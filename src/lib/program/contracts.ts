@@ -37,7 +37,47 @@ export const programTodayResponseSchema = z.object({
 });
 
 export const programSessionDetailResponseSchema = z.object({
-  session: programSessionSummarySchema,
+  session: z.object({
+    id: z.string().trim().min(1),
+    scheduledDate: z.iso.date(),
+    dayIndex: z.number().int().min(0).max(6),
+    focusLabel: z.string().trim().min(1),
+    state: z.enum(sessionStateValues),
+    startedAt: z.iso.datetime().nullable(),
+    completedAt: z.iso.datetime().nullable(),
+    effectiveDurationSec: z.number().int().min(0).nullable(),
+    durationCorrectedAt: z.iso.datetime().nullable(),
+    note: z.string().trim().max(280).nullable(),
+    postSessionFatigue: z.number().int().min(1).max(5).nullable(),
+    postSessionReadiness: z.number().int().min(1).max(5).nullable(),
+    postSessionComment: z.string().trim().max(280).nullable(),
+    exercises: z.array(
+      z.object({
+        id: z.string().trim().min(1),
+        exerciseKey: z.string().trim().min(1),
+        displayName: z.string().trim().min(1),
+        movementPattern: z.enum(movementPatternValues),
+        sets: z.number().int().min(1),
+        targetReps: z.number().int().min(1),
+        targetLoad: z.string().trim().min(1),
+        restMinSec: z.number().int().min(0),
+        restMaxSec: z.number().int().min(0),
+        isSubstituted: z.boolean(),
+        originalExerciseKey: z.string().trim().min(1).nullable(),
+        isSkipped: z.boolean(),
+        skipReasonCode: z.string().trim().min(1).nullable(),
+        skipReasonText: z.string().trim().min(1).nullable(),
+        loggedSets: z.array(
+          z.object({
+            setIndex: z.number().int().min(1),
+            weight: z.number().positive(),
+            reps: z.number().int().min(1),
+            rpe: z.number().min(1).max(10).nullable(),
+          }),
+        ).default([]),
+      }),
+    ).default([]),
+  }),
 });
 
 export const programHistoryRowSchema = z.object({

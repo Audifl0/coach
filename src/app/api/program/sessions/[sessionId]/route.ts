@@ -1,4 +1,5 @@
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
+import { buildSessionDetailProjection } from '@/lib/program/select-today-session';
 import { createProgramDal } from '@/server/dal/program';
 
 type RouteContext = {
@@ -58,26 +59,6 @@ function json(body: unknown, status: number): Response {
   return Response.json(body, { status });
 }
 
-function toIsoDate(value: Date | string): string {
-  if (typeof value === 'string') {
-    return value.slice(0, 10);
-  }
-
-  return value.toISOString().slice(0, 10);
-}
-
-function toIsoDateTime(value: Date | string | null | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  return value.toISOString();
-}
-
 function toNumber(value: number | string | { toString(): string } | null): number | null {
   if (value === null) {
     return null;
@@ -130,27 +111,12 @@ export function createProgramSessionDetailGetHandler(deps: ProgramSessionDetailR
           })),
       }));
 
-    return json(
-      {
-        session: {
-          id: detail.id,
-          scheduledDate: toIsoDate(detail.scheduledDate),
-          dayIndex: detail.dayIndex,
-          focusLabel: detail.focusLabel,
-          state: detail.state,
-          startedAt: toIsoDateTime(detail.startedAt),
-          completedAt: toIsoDateTime(detail.completedAt),
-          effectiveDurationSec: detail.effectiveDurationSec ?? null,
-          durationCorrectedAt: toIsoDateTime(detail.durationCorrectedAt),
-          note: detail.note ?? null,
-          postSessionFatigue: detail.postSessionFatigue ?? null,
-          postSessionReadiness: detail.postSessionReadiness ?? null,
-          postSessionComment: detail.postSessionComment ?? null,
-          exercises: scopedExercises,
-        },
-      },
-      200,
-    );
+    const payload = buildSessionDetailProjection({
+      ...detail,
+      exercises: scopedExercises,
+    });
+
+    return json(payload, 200);
   };
 }
 

@@ -52,6 +52,30 @@ type SessionHistoryExerciseLike = {
   loggedSets: LoggedSetLike[];
 };
 
+type SessionDetailExerciseLike = SessionExerciseLike & {
+  isSkipped?: boolean;
+  skipReasonCode?: string | null;
+  skipReasonText?: string | null;
+  loggedSets?: LoggedSetLike[];
+};
+
+type SessionDetailRecordLike = {
+  id: string;
+  scheduledDate: Date | string;
+  dayIndex: number;
+  focusLabel: string;
+  state: SessionState;
+  startedAt?: Date | string | null;
+  completedAt?: Date | string | null;
+  effectiveDurationSec?: number | null;
+  durationCorrectedAt?: Date | string | null;
+  note?: string | null;
+  postSessionFatigue?: number | null;
+  postSessionReadiness?: number | null;
+  postSessionComment?: string | null;
+  exercises: SessionDetailExerciseLike[];
+};
+
 type SessionHistoryRecordLike = {
   id: string;
   scheduledDate: Date | string;
@@ -66,6 +90,18 @@ function toIsoDate(value: Date | string): string {
   }
 
   return value.toISOString().slice(0, 10);
+}
+
+function toIsoDateTime(value: Date | string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  return value.toISOString();
 }
 
 function toNumericValue(value: number | string | { toString(): string }): number {
@@ -125,9 +161,47 @@ export function selectTodayWorkoutProjection(input: {
   });
 }
 
-export function buildSessionDetailProjection(session: SessionRecordLike): ProgramSessionDetailResponse {
+export function buildSessionDetailProjection(session: SessionDetailRecordLike): ProgramSessionDetailResponse {
   return parseProgramSessionDetailResponse({
-    session: mapSessionSummary(session),
+    session: {
+      id: session.id,
+      scheduledDate: toIsoDate(session.scheduledDate),
+      dayIndex: session.dayIndex,
+      focusLabel: session.focusLabel,
+      state: session.state,
+      startedAt: toIsoDateTime(session.startedAt),
+      completedAt: toIsoDateTime(session.completedAt),
+      effectiveDurationSec: session.effectiveDurationSec ?? null,
+      durationCorrectedAt: toIsoDateTime(session.durationCorrectedAt),
+      note: session.note ?? null,
+      postSessionFatigue: session.postSessionFatigue ?? null,
+      postSessionReadiness: session.postSessionReadiness ?? null,
+      postSessionComment: session.postSessionComment ?? null,
+      exercises: session.exercises.map((exercise) => ({
+        id: exercise.id,
+        exerciseKey: exercise.exerciseKey,
+        displayName: exercise.displayName,
+        movementPattern: exercise.movementPattern as ProgramSessionSummary['exercises'][number]['movementPattern'],
+        sets: exercise.sets,
+        targetReps: exercise.targetReps,
+        targetLoad: exercise.targetLoad,
+        restMinSec: exercise.restMinSec,
+        restMaxSec: exercise.restMaxSec,
+        isSubstituted: exercise.isSubstituted,
+        originalExerciseKey: exercise.originalExerciseKey,
+        isSkipped: Boolean(exercise.isSkipped),
+        skipReasonCode: exercise.skipReasonCode ?? null,
+        skipReasonText: exercise.skipReasonText ?? null,
+        loggedSets: [...(exercise.loggedSets ?? [])]
+          .sort((a, b) => a.setIndex - b.setIndex)
+          .map((setItem) => ({
+            setIndex: setItem.setIndex,
+            weight: toNumericValue(setItem.weight),
+            reps: setItem.reps,
+            rpe: setItem.rpe === null ? null : toNumericValue(setItem.rpe),
+          })),
+      })),
+    },
   });
 }
 
