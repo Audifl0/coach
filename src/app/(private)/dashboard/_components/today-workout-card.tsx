@@ -7,6 +7,7 @@ import {
   type ProgramSessionSummary,
   type ProgramTodayResponse,
 } from '@/lib/program/contracts';
+import { SessionLogger } from './session-logger';
 
 export function getPrimaryActionLabel(primaryAction: ProgramTodayResponse['primaryAction']): string {
   if (primaryAction === 'start_workout') {
@@ -41,6 +42,7 @@ function formatRestRange(restMinSec: number, restMaxSec: number): string {
 
 export function TodayWorkoutCard({ data }: { data: ProgramTodayResponse }) {
   const [detailOpen, setDetailOpen] = useState(false);
+  const [loggerOpen, setLoggerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [detailSession, setDetailSession] = useState<ProgramSessionSummary | null>(null);
@@ -101,11 +103,15 @@ export function TodayWorkoutCard({ data }: { data: ProgramTodayResponse }) {
       </p>
       <p>Date: {session.scheduledDate}</p>
       <div>
-        <button type="button">{actionLabel}</button>
+        <button type="button" onClick={() => setLoggerOpen((current) => !current)}>
+          {loggerOpen ? 'Masquer suivi seance' : (session.state === 'started' ? 'Reprendre seance' : actionLabel)}
+        </button>
         <button type="button" onClick={handleToggleDetails}>
           {detailOpen ? 'Masquer les exercices' : 'Voir les exercices'}
         </button>
       </div>
+
+      {loggerOpen ? <SessionLogger session={session} /> : null}
 
       {loading ? <p>Chargement des details...</p> : null}
       {errorMessage ? <p>{errorMessage}</p> : null}
