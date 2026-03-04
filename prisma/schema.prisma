@@ -12,6 +12,9 @@ model User {
   passwordHash   String
   sessions       Session[]
   athleteProfile AthleteProfile?
+  programPlans   ProgramPlan[]
+  plannedSessions PlannedSession[]
+  plannedExercises PlannedExercise[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 }
@@ -40,4 +43,60 @@ model AthleteProfile {
   limitations        Json
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+}
+
+model ProgramPlan {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      String
+  startDate   DateTime
+  endDate     DateTime
+  sessions    PlannedSession[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([userId, status])
+}
+
+model PlannedSession {
+  id            String            @id @default(cuid())
+  programPlanId String
+  programPlan   ProgramPlan       @relation(fields: [programPlanId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduledDate DateTime
+  dayIndex      Int
+  focusLabel    String
+  state         String
+  exercises     PlannedExercise[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([userId, scheduledDate])
+  @@index([programPlanId, dayIndex])
+}
+
+model PlannedExercise {
+  id                 String         @id @default(cuid())
+  plannedSessionId   String
+  plannedSession     PlannedSession @relation(fields: [plannedSessionId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderIndex         Int
+  exerciseKey        String
+  displayName        String
+  movementPattern    String
+  sets               Int
+  targetReps         Int
+  targetLoad         String
+  restMinSec         Int
+  restMaxSec         Int
+  isSubstituted      Boolean        @default(false)
+  originalExerciseKey String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@unique([plannedSessionId, orderIndex])
+  @@index([userId, plannedSessionId])
 }
