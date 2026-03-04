@@ -64,11 +64,10 @@ function createMemoryRepo() {
   };
 }
 
-test('signup and login lifecycle enforces duplicate rejection, generic auth failures, and persistent session cookie issuance', async () => {
+test('signup and login creates account with hashed password and rejects duplicate usernames', async () => {
   const db = createMemoryRepo();
   const auth = createAuthService(db.repo);
   const signupHandler = createSignupHandler(auth);
-  const loginHandler = createLoginHandler(auth);
 
   const signupResponse = await signupHandler(
     new Request('http://localhost/api/auth/signup', {
@@ -86,9 +85,70 @@ test('signup and login lifecycle enforces duplicate rejection, generic auth fail
   assert.ok(persisted);
   assert.notEqual(persisted.passwordHash, 'secret123');
 
-  await assert.rejects(
-    auth.signup({ username: 'coach', password: 'secret123' }),
-    SignupConflictError,
+  const duplicateResponse = await signupHandler(
+    new Request('http://localhost/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'coach', password: 'secret123' }),
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
+
+  assert.equal(duplicateResponse.status, 409);
+  assert.deepEqual(await duplicateResponse.json(), { error: 'Username is already in use' });
+
+  await assert.rejects(() => auth.signup({ username: 'coach', password: 'secret123' }), SignupConflictError);
+});
+
+test('signup and login returns generic login failures for wrong password and unknown account', async () => {
+  const db = createMemoryRepo();
+  const auth = createAuthService(db.repo);
+  const signupHandler = createSignupHandler(auth);
+  const loginHandler = createLoginHandler(auth);
+
+  await signupHandler(
+    new Request('http://localhost/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'coach', password: 'secret123' }),
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
+
+  const wrongPasswordResponse = await loginHandler(
+    new Request('http://localhost/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'coach', password: 'wrong-pass' }),
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
+  const unknownUserResponse = await loginHandler(
+    new Request('http://localhost/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'missing', password: 'wrong-pass' }),
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
+
+  assert.equal(wrongPasswordResponse.status, 401);
+  assert.equal(unknownUserResponse.status, 401);
+  assert.deepEqual(await wrongPasswordResponse.json(), { error: 'Invalid username or password' });
+  assert.deepEqual(await unknownUserResponse.json(), { error: 'Invalid username or password' });
+
+  await assert.rejects(() => auth.login({ username: 'coach', password: 'wrong-pass' }), InvalidCredentialsError);
+  await assert.rejects(() => auth.login({ username: 'missing', password: 'wrong-pass' }), InvalidCredentialsError);
+});
+
+test('signup and login issues persistent secure session cookies and stores token hash only', async () => {
+  const db = createMemoryRepo();
+  const auth = createAuthService(db.repo);
+  const signupHandler = createSignupHandler(auth);
+  const loginHandler = createLoginHandler(auth);
+
+  await signupHandler(
+    new Request('http://localhost/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'coach', password: 'secret123' }),
+      headers: { 'content-type': 'application/json' },
+    }),
   );
 
   const loginResponse = await loginHandler(
@@ -101,21 +161,17 @@ test('signup and login lifecycle enforces duplicate rejection, generic auth fail
 
   assert.equal(loginResponse.status, 200);
   assert.equal(db.sessions.length, 1);
-  assert.ok(db.sessions[0].expiresAt.getTime() > Date.now() + 25 * 24 * 60 * 60 * 1000);
+  const expiresAtMs = db.sessions[0].expiresAt.getTime();
+  assert.ok(expiresAtMs > Date.now() + 25 * 24 * 60 * 60 * 1000);
+  assert.ok(expiresAtMs < Date.now() + 31 * 24 * 60 * 60 * 1000);
   const cookie = loginResponse.headers.get('set-cookie');
   assert.ok(cookie);
+  assert.match(cookie, /coach_session=/);
   assert.match(cookie, /HttpOnly/i);
   assert.match(cookie, /Secure/i);
   assert.match(cookie, /SameSite=Lax/i);
   assert.match(cookie, /Max-Age=2592000/);
-
-  await assert.rejects(
-    auth.login({ username: 'coach', password: 'wrong-pass' }),
-    InvalidCredentialsError,
-  );
-  await assert.rejects(
-    auth.login({ username: 'missing', password: 'wrong-pass' }),
-    InvalidCredentialsError,
-  );
+  const token = cookie.split(';')[0].split('=')[1];
+  assert.ok(token);
+  assert.notEqual(db.sessions[0].sessionTokenHash, token);
 });
-
