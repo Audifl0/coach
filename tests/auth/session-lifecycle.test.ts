@@ -12,6 +12,7 @@ import {
 import { createLoginHandler } from '../../src/app/api/auth/login/route';
 import { createLogoutHandler } from '../../src/app/api/auth/logout/route';
 import { createSignupHandler } from '../../src/app/api/auth/signup/route';
+import { resolveDashboardSession } from '../../src/app/(private)/dashboard/page';
 import { middleware } from '../../src/middleware';
 
 type UserRecord = {
@@ -72,6 +73,19 @@ function createMemoryRepo() {
 
       target.revokedAt = new Date();
       return true;
+    },
+    async findActiveSessionByTokenHash(sessionTokenHash: string) {
+      const target = sessions.find((session) => session.sessionTokenHash === sessionTokenHash);
+      if (!target) {
+        return null;
+      }
+
+      return {
+        id: target.id,
+        userId: target.userId,
+        expiresAt: target.expiresAt,
+        revokedAt: target.revokedAt,
+      };
     },
   };
 
@@ -259,10 +273,19 @@ test('persistence and current-session logout revokes only active session while p
   assert.equal(anonymousGate.status, 307);
   assert.equal(anonymousGate.headers.get('location'), 'http://localhost/login?next=%2Fdashboard');
 
-  const persistedSessionGate = middleware(
+  const cookiePrefilterGate = middleware(
     new NextRequest('http://localhost/dashboard', {
-      headers: { cookie: `${SESSION_COOKIE_NAME}=${tokenTwo}` },
+      headers: { cookie: `${SESSION_COOKIE_NAME}=forged-or-stale-token` },
     }),
   );
-  assert.equal(persistedSessionGate.headers.get('x-middleware-next'), '1');
+  assert.equal(cookiePrefilterGate.headers.get('x-middleware-next'), '1');
+
+  const revokedDashboardSession = await resolveDashboardSession(tokenOne, db.repo);
+  const persistedDashboardSession = await resolveDashboardSession(tokenTwo, db.repo);
+
+  assert.equal(revokedDashboardSession, null);
+  assert.deepEqual(persistedDashboardSession, {
+    userId: secondSession.userId,
+    sessionId: secondSession.id,
+  });
 });
