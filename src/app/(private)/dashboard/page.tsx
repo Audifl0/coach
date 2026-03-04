@@ -1,13 +1,24 @@
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import { SESSION_COOKIE_NAME } from '@/lib/auth/auth';
+import {
+  buildDefaultSessionGateRepository,
+  type SessionGateRepository,
+  validateSessionFromCookies,
+  validateSessionToken,
+} from '@/lib/auth/session-gate';
+
+export async function resolveDashboardSession(
+  sessionToken: string | null | undefined,
+  repository: SessionGateRepository,
+) {
+  return validateSessionToken(sessionToken, repository);
+}
 
 export default async function DashboardPage() {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  const repository = await buildDefaultSessionGateRepository();
+  const session = await validateSessionFromCookies(repository);
 
-  if (!sessionToken) {
+  if (!session) {
     redirect('/login?next=/dashboard');
   }
 

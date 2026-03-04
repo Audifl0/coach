@@ -4,9 +4,11 @@ import type { NextRequest } from 'next/server';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/auth';
 
 export function middleware(request: NextRequest) {
-  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  const hasSessionCookie = Boolean(request.cookies.get(SESSION_COOKIE_NAME)?.value);
 
-  if (token) {
+  // Middleware is only an anonymous prefilter for UX redirect handling.
+  // Authoritative session validation happens server-side in private routes.
+  if (hasSessionCookie) {
     return NextResponse.next();
   }
 
