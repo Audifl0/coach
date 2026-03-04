@@ -1,9 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { NextRequest } from 'next/server';
 
-import { InvalidCredentialsError, SignupConflictError, createAuthService } from '../../src/lib/auth/auth';
+import {
+  InvalidCredentialsError,
+  SESSION_COOKIE_NAME,
+  SignupConflictError,
+  createAuthService,
+  hashSessionToken,
+} from '../../src/lib/auth/auth';
 import { createLoginHandler } from '../../src/app/api/auth/login/route';
+import { createLogoutHandler } from '../../src/app/api/auth/logout/route';
 import { createSignupHandler } from '../../src/app/api/auth/signup/route';
+import { middleware } from '../../src/middleware';
 
 type UserRecord = {
   id: string;
@@ -55,6 +64,15 @@ function createMemoryRepo() {
       sessions.push(session);
       return session;
     },
+    async revokeSessionByTokenHash(sessionTokenHash: string) {
+      const target = sessions.find((session) => session.sessionTokenHash === sessionTokenHash);
+      if (!target || target.revokedAt) {
+        return false;
+      }
+
+      target.revokedAt = new Date();
+      return true;
+    },
   };
 
   return {
@@ -62,6 +80,13 @@ function createMemoryRepo() {
     users,
     sessions,
   };
+}
+
+function getCookieToken(setCookieHeader: string | null): string {
+  assert.ok(setCookieHeader);
+  const token = setCookieHeader.split(';')[0].split('=')[1];
+  assert.ok(token);
+  return token;
 }
 
 test('signup and login creates account with hashed password and rejects duplicate usernames', async () => {
@@ -174,4 +199,70 @@ test('signup and login issues persistent secure session cookies and stores token
   const token = cookie.split(';')[0].split('=')[1];
   assert.ok(token);
   assert.notEqual(db.sessions[0].sessionTokenHash, token);
+});
+
+test('persistence and current-session logout revokes only active session while preserving others', async () => {
+  const db = createMemoryRepo();
+  const auth = createAuthService(db.repo);
+  const signupHandler = createSignupHandler(auth);
+  const loginHandler = createLoginHandler(auth);
+  const logoutHandler = createLogoutHandler(async (sessionTokenHash) => db.repo.revokeSessionByTokenHash(sessionTokenHash));
+
+  await signupHandler(
+    new Request('http://localhost/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'coach', password: 'secret123' }),
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
+
+  const loginOne = await loginHandler(
+    new Request('http://localhost/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'coach', password: 'secret123' }),
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
+  const loginTwo = await loginHandler(
+    new Request('http://localhost/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'coach', password: 'secret123' }),
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
+
+  const tokenOne = getCookieToken(loginOne.headers.get('set-cookie'));
+  const tokenTwo = getCookieToken(loginTwo.headers.get('set-cookie'));
+  assert.equal(db.sessions.length, 2);
+
+  const logoutResponse = await logoutHandler(
+    new Request('http://localhost/api/auth/logout', {
+      method: 'POST',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${tokenOne}` },
+    }),
+  );
+
+  assert.equal(logoutResponse.status, 200);
+  const clearedCookie = logoutResponse.headers.get('set-cookie');
+  assert.ok(clearedCookie);
+  assert.match(clearedCookie, /coach_session=/);
+  assert.match(clearedCookie, /Max-Age=0/);
+
+  const firstSession = db.sessions.find((session) => session.sessionTokenHash === hashSessionToken(tokenOne));
+  const secondSession = db.sessions.find((session) => session.sessionTokenHash === hashSessionToken(tokenTwo));
+  assert.ok(firstSession);
+  assert.ok(secondSession);
+  assert.ok(firstSession.revokedAt instanceof Date);
+  assert.equal(secondSession.revokedAt, null);
+
+  const anonymousGate = middleware(new NextRequest('http://localhost/dashboard'));
+  assert.equal(anonymousGate.status, 307);
+  assert.equal(anonymousGate.headers.get('location'), 'http://localhost/login?next=%2Fdashboard');
+
+  const persistedSessionGate = middleware(
+    new NextRequest('http://localhost/dashboard', {
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${tokenTwo}` },
+    }),
+  );
+  assert.equal(persistedSessionGate.headers.get('x-middleware-next'), '1');
 });
