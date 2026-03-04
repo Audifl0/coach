@@ -9,7 +9,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Authentication
 
-- [ ] **AUTH-01**: User can create a personal account with username and password.
+- [x] **AUTH-01**: User can create a personal account with username and password.
 - [ ] **AUTH-02**: User can sign in and keep a persistent session across browser refresh.
 - [ ] **AUTH-03**: User can recover account access through a manual admin password reset flow.
 
@@ -89,7 +89,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 | 1 | Pending |
+| AUTH-01 | 1 | Complete |
 | AUTH-02 | 1 | Pending |
 | AUTH-03 | 1 | Pending |
 | PROF-01 | 2 | Pending |
