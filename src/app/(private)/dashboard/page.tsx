@@ -7,7 +7,6 @@ import {
   validateSessionToken,
 } from '@/lib/auth/session-gate';
 import { isProfileComplete } from '@/lib/profile/completeness';
-import { prisma } from '@/lib/db/prisma';
 
 export async function resolveDashboardSession(
   sessionToken: string | null | undefined,
@@ -16,30 +15,50 @@ export async function resolveDashboardSession(
   return validateSessionToken(sessionToken, repository);
 }
 
+export async function resolveDashboardRoute(
+  session: { userId: string } | null,
+  findProfileByUserId: (userId: string) => Promise<unknown | null>,
+): Promise<'login' | 'onboarding' | 'dashboard'> {
+  if (!session) {
+    return 'login';
+  }
+
+  const profile = await findProfileByUserId(session.userId);
+  if (!isProfileComplete(profile as never)) {
+    return 'onboarding';
+  }
+
+  return 'dashboard';
+}
+
 export default async function DashboardPage() {
+  const { prisma } = await import('@/lib/db/prisma');
   const repository = await buildDefaultSessionGateRepository();
   const session = await validateSessionFromCookies(repository);
+  const route = await resolveDashboardRoute(
+    session,
+    async (userId) =>
+      prisma.athleteProfile.findUnique({
+        where: { userId },
+        select: {
+          userId: true,
+          goal: true,
+          weeklySessionTarget: true,
+          sessionDuration: true,
+          equipmentCategories: true,
+          limitationsDeclared: true,
+          limitations: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+  );
 
-  if (!session) {
+  if (route === 'login') {
     redirect('/login?next=/dashboard');
   }
 
-  const profile = await prisma.athleteProfile.findUnique({
-    where: { userId: session.userId },
-    select: {
-      userId: true,
-      goal: true,
-      weeklySessionTarget: true,
-      sessionDuration: true,
-      equipmentCategories: true,
-      limitationsDeclared: true,
-      limitations: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
-
-  if (!isProfileComplete(profile as never)) {
+  if (route === 'onboarding') {
     redirect('/onboarding');
   }
 
