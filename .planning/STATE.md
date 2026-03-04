@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 04
 current_phase_name: Session Logging and History
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-03-04T20:06:33.461Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-03-04T20:14:21.713Z"
 last_activity: 2026-03-04
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 19
-  completed_plans: 16
-  percent: 84
+  completed_plans: 17
+  percent: 89
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 04
 **Current Phase Name:** Session Logging and History
 **Total Phases:** 6
-**Current Plan:** 2
+**Current Plan:** 3
 **Total Plans in Phase:** 4
 **Status:** Ready to execute
 **Last Activity:** 2026-03-04
 **Last Activity Description:** Completed 04-01 plan
-**Progress:** [████████░░] 84%
+**Progress:** [█████████░] 89%
 
 ## Performance Metrics
 
@@ -85,6 +85,8 @@ Recent decisions affecting current work:
 - [Phase 04-session-logging-and-history]: Stored execution logs under existing ProgramPlan->PlannedSession->PlannedExercise ownership to preserve account scoping.
 - [Phase 04-session-logging-and-history]: History query parsing is strict: custom requires ordered from/to and preset windows reject explicit date bounds.
 - [Phase 04-session-logging-and-history]: History projection outputs are contract-validated via shared parse helpers to prevent route-local shape drift.
+- [Phase 04-session-logging-and-history]: Session lifecycle timing invariants are centralized in createSessionLoggingService with injectable now() for deterministic tests.
+- [Phase 04-session-logging-and-history]: Program DAL now exposes explicit scoped logging/history primitives (set upsert, skip/revert, completion, correction, history reads).
 
 ### Pending Todos
 
@@ -96,6 +98,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-04T20:06:29.489Z
-**Stopped At:** Completed 04-01-PLAN.md
+**Last Date:** 2026-03-04T20:14:21.710Z
+**Stopped At:** Completed 04-02-PLAN.md
 **Resume File:** None
