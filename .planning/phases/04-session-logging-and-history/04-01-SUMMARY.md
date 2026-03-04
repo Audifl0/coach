@@ -62,7 +62,7 @@ Each task was committed atomically:
 3. **Task 2 (GREEN): Implement logging and history contract parsers** - `5f92115` (feat)
 4. **Task 3: Add projection helpers for history summaries and grouped set logs** - `3439122` (feat)
 
-**Plan metadata:** pending final docs commit
+**Plan metadata:** `aef0e0d` (docs)
 
 ## Files Created/Modified
 - `prisma/schema.prisma` - Adds session execution lifecycle fields, exercise skip fields, and `LoggedSet` relations.
