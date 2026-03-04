@@ -4,7 +4,7 @@
 **Scope:** v1 only (26 requirements)
 **Principles:** safety-first coaching, deterministic guardrails, pragmatic VPS delivery
 
-## Phase 1 - Platform Foundation, Security, and Authentication
+## Phase 1: Platform Foundation, Security, and Authentication
 
 **Goal:** Deliver a secure VPS-hosted app foundation with complete email/password account lifecycle.
 
@@ -17,7 +17,7 @@
 - Application is reachable on a VPS HTTPS endpoint with valid TLS.
 - Sensitive user data is encrypted in transit and protected at rest per configured controls.
 
-## Phase 2 - Athlete Profile and Constraints Onboarding
+## Phase 2: Athlete Profile and Constraints Onboarding
 
 **Goal:** Capture all profile inputs required for safe personalized programming.
 
@@ -29,7 +29,7 @@
 - User can record limitation or pain flags that are persisted and queryable.
 - User can edit profile constraints later and changes are reflected in profile state.
 
-## Phase 3 - Program Planning and Daily Workout Surface
+## Phase 3: Program Planning and Daily Workout Surface
 
 **Goal:** Generate actionable weekly programming and present today's planned workout.
 
@@ -41,7 +41,7 @@
 - Exercise replacement returns only approved safe equivalents.
 - Dashboard home shows today's workout and next action in a single view.
 
-## Phase 4 - Session Logging and History
+## Phase 4: Session Logging and History
 
 **Goal:** Make workout completion tracking reliable and fast for daily adherence.
 
@@ -53,7 +53,7 @@
 - User can submit post-session readiness/fatigue feedback.
 - User can review recent session history with logged performance details.
 
-## Phase 5 - Adaptive Coaching and Safety Guardrails
+## Phase 5: Adaptive Coaching and Safety Guardrails
 
 **Goal:** Produce conservative, explainable next-session adjustments with user control.
 
@@ -66,7 +66,7 @@
 - Recommendations never exceed configured conservative progression bounds.
 - Low-confidence or limitation-conflicting cases trigger warning/fallback conservative plan and dashboard forecast reflects applied outcome.
 
-## Phase 6 - Trends and Operational Reliability
+## Phase 6: Trends and Operational Reliability
 
 **Goal:** Finalize decision-support trends and production recovery readiness.
 
@@ -82,4 +82,3 @@
 - Mapped to phases: 26
 - Unmapped: 0
 - Multi-phase assignments: 0
-
