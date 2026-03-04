@@ -61,7 +61,7 @@ Each task was committed atomically:
    - `78bd7ae` (test): RED tests for session logging service invariants
    - `6bddd6d` (feat): GREEN service implementation + lifecycle DAL accessor
 
-**Plan metadata:** pending
+**Plan metadata:** `cb63755` (docs)
 
 ## Files Created/Modified
 - `src/server/dal/program.ts` - Added scoped logging mutation methods, history projections, and lifecycle accessor.
