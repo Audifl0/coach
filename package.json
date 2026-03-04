@@ -8,7 +8,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "prisma:generate": "prisma generate",
-    "test": "node --test --experimental-strip-types"
+    "test": "tsx --test"
   },
   "dependencies": {
     "@prisma/client": "7.4.0",
@@ -24,6 +24,7 @@
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "prisma": "7.4.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
   "engines": {

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { validateLoginInput, validateSignupInput, type SessionContext } from '../../src/lib/auth/contracts.ts';
-import { requireAccountScope } from '../../src/server/dal/account-scope.ts';
+import { validateLoginInput, validateSignupInput, type SessionContext } from '../../src/lib/auth/contracts';
+import { requireAccountScope } from '../../src/server/dal/account-scope';
 
 test('auth contracts reject missing username/password fields', () => {
   assert.throws(() => validateSignupInput({}), /username/i);
