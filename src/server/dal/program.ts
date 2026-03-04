@@ -115,6 +115,7 @@ type ProgramDalClient = {
     findFirst(args: {
       where: {
         userId: string;
+        id?: string;
         scheduledDate: { gte?: Date; lt?: Date; gt?: Date };
         programPlan?: { status: 'active' | 'archived' };
       };
@@ -266,6 +267,25 @@ export function createProgramDal(db: ProgramDalClient, session: SessionContext |
         todaySession: null,
         nextSession,
       };
+    },
+
+    async getSessionById(sessionId: string): Promise<PlannedSessionRecord | null> {
+      return db.plannedSession.findFirst({
+        where: {
+          ...buildAccountScopedWhere(scope, { id: sessionId }),
+          scheduledDate: {},
+          programPlan: {
+            status: 'active',
+          },
+        },
+        include: {
+          exercises: {
+            orderBy: {
+              orderIndex: 'asc',
+            },
+          },
+        },
+      });
     },
 
     async getPlannedExerciseOwnership(plannedExerciseId: string): Promise<{
