@@ -9,9 +9,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Authentication
 
-- [ ] **AUTH-01**: User can create a personal account with email/password.
+- [ ] **AUTH-01**: User can create a personal account with username and password.
 - [ ] **AUTH-02**: User can sign in and keep a persistent session across browser refresh.
-- [ ] **AUTH-03**: User can reset password through email recovery flow.
+- [ ] **AUTH-03**: User can recover account access through a manual admin password reset flow.
 
 ### Athlete Profile
 
