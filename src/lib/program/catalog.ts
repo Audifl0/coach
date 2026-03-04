@@ -1,0 +1,138 @@
+import type { ExerciseCatalogEntry } from './types';
+
+export const exerciseCatalog: ExerciseCatalogEntry[] = [
+  {
+    key: 'goblet_squat',
+    displayName: 'Goblet Squat',
+    movementPattern: 'squat',
+    equipmentTags: ['dumbbells'],
+    blockedLimitations: ['knee_acute'],
+    compatibleSubstitutionKeys: ['leg_press', 'split_squat', 'bodyweight_box_squat'],
+  },
+  {
+    key: 'leg_press',
+    displayName: 'Leg Press',
+    movementPattern: 'squat',
+    equipmentTags: ['machines'],
+    blockedLimitations: ['knee_acute'],
+    compatibleSubstitutionKeys: ['goblet_squat', 'split_squat', 'bodyweight_box_squat'],
+  },
+  {
+    key: 'split_squat',
+    displayName: 'Split Squat',
+    movementPattern: 'squat',
+    equipmentTags: ['bodyweight', 'dumbbells'],
+    blockedLimitations: ['knee_acute'],
+    compatibleSubstitutionKeys: ['goblet_squat', 'leg_press', 'bodyweight_box_squat'],
+  },
+  {
+    key: 'bodyweight_box_squat',
+    displayName: 'Bodyweight Box Squat',
+    movementPattern: 'squat',
+    equipmentTags: ['bodyweight', 'bench'],
+    blockedLimitations: ['knee_acute'],
+    compatibleSubstitutionKeys: ['goblet_squat', 'leg_press', 'split_squat'],
+  },
+  {
+    key: 'dumbbell_rdl',
+    displayName: 'Dumbbell Romanian Deadlift',
+    movementPattern: 'hinge',
+    equipmentTags: ['dumbbells'],
+    blockedLimitations: ['low_back_acute'],
+    compatibleSubstitutionKeys: ['barbell_rdl', 'hip_hinge_band_pullthrough', 'machine_back_extension'],
+  },
+  {
+    key: 'barbell_rdl',
+    displayName: 'Barbell Romanian Deadlift',
+    movementPattern: 'hinge',
+    equipmentTags: ['barbell'],
+    blockedLimitations: ['low_back_acute'],
+    compatibleSubstitutionKeys: ['dumbbell_rdl', 'hip_hinge_band_pullthrough', 'machine_back_extension'],
+  },
+  {
+    key: 'hip_hinge_band_pullthrough',
+    displayName: 'Band Pull-Through',
+    movementPattern: 'hinge',
+    equipmentTags: ['bands'],
+    blockedLimitations: ['low_back_acute'],
+    compatibleSubstitutionKeys: ['dumbbell_rdl', 'barbell_rdl', 'machine_back_extension'],
+  },
+  {
+    key: 'machine_back_extension',
+    displayName: 'Back Extension Machine',
+    movementPattern: 'hinge',
+    equipmentTags: ['machines'],
+    blockedLimitations: ['low_back_acute'],
+    compatibleSubstitutionKeys: ['dumbbell_rdl', 'barbell_rdl', 'hip_hinge_band_pullthrough'],
+  },
+  {
+    key: 'dumbbell_bench_press',
+    displayName: 'Dumbbell Bench Press',
+    movementPattern: 'horizontal_push',
+    equipmentTags: ['dumbbells', 'bench'],
+    blockedLimitations: ['shoulder_acute'],
+    compatibleSubstitutionKeys: ['machine_chest_press', 'push_up', 'band_chest_press'],
+  },
+  {
+    key: 'machine_chest_press',
+    displayName: 'Machine Chest Press',
+    movementPattern: 'horizontal_push',
+    equipmentTags: ['machines'],
+    blockedLimitations: ['shoulder_acute'],
+    compatibleSubstitutionKeys: ['dumbbell_bench_press', 'push_up', 'band_chest_press'],
+  },
+  {
+    key: 'push_up',
+    displayName: 'Push-Up',
+    movementPattern: 'horizontal_push',
+    equipmentTags: ['bodyweight'],
+    blockedLimitations: ['shoulder_acute', 'wrist_acute'],
+    compatibleSubstitutionKeys: ['dumbbell_bench_press', 'machine_chest_press', 'band_chest_press'],
+  },
+  {
+    key: 'band_chest_press',
+    displayName: 'Band Chest Press',
+    movementPattern: 'horizontal_push',
+    equipmentTags: ['bands'],
+    blockedLimitations: ['shoulder_acute'],
+    compatibleSubstitutionKeys: ['dumbbell_bench_press', 'machine_chest_press', 'push_up'],
+  },
+  {
+    key: 'seated_cable_row',
+    displayName: 'Seated Cable Row',
+    movementPattern: 'horizontal_pull',
+    equipmentTags: ['machines'],
+    blockedLimitations: ['elbow_acute'],
+    compatibleSubstitutionKeys: ['one_arm_dumbbell_row', 'band_row', 'chest_supported_row'],
+  },
+  {
+    key: 'one_arm_dumbbell_row',
+    displayName: 'One-Arm Dumbbell Row',
+    movementPattern: 'horizontal_pull',
+    equipmentTags: ['dumbbells', 'bench'],
+    blockedLimitations: ['elbow_acute'],
+    compatibleSubstitutionKeys: ['seated_cable_row', 'band_row', 'chest_supported_row'],
+  },
+  {
+    key: 'band_row',
+    displayName: 'Band Row',
+    movementPattern: 'horizontal_pull',
+    equipmentTags: ['bands'],
+    blockedLimitations: ['elbow_acute'],
+    compatibleSubstitutionKeys: ['seated_cable_row', 'one_arm_dumbbell_row', 'chest_supported_row'],
+  },
+  {
+    key: 'chest_supported_row',
+    displayName: 'Chest-Supported Row',
+    movementPattern: 'horizontal_pull',
+    equipmentTags: ['dumbbells', 'bench'],
+    blockedLimitations: ['elbow_acute'],
+    compatibleSubstitutionKeys: ['seated_cable_row', 'one_arm_dumbbell_row', 'band_row'],
+  },
+];
+
+export const exerciseCatalogByKey = new Map(exerciseCatalog.map((entry) => [entry.key, entry] as const));
+
+export function getExerciseCatalogEntry(exerciseKey: string): ExerciseCatalogEntry | null {
+  return exerciseCatalogByKey.get(exerciseKey) ?? null;
+}
