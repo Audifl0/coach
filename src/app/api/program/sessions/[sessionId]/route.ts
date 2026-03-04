@@ -1,9 +1,15 @@
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
-import { buildSessionDetailProjection } from '@/lib/program/select-today-session';
 import { createProgramDal } from '@/server/dal/program';
 
 type RouteContext = {
   params: { sessionId: string } | Promise<{ sessionId: string }>;
+};
+
+type SessionDetailLoggedSet = {
+  setIndex: number;
+  weight: number | string | { toString(): string };
+  reps: number;
+  rpe: number | string | { toString(): string } | null;
 };
 
 type SessionDetailExercise = {
@@ -19,6 +25,10 @@ type SessionDetailExercise = {
   restMaxSec: number;
   isSubstituted: boolean;
   originalExerciseKey: string | null;
+  isSkipped?: boolean;
+  skipReasonCode?: string | null;
+  skipReasonText?: string | null;
+  loggedSets?: SessionDetailLoggedSet[];
 };
 
 type SessionDetailRecord = {
@@ -28,6 +38,14 @@ type SessionDetailRecord = {
   dayIndex: number;
   focusLabel: string;
   state: 'planned' | 'completed' | 'skipped';
+  startedAt?: Date | string | null;
+  completedAt?: Date | string | null;
+  effectiveDurationSec?: number | null;
+  durationCorrectedAt?: Date | string | null;
+  note?: string | null;
+  postSessionFatigue?: number | null;
+  postSessionReadiness?: number | null;
+  postSessionComment?: string | null;
   exercises: SessionDetailExercise[];
 };
 
@@ -38,6 +56,38 @@ export type ProgramSessionDetailRouteDeps = {
 
 function json(body: unknown, status: number): Response {
   return Response.json(body, { status });
+}
+
+function toIsoDate(value: Date | string): string {
+  if (typeof value === 'string') {
+    return value.slice(0, 10);
+  }
+
+  return value.toISOString().slice(0, 10);
+}
+
+function toIsoDateTime(value: Date | string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  return value.toISOString();
+}
+
+function toNumber(value: number | string | { toString(): string } | null): number | null {
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value === 'number') {
+    return value;
+  }
+
+  return Number(value.toString());
 }
 
 export function createProgramSessionDetailGetHandler(deps: ProgramSessionDetailRouteDeps) {
@@ -53,16 +103,54 @@ export function createProgramSessionDetailGetHandler(deps: ProgramSessionDetailR
       return json({ error: 'Session not found' }, 404);
     }
 
-    const scopedExercises = detail.exercises.filter((exercise) =>
-      typeof exercise.userId === 'undefined' || exercise.userId === session.userId,
+    const scopedExercises = detail.exercises
+      .filter((exercise) => typeof exercise.userId === 'undefined' || exercise.userId === session.userId)
+      .map((exercise) => ({
+        id: exercise.id,
+        exerciseKey: exercise.exerciseKey,
+        displayName: exercise.displayName,
+        movementPattern: exercise.movementPattern,
+        sets: exercise.sets,
+        targetReps: exercise.targetReps,
+        targetLoad: exercise.targetLoad,
+        restMinSec: exercise.restMinSec,
+        restMaxSec: exercise.restMaxSec,
+        isSubstituted: exercise.isSubstituted,
+        originalExerciseKey: exercise.originalExerciseKey,
+        isSkipped: Boolean(exercise.isSkipped),
+        skipReasonCode: exercise.skipReasonCode ?? null,
+        skipReasonText: exercise.skipReasonText ?? null,
+        loggedSets: [...(exercise.loggedSets ?? [])]
+          .sort((a, b) => a.setIndex - b.setIndex)
+          .map((setItem) => ({
+            setIndex: setItem.setIndex,
+            weight: Number(toNumber(setItem.weight) ?? 0),
+            reps: setItem.reps,
+            rpe: toNumber(setItem.rpe),
+          })),
+      }));
+
+    return json(
+      {
+        session: {
+          id: detail.id,
+          scheduledDate: toIsoDate(detail.scheduledDate),
+          dayIndex: detail.dayIndex,
+          focusLabel: detail.focusLabel,
+          state: detail.state,
+          startedAt: toIsoDateTime(detail.startedAt),
+          completedAt: toIsoDateTime(detail.completedAt),
+          effectiveDurationSec: detail.effectiveDurationSec ?? null,
+          durationCorrectedAt: toIsoDateTime(detail.durationCorrectedAt),
+          note: detail.note ?? null,
+          postSessionFatigue: detail.postSessionFatigue ?? null,
+          postSessionReadiness: detail.postSessionReadiness ?? null,
+          postSessionComment: detail.postSessionComment ?? null,
+          exercises: scopedExercises,
+        },
+      },
+      200,
     );
-
-    const payload = buildSessionDetailProjection({
-      ...detail,
-      exercises: scopedExercises,
-    });
-
-    return json(payload, 200);
   };
 }
 
@@ -74,7 +162,54 @@ async function buildDefaultDeps(): Promise<ProgramSessionDetailRouteDeps> {
     resolveSession: () => validateSessionFromCookies(repository),
     getSessionDetail: async (sessionId, userId) => {
       const dal = createProgramDal(prisma as never, { userId });
-      return dal.getSessionById(sessionId) as Promise<SessionDetailRecord | null>;
+      const session = await dal.getSessionById(sessionId);
+      if (!session) {
+        return null;
+      }
+
+      const exerciseIds = session.exercises.map((exercise) => exercise.id);
+      const loggedSets =
+        exerciseIds.length > 0
+          ? await prisma.loggedSet.findMany({
+            where: {
+              userId,
+              plannedSessionId: sessionId,
+              plannedExerciseId: {
+                in: exerciseIds,
+              },
+            },
+            orderBy: {
+              setIndex: 'asc',
+            },
+            select: {
+              plannedExerciseId: true,
+              setIndex: true,
+              weight: true,
+              reps: true,
+              rpe: true,
+            },
+          })
+          : [];
+
+      const setsByExercise = new Map<string, SessionDetailLoggedSet[]>();
+      for (const row of loggedSets) {
+        const bucket = setsByExercise.get(row.plannedExerciseId) ?? [];
+        bucket.push({
+          setIndex: row.setIndex,
+          weight: row.weight as unknown as number,
+          reps: row.reps,
+          rpe: row.rpe as unknown as number | null,
+        });
+        setsByExercise.set(row.plannedExerciseId, bucket);
+      }
+
+      return {
+        ...session,
+        exercises: session.exercises.map((exercise) => ({
+          ...exercise,
+          loggedSets: setsByExercise.get(exercise.id) ?? [],
+        })),
+      } as SessionDetailRecord;
     },
   };
 }
