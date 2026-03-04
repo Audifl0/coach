@@ -11,7 +11,7 @@
 **Requirements:** AUTH-01, AUTH-02, AUTH-03, PLAT-01, PLAT-03
 
 **Success Criteria (observable):**
-- New user can create an account via email/password and reach an authenticated area.
+- New user can create an account via username/password and reach an authenticated area.
 - Authenticated session survives browser refresh and standard revisit flow.
 - Manual admin reset flow can restore account access and allow login with a new password.
 - Application is reachable on a VPS HTTPS endpoint with valid TLS.
