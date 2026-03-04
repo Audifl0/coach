@@ -3,6 +3,27 @@ import test from 'node:test';
 
 import { createProgramDal, type PlannedExerciseRecord, type PlannedSessionRecord, type ProgramPlanRecord } from '../../src/server/dal/program';
 
+async function loadSessionLoggingServiceFactory(): Promise<
+  (deps: { programDal: Record<string, unknown>; now?: () => Date }) => Record<string, unknown>
+> {
+  try {
+    const loaded = await import('../../src/server/services/session-logging');
+
+    if (typeof loaded.createSessionLoggingService === 'function') {
+      return loaded.createSessionLoggingService as (deps: {
+        programDal: Record<string, unknown>;
+        now?: () => Date;
+      }) => Record<string, unknown>;
+    }
+  } catch {
+    // Red phase fallback when module does not exist yet.
+  }
+
+  return () => {
+    throw new Error('createSessionLoggingService is not implemented');
+  };
+}
+
 function createExercise(overrides: Partial<PlannedExerciseRecord> = {}): PlannedExerciseRecord {
   return {
     id: 'exercise_1',
@@ -696,4 +717,232 @@ test('history list/detail are account-scoped and include aggregated load with gr
   assert.equal(detailExerciseWhereUserId, 'user_1');
   assert.equal(detail?.exercises.length, 1);
   assert.equal(detail?.exercises[0]?.loggedSets.length, 2);
+});
+
+test('service starts timer on first logged set and preserves original startedAt for later edits', async () => {
+  const createSessionLoggingService = await loadSessionLoggingServiceFactory();
+  let startedAt: Date | null = null;
+  let markStartedCalls = 0;
+  const nowValues = [new Date('2026-03-04T08:00:00.000Z'), new Date('2026-03-04T08:06:00.000Z')];
+
+  const service = createSessionLoggingService({
+    now: () => nowValues.shift() ?? new Date('2026-03-04T08:06:00.000Z'),
+    programDal: {
+      async getPlannedExerciseOwnership() {
+        return {
+          plannedExerciseId: 'exercise_1',
+          plannedSessionId: 'session_1',
+        };
+      },
+      async getSessionLifecycle() {
+        return {
+          plannedSessionId: 'session_1',
+          startedAt,
+          completedAt: null,
+        };
+      },
+      async markSessionStarted(_: string, at: Date) {
+        markStartedCalls += 1;
+        startedAt = startedAt ?? at;
+        return { startedAt };
+      },
+      async upsertLoggedSet() {
+        return { id: 'set_1' };
+      },
+    },
+  }) as unknown as {
+    logSet(args: { plannedExerciseId: string; setIndex: number; weight: number; reps: number; rpe?: number }): Promise<void>;
+  };
+
+  await service.logSet({
+    plannedExerciseId: 'exercise_1',
+    setIndex: 1,
+    weight: 20,
+    reps: 10,
+    rpe: 7,
+  });
+  await service.logSet({
+    plannedExerciseId: 'exercise_1',
+    setIndex: 1,
+    weight: 22.5,
+    reps: 8,
+    rpe: 8,
+  });
+
+  assert.equal(startedAt?.toISOString(), '2026-03-04T08:00:00.000Z');
+  assert.equal(markStartedCalls, 1);
+});
+
+test('service completion computes effectiveDurationSec from startedAt to completion time', async () => {
+  const createSessionLoggingService = await loadSessionLoggingServiceFactory();
+  let completePayload:
+    | {
+        effectiveDurationSec: number;
+        plannedSessionId: string;
+      }
+    | undefined;
+
+  const service = createSessionLoggingService({
+    now: () => new Date('2026-03-04T09:10:00.000Z'),
+    programDal: {
+      async getSessionLifecycle() {
+        return {
+          plannedSessionId: 'session_1',
+          startedAt: new Date('2026-03-04T08:00:00.000Z'),
+          completedAt: null,
+        };
+      },
+      async completeSession(payload: { plannedSessionId: string; effectiveDurationSec: number }) {
+        completePayload = payload;
+      },
+    },
+  }) as unknown as {
+    completeSession(args: { plannedSessionId: string; fatigue: number; readiness: number; comment?: string }): Promise<void>;
+  };
+
+  await service.completeSession({
+    plannedSessionId: 'session_1',
+    fatigue: 3,
+    readiness: 4,
+    comment: 'good',
+  });
+
+  assert.equal(completePayload?.plannedSessionId, 'session_1');
+  assert.equal(completePayload?.effectiveDurationSec, 4200);
+});
+
+test('service accepts duration correction within 24h and rejects afterward', async () => {
+  const createSessionLoggingService = await loadSessionLoggingServiceFactory();
+  let correctionCalls = 0;
+
+  const serviceWithinWindow = createSessionLoggingService({
+    now: () => new Date('2026-03-05T09:00:00.000Z'),
+    programDal: {
+      async getSessionLifecycle() {
+        return {
+          plannedSessionId: 'session_1',
+          startedAt: new Date('2026-03-04T08:00:00.000Z'),
+          completedAt: new Date('2026-03-04T10:00:00.000Z'),
+        };
+      },
+      async correctSessionDuration() {
+        correctionCalls += 1;
+      },
+    },
+  }) as unknown as {
+    correctDuration(args: { plannedSessionId: string; effectiveDurationSec: number }): Promise<void>;
+  };
+
+  await serviceWithinWindow.correctDuration({
+    plannedSessionId: 'session_1',
+    effectiveDurationSec: 4800,
+  });
+  assert.equal(correctionCalls, 1);
+
+  const serviceAfterWindow = createSessionLoggingService({
+    now: () => new Date('2026-03-05T10:00:01.000Z'),
+    programDal: {
+      async getSessionLifecycle() {
+        return {
+          plannedSessionId: 'session_1',
+          startedAt: new Date('2026-03-04T08:00:00.000Z'),
+          completedAt: new Date('2026-03-04T10:00:00.000Z'),
+        };
+      },
+      async correctSessionDuration() {
+        correctionCalls += 1;
+      },
+    },
+  }) as unknown as {
+    correctDuration(args: { plannedSessionId: string; effectiveDurationSec: number }): Promise<void>;
+  };
+
+  await assert.rejects(
+    () =>
+      serviceAfterWindow.correctDuration({
+        plannedSessionId: 'session_1',
+        effectiveDurationSec: 4700,
+      }),
+    /24.?hour/i,
+  );
+  assert.equal(correctionCalls, 1);
+});
+
+test('service blocks set skip and note mutations after completion but allows valid duration correction', async () => {
+  const createSessionLoggingService = await loadSessionLoggingServiceFactory();
+  let correctionCalls = 0;
+
+  const service = createSessionLoggingService({
+    now: () => new Date('2026-03-04T12:00:00.000Z'),
+    programDal: {
+      async getPlannedExerciseOwnership() {
+        return {
+          plannedExerciseId: 'exercise_1',
+          plannedSessionId: 'session_1',
+        };
+      },
+      async getSessionLifecycle() {
+        return {
+          plannedSessionId: 'session_1',
+          startedAt: new Date('2026-03-04T08:00:00.000Z'),
+          completedAt: new Date('2026-03-04T11:00:00.000Z'),
+        };
+      },
+      async upsertLoggedSet() {
+        throw new Error('should not be called');
+      },
+      async markExerciseSkipped() {
+        throw new Error('should not be called');
+      },
+      async revertExerciseSkipped() {
+        throw new Error('should not be called');
+      },
+      async updateSessionNote() {
+        throw new Error('should not be called');
+      },
+      async correctSessionDuration() {
+        correctionCalls += 1;
+      },
+    },
+  }) as unknown as {
+    logSet(args: { plannedExerciseId: string; setIndex: number; weight: number; reps: number; rpe?: number }): Promise<void>;
+    skipExercise(args: { plannedExerciseId: string; reasonCode: string; reasonText?: string }): Promise<void>;
+    revertSkippedExercise(plannedExerciseId: string): Promise<void>;
+    updateSessionNote(args: { plannedSessionId: string; note: string | null }): Promise<void>;
+    correctDuration(args: { plannedSessionId: string; effectiveDurationSec: number }): Promise<void>;
+  };
+
+  await assert.rejects(
+    () =>
+      service.logSet({
+        plannedExerciseId: 'exercise_1',
+        setIndex: 1,
+        weight: 20,
+        reps: 10,
+      }),
+    /completed/i,
+  );
+  await assert.rejects(
+    () =>
+      service.skipExercise({
+        plannedExerciseId: 'exercise_1',
+        reasonCode: 'pain',
+      }),
+    /completed/i,
+  );
+  await assert.rejects(() => service.revertSkippedExercise('exercise_1'), /completed/i);
+  await assert.rejects(
+    () =>
+      service.updateSessionNote({
+        plannedSessionId: 'session_1',
+        note: 'note',
+      }),
+    /completed/i,
+  );
+
+  await service.correctDuration({
+    plannedSessionId: 'session_1',
+    effectiveDurationSec: 3600,
+  });
+  assert.equal(correctionCalls, 1);
 });
