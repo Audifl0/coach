@@ -275,3 +275,410 @@ test('ownership checks enforce account boundary and substitution updates single 
     /mismatched account context/i,
   );
 });
+
+test('upsertLoggedSet updates existing rows for matching plannedExerciseId and setIndex', async () => {
+  const persistedByKey = new Map<string, { id: string; plannedExerciseId: string; setIndex: number; weight: number; reps: number; rpe: number | null }>();
+  persistedByKey.set('exercise_1:1', {
+    id: 'set_1',
+    plannedExerciseId: 'exercise_1',
+    setIndex: 1,
+    weight: 20,
+    reps: 10,
+    rpe: null,
+  });
+
+  let createCount = 0;
+  let updateCount = 0;
+
+  const db = {
+    async $transaction<T>(callback: (tx: never) => Promise<T>): Promise<T> {
+      return callback(this as never);
+    },
+    programPlan: {
+      async updateMany() {
+        return { count: 0 };
+      },
+      async create() {
+        return createPlan();
+      },
+    },
+    plannedSession: {
+      async findFirst() {
+        return null;
+      },
+      async update() {
+        throw new Error('not used in this test');
+      },
+      async findMany() {
+        return [];
+      },
+    },
+    plannedExercise: {
+      async findUnique() {
+        return {
+          ...createExercise(),
+          plannedSession: {
+            id: 'session_1',
+            userId: 'user_1',
+            scheduledDate: new Date('2026-03-04T08:00:00.000Z'),
+            completedAt: null,
+          },
+        };
+      },
+      async update() {
+        throw new Error('not used in this test');
+      },
+      async findMany() {
+        return [];
+      },
+    },
+    loggedSet: {
+      async upsert(args: {
+        where: { plannedExerciseId_setIndex: { plannedExerciseId: string; setIndex: number } };
+        create: { plannedExerciseId: string; setIndex: number; weight: number; reps: number; rpe: number | null };
+        update: { weight: number; reps: number; rpe: number | null };
+      }) {
+        const key = `${args.where.plannedExerciseId_setIndex.plannedExerciseId}:${args.where.plannedExerciseId_setIndex.setIndex}`;
+        const existing = persistedByKey.get(key);
+        if (existing) {
+          updateCount += 1;
+          const next = { ...existing, ...args.update };
+          persistedByKey.set(key, next);
+          return next;
+        }
+
+        createCount += 1;
+        const created = {
+          id: `set_${createCount + updateCount + 1}`,
+          ...args.create,
+        };
+        persistedByKey.set(key, created);
+        return created;
+      },
+    },
+  };
+
+  const dal = createProgramDal(db as never, { userId: 'user_1' }) as unknown as {
+    upsertLoggedSet(args: {
+      plannedExerciseId: string;
+      setIndex: number;
+      weight: number;
+      reps: number;
+      rpe: number | null;
+    }): Promise<{ id: string; setIndex: number; weight: number; reps: number; rpe: number | null }>;
+  };
+
+  const updated = await dal.upsertLoggedSet({
+    plannedExerciseId: 'exercise_1',
+    setIndex: 1,
+    weight: 24,
+    reps: 8,
+    rpe: 8,
+  });
+
+  assert.equal(updated.id, 'set_1');
+  assert.equal(updated.weight, 24);
+  assert.equal(updated.reps, 8);
+  assert.equal(updated.rpe, 8);
+  assert.equal(createCount, 0);
+  assert.equal(updateCount, 1);
+  assert.equal(persistedByKey.size, 1);
+});
+
+test('skip requires reason code and revert is blocked after session completion', async () => {
+  let skipUpdateCount = 0;
+  let completed = false;
+  const db = {
+    async $transaction<T>(callback: (tx: never) => Promise<T>): Promise<T> {
+      return callback(this as never);
+    },
+    programPlan: {
+      async updateMany() {
+        return { count: 0 };
+      },
+      async create() {
+        return createPlan();
+      },
+    },
+    plannedSession: {
+      async findFirst() {
+        return null;
+      },
+      async update() {
+        throw new Error('not used in this test');
+      },
+      async findMany() {
+        return [];
+      },
+    },
+    plannedExercise: {
+      async findUnique() {
+        return {
+          ...createExercise(),
+          plannedSession: {
+            id: 'session_1',
+            userId: 'user_1',
+            scheduledDate: new Date('2026-03-04T08:00:00.000Z'),
+            completedAt: completed ? new Date('2026-03-04T10:00:00.000Z') : null,
+          },
+        };
+      },
+      async update() {
+        skipUpdateCount += 1;
+        return createExercise();
+      },
+      async findMany() {
+        return [];
+      },
+    },
+    loggedSet: {
+      async upsert() {
+        throw new Error('not used in this test');
+      },
+    },
+  };
+
+  const dal = createProgramDal(db as never, { userId: 'user_1' }) as unknown as {
+    markExerciseSkipped(args: { plannedExerciseId: string; reasonCode: string; reasonText?: string }): Promise<void>;
+    revertExerciseSkipped(plannedExerciseId: string): Promise<void>;
+  };
+
+  await assert.rejects(
+    () =>
+      dal.markExerciseSkipped({
+        plannedExerciseId: 'exercise_1',
+        reasonCode: '',
+      }),
+    /reason code/i,
+  );
+  assert.equal(skipUpdateCount, 0);
+
+  await dal.markExerciseSkipped({
+    plannedExerciseId: 'exercise_1',
+    reasonCode: 'pain',
+    reasonText: 'knee discomfort',
+  });
+  assert.equal(skipUpdateCount, 1);
+
+  completed = true;
+  await assert.rejects(() => dal.revertExerciseSkipped('exercise_1'), /completed/i);
+});
+
+test('completeSession persists feedback once and rejects post-completion set edits', async () => {
+  let completedAt: Date | null = null;
+  let completeUpdateCount = 0;
+
+  const db = {
+    async $transaction<T>(callback: (tx: never) => Promise<T>): Promise<T> {
+      return callback(this as never);
+    },
+    programPlan: {
+      async updateMany() {
+        return { count: 0 };
+      },
+      async create() {
+        return createPlan();
+      },
+    },
+    plannedSession: {
+      async findFirst() {
+        return null;
+      },
+      async update() {
+        completeUpdateCount += 1;
+        completedAt = completedAt ?? new Date('2026-03-04T10:10:00.000Z');
+        return createSession({
+          completedAt: completedAt ?? undefined,
+        } as never);
+      },
+      async findMany() {
+        return [];
+      },
+    },
+    plannedExercise: {
+      async findUnique() {
+        return {
+          ...createExercise(),
+          plannedSession: {
+            id: 'session_1',
+            userId: 'user_1',
+            scheduledDate: new Date('2026-03-04T08:00:00.000Z'),
+            completedAt,
+          },
+        };
+      },
+      async update() {
+        return createExercise();
+      },
+      async findMany() {
+        return [];
+      },
+    },
+    loggedSet: {
+      async upsert() {
+        return {
+          id: 'set_1',
+          plannedExerciseId: 'exercise_1',
+          setIndex: 1,
+          weight: 20,
+          reps: 8,
+          rpe: null,
+        };
+      },
+    },
+  };
+
+  const dal = createProgramDal(db as never, { userId: 'user_1' }) as unknown as {
+    completeSession(args: {
+      plannedSessionId: string;
+      fatigue: number;
+      readiness: number;
+      comment?: string;
+      completedAt: Date;
+      effectiveDurationSec: number;
+    }): Promise<void>;
+    upsertLoggedSet(args: {
+      plannedExerciseId: string;
+      setIndex: number;
+      weight: number;
+      reps: number;
+      rpe: number | null;
+    }): Promise<void>;
+  };
+
+  await dal.completeSession({
+    plannedSessionId: 'session_1',
+    fatigue: 3,
+    readiness: 4,
+    comment: 'solid',
+    completedAt: new Date('2026-03-04T10:10:00.000Z'),
+    effectiveDurationSec: 3900,
+  });
+
+  await assert.rejects(
+    () =>
+      dal.completeSession({
+        plannedSessionId: 'session_1',
+        fatigue: 3,
+        readiness: 4,
+        completedAt: new Date('2026-03-04T10:11:00.000Z'),
+        effectiveDurationSec: 3910,
+      }),
+    /already completed/i,
+  );
+  assert.equal(completeUpdateCount, 1);
+
+  await assert.rejects(
+    () =>
+      dal.upsertLoggedSet({
+        plannedExerciseId: 'exercise_1',
+        setIndex: 1,
+        weight: 22,
+        reps: 8,
+        rpe: 8,
+      }),
+    /completed/i,
+  );
+});
+
+test('history list/detail are account-scoped and include aggregated load with grouped sets', async () => {
+  const historyWhereClauses: Array<{ userId: string; completedAt: { gte: Date; lte: Date } }> = [];
+  let detailExerciseWhereUserId = '';
+  const db = {
+    async $transaction<T>(callback: (tx: never) => Promise<T>): Promise<T> {
+      return callback(this as never);
+    },
+    programPlan: {
+      async updateMany() {
+        return { count: 0 };
+      },
+      async create() {
+        return createPlan();
+      },
+    },
+    plannedSession: {
+      async findFirst() {
+        return null;
+      },
+      async update() {
+        throw new Error('not used in this test');
+      },
+      async findMany(args: { where: { userId: string; completedAt: { gte: Date; lte: Date } } }) {
+        historyWhereClauses.push(args.where);
+        return [
+          {
+            id: 'session_1',
+            userId: 'user_1',
+            scheduledDate: new Date('2026-03-04T08:00:00.000Z'),
+            completedAt: new Date('2026-03-04T09:00:00.000Z'),
+            effectiveDurationSec: 3600,
+            exercises: [{ id: 'exercise_1' }, { id: 'exercise_2' }],
+            loggedSets: [
+              { plannedExerciseId: 'exercise_1', weight: 20, reps: 10 },
+              { plannedExerciseId: 'exercise_1', weight: 22.5, reps: 8 },
+              { plannedExerciseId: 'exercise_2', weight: 60, reps: 6 },
+            ],
+          },
+        ];
+      },
+    },
+    plannedExercise: {
+      async findUnique() {
+        return null;
+      },
+      async update() {
+        return createExercise();
+      },
+      async findMany(args: { where: { userId: string; plannedSessionId: string } }) {
+        detailExerciseWhereUserId = args.where.userId;
+        return [
+          {
+            ...createExercise({
+              id: 'exercise_1',
+              exerciseKey: 'goblet_squat',
+              displayName: 'Goblet Squat',
+              movementPattern: 'squat',
+              isSkipped: false as never,
+              skipReasonCode: null as never,
+              skipReasonText: null as never,
+            }),
+            loggedSets: [
+              { setIndex: 1, weight: 20, reps: 10, rpe: null },
+              { setIndex: 2, weight: 22.5, reps: 8, rpe: 8 },
+            ],
+          },
+        ];
+      },
+    },
+    loggedSet: {
+      async upsert() {
+        throw new Error('not used in this test');
+      },
+    },
+  };
+
+  const dal = createProgramDal(db as never, { userId: 'user_1' }) as unknown as {
+    getHistoryList(args: { from: Date; to: Date }): Promise<Array<{ id: string; exerciseCount: number; totalLoad: number }>>;
+    getHistorySessionDetail(sessionId: string): Promise<{
+      id: string;
+      exercises: Array<{
+        id: string;
+        loggedSets: Array<{ setIndex: number; weight: number; reps: number; rpe: number | null }>;
+      }>;
+    } | null>;
+  };
+
+  const list = await dal.getHistoryList({
+    from: new Date('2026-03-01T00:00:00.000Z'),
+    to: new Date('2026-03-04T23:59:59.000Z'),
+  });
+  assert.equal(historyWhereClauses[0]?.userId, 'user_1');
+  assert.equal(list.length, 1);
+  assert.equal(list[0]?.exerciseCount, 2);
+  assert.equal(list[0]?.totalLoad, 740);
+
+  const detail = await dal.getHistorySessionDetail('session_1');
+  assert.equal(detailExerciseWhereUserId, 'user_1');
+  assert.equal(detail?.exercises.length, 1);
+  assert.equal(detail?.exercises[0]?.loggedSets.length, 2);
+});
