@@ -6,14 +6,14 @@ current_phase: 04
 current_phase_name: Session Logging and History
 current_plan: 4
 status: verifying
-stopped_at: Completed 04-04-PLAN.md
-last_updated: "2026-03-04T20:29:41.862Z"
+stopped_at: Completed 04-05-PLAN.md
+last_updated: "2026-03-04T20:44:50.517Z"
 last_activity: 2026-03-04
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 19
-  completed_plans: 19
+  total_plans: 20
+  completed_plans: 20
   percent: 100
 ---
 
@@ -92,6 +92,8 @@ Recent decisions affecting current work:
 - [Phase 04-session-logging-and-history]: Used helper exports in dashboard components to keep interaction behavior deterministic under node:test.
 - [Phase 04-session-logging-and-history]: Mounted history card as an independent client panel below today workout to avoid breaking auth/onboarding route behavior.
 - [Phase 04-session-logging-and-history]: Drilldown detail reuses /api/program/sessions/:sessionId to avoid introducing a new history-detail endpoint.
+- [Phase 04-session-logging-and-history]: Kept auth + not-found masking in route while moving payload shaping to buildSessionDetailProjection.
+- [Phase 04-session-logging-and-history]: Expanded ProgramSessionDetailResponse schema to validate enriched execution metadata instead of route-local loose shaping.
 
 ### Pending Todos
 
@@ -103,6 +105,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-04T20:29:41.860Z
-**Stopped At:** Completed 04-04-PLAN.md
+**Last Date:** 2026-03-04T20:44:50.514Z
+**Stopped At:** Completed 04-05-PLAN.md
 **Resume File:** None
