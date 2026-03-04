@@ -22,8 +22,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Program Planning
 
-- [ ] **PROG-01**: User can generate a weekly training split adapted to profile constraints.
-- [ ] **PROG-02**: User can view per-exercise prescription (sets, reps, target load/intensity, rest).
+- [x] **PROG-01**: User can generate a weekly training split adapted to profile constraints.
+- [x] **PROG-02**: User can view per-exercise prescription (sets, reps, target load/intensity, rest).
 - [ ] **PROG-03**: User can replace an exercise with a safe equivalent from substitution rules.
 
 ### Session Logging
@@ -96,8 +96,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROF-02 | 2 | Complete |
 | PROF-03 | 2 | Complete |
 | PROF-04 | 2 | Complete |
-| PROG-01 | 3 | Pending |
-| PROG-02 | 3 | Pending |
+| PROG-01 | 3 | Complete |
+| PROG-02 | 3 | Complete |
 | PROG-03 | 3 | Pending |
 | LOG-01 | 4 | Pending |
 | LOG-02 | 4 | Pending |

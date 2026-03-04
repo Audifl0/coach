@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 03
 current_phase_name: Program Planning and Daily Workout Surface
-current_plan: Not started
+current_plan: 03-02
 status: active
-stopped_at: Completed 02-04-PLAN.md
-last_updated: "2026-03-04T17:05:47.509Z"
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-03-04T17:47:59.093Z"
 last_activity: 2026-03-04
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 15
-  completed_plans: 11
-  percent: 73
+  completed_plans: 12
+  percent: 80
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 03
 **Current Phase Name:** Program Planning and Daily Workout Surface
 **Total Phases:** 6
-**Current Plan:** Not started
+**Current Plan:** 03-02
 **Total Plans in Phase:** 4
-**Status:** Ready for planning
+**Status:** Active execution
 **Last Activity:** 2026-03-04
-**Last Activity Description:** Phase 2 complete
-**Progress:** [███████░░░] 73%
+**Last Activity Description:** Completed 03-01-PLAN.md
+**Progress:** [████████░░] 80%
 
 ## Performance Metrics
 
@@ -72,6 +72,9 @@ Recent decisions affecting current work:
 - [Phase 01-platform-foundation-security-and-authentication]: Private route authorization now depends on persisted active session state, never raw cookie presence.
 - [Phase 01-platform-foundation-security-and-authentication]: Middleware remains a lightweight UX prefilter; authoritative auth checks run in server-side private route logic.
 - [Phase 01-platform-foundation-security-and-authentication]: Current-session logout revocation semantics are verified by lifecycle tests against concurrent session behavior.
+- [Phase 03-program-planning-and-daily-workout-surface]: Program persistence uses explicit active/archived status with DAL-driven active-plan replacement
+- [Phase 03-program-planning-and-daily-workout-surface]: Program DAL methods enforce ownership strictly from authenticated session scope, never caller userId
+- [Phase 03-program-planning-and-daily-workout-surface]: Substitution compatibility metadata remains deterministic in code catalog for Phase 3 foundation
 
 ### Pending Todos
 
@@ -83,6 +86,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-04T11:33:39.373Z
-**Stopped At:** Completed 01-07-PLAN.md
+**Last Date:** 2026-03-04T17:47:59.091Z
+**Stopped At:** Completed 03-01-PLAN.md
 **Resume File:** None
