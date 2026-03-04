@@ -51,6 +51,69 @@ export const substitutionApplyInputSchema = z.object({
   replacementExerciseKey: z.string().trim().min(1),
 });
 
+export const loggedSetInputSchema = z.object({
+  setIndex: z.number().int().min(1),
+  weight: z.number().positive(),
+  reps: z.number().int().min(1),
+  rpe: z.number().min(1).max(10).optional(),
+});
+
+export const exerciseSkipInputSchema = z.object({
+  reasonCode: z.string().trim().min(1),
+  reasonText: z.string().trim().max(280).optional(),
+});
+
+export const sessionNoteInputSchema = z.object({
+  note: z.string().trim().max(280).nullable().optional(),
+});
+
+export const sessionCompleteInputSchema = z.object({
+  fatigue: z.number().int().min(1).max(5),
+  readiness: z.number().int().min(1).max(5),
+  comment: z.string().trim().max(280).optional(),
+});
+
+export const sessionDurationCorrectionInputSchema = z.object({
+  effectiveDurationSec: z.number().int().min(1),
+});
+
+export const historyPeriodValues = ['7d', '30d', '90d', 'custom'] as const;
+
+export const historyQueryInputSchema = z
+  .object({
+    period: z.enum(historyPeriodValues),
+    from: z.iso.date().optional(),
+    to: z.iso.date().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.period === 'custom') {
+      if (!value.from || !value.to) {
+        ctx.addIssue({
+          code: 'custom',
+          message: '`from` and `to` are required when period is custom',
+        });
+        return;
+      }
+
+      if (value.from > value.to) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['from'],
+          message: '`from` must be less than or equal to `to`',
+        });
+      }
+
+      return;
+    }
+
+    if (value.from || value.to) {
+      ctx.addIssue({
+        code: 'custom',
+        message: '`from` and `to` are only allowed when period is custom',
+      });
+    }
+  });
+
 export type ProgramGenerateInput = z.infer<typeof programGenerateInputSchema>;
 export type ProgramPlannedExercise = z.infer<typeof programPlannedExerciseSchema>;
 export type ProgramSessionSummary = z.infer<typeof programSessionSummarySchema>;
@@ -58,6 +121,12 @@ export type ProgramTodayResponse = z.infer<typeof programTodayResponseSchema>;
 export type ProgramSessionDetailResponse = z.infer<typeof programSessionDetailResponseSchema>;
 export type SubstitutionCandidate = z.infer<typeof substitutionCandidateSchema>;
 export type SubstitutionApplyInput = z.infer<typeof substitutionApplyInputSchema>;
+export type LoggedSetInput = z.infer<typeof loggedSetInputSchema>;
+export type ExerciseSkipInput = z.infer<typeof exerciseSkipInputSchema>;
+export type SessionNoteInput = z.infer<typeof sessionNoteInputSchema>;
+export type SessionCompleteInput = z.infer<typeof sessionCompleteInputSchema>;
+export type SessionDurationCorrectionInput = z.infer<typeof sessionDurationCorrectionInputSchema>;
+export type HistoryQueryInput = z.infer<typeof historyQueryInputSchema>;
 
 export function parseProgramGenerateInput(input: unknown): ProgramGenerateInput {
   return programGenerateInputSchema.parse(input);
@@ -73,4 +142,28 @@ export function parseProgramSessionDetailResponse(input: unknown): ProgramSessio
 
 export function parseSubstitutionApplyInput(input: unknown): SubstitutionApplyInput {
   return substitutionApplyInputSchema.parse(input);
+}
+
+export function parseLoggedSetInput(input: unknown): LoggedSetInput {
+  return loggedSetInputSchema.parse(input);
+}
+
+export function parseExerciseSkipInput(input: unknown): ExerciseSkipInput {
+  return exerciseSkipInputSchema.parse(input);
+}
+
+export function parseSessionNoteInput(input: unknown): SessionNoteInput {
+  return sessionNoteInputSchema.parse(input);
+}
+
+export function parseSessionCompleteInput(input: unknown): SessionCompleteInput {
+  return sessionCompleteInputSchema.parse(input);
+}
+
+export function parseSessionDurationCorrectionInput(input: unknown): SessionDurationCorrectionInput {
+  return sessionDurationCorrectionInputSchema.parse(input);
+}
+
+export function parseHistoryQueryInput(input: unknown): HistoryQueryInput {
+  return historyQueryInputSchema.parse(input);
 }
