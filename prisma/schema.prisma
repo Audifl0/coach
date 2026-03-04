@@ -15,6 +15,7 @@ model User {
   programPlans   ProgramPlan[]
   plannedSessions PlannedSession[]
   plannedExercises PlannedExercise[]
+  loggedSets     LoggedSet[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 }
@@ -69,7 +70,16 @@ model PlannedSession {
   dayIndex      Int
   focusLabel    String
   state         String
+  startedAt     DateTime?
+  completedAt   DateTime?
+  effectiveDurationSec Int?
+  durationCorrectedAt DateTime?
+  note          String?
+  postSessionFatigue Int?
+  postSessionReadiness Int?
+  postSessionComment String?
   exercises     PlannedExercise[]
+  loggedSets    LoggedSet[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
@@ -94,9 +104,33 @@ model PlannedExercise {
   restMaxSec         Int
   isSubstituted      Boolean        @default(false)
   originalExerciseKey String?
+  isSkipped          Boolean        @default(false)
+  skipReasonCode     String?
+  skipReasonText     String?
+  skippedAt          DateTime?
+  loggedSets         LoggedSet[]
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 
   @@unique([plannedSessionId, orderIndex])
+  @@index([userId, plannedSessionId])
+}
+
+model LoggedSet {
+  id                String          @id @default(cuid())
+  plannedSessionId  String
+  plannedSession    PlannedSession  @relation(fields: [plannedSessionId], references: [id], onDelete: Cascade)
+  plannedExerciseId String
+  plannedExercise   PlannedExercise @relation(fields: [plannedExerciseId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  setIndex          Int
+  weight            Decimal
+  reps              Int
+  rpe               Decimal?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([plannedExerciseId, setIndex])
   @@index([userId, plannedSessionId])
 }
