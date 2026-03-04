@@ -53,7 +53,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Deployment & Reliability
 
-- [ ] **PLAT-01**: User can access the web app on a VPS-hosted HTTPS endpoint.
+- [x] **PLAT-01**: User can access the web app on a VPS-hosted HTTPS endpoint.
 - [ ] **PLAT-02**: User data is backed up and can be restored in case of failure.
 - [x] **PLAT-03**: User-related sensitive data is protected in transit and at rest.
 
@@ -112,7 +112,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DASH-01 | 3 | Pending |
 | DASH-02 | 6 | Pending |
 | DASH-03 | 5 | Pending |
-| PLAT-01 | 1 | Pending |
+| PLAT-01 | 1 | Complete |
 | PLAT-02 | 6 | Pending |
 | PLAT-03 | 1 | Complete |
 

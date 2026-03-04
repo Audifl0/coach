@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 1
 current_phase_name: Platform Foundation, Security, and Authentication
-current_plan: 1
+current_plan: 2
 status: verifying
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-03-04T10:44:20.416Z"
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-03-04T10:50:43.197Z"
 last_activity: 2026-03-04
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 6
-  completed_plans: 1
-  percent: 17
+  completed_plans: 2
+  percent: 33
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 1
 **Current Phase Name:** Platform Foundation, Security, and Authentication
 **Total Phases:** 6
-**Current Plan:** 1
+**Current Plan:** 2
 **Total Plans in Phase:** 6
-**Status:** Phase complete — ready for verification
+**Status:** In progress
 **Last Activity:** 2026-03-04
-**Last Activity Description:** Completed plan 01-01 foundation bootstrap
-**Progress:** [██░░░░░░░░] 17%
+**Last Activity Description:** Completed plan 01-04 VPS security and deployment baseline
+**Progress:** [███░░░░░░░] 33%
 
 ## Performance Metrics
 
@@ -57,6 +57,8 @@ Recent decisions affecting current work:
 - [Phase 01]: Pinned stable foundation dependencies with minimal scripts for deterministic installs.
 - [Phase 01]: Adopted Prisma 7 config-driven datasource via prisma.config.ts.
 - [Phase 01]: Baseline env contract includes DATABASE_URL, BETTER_AUTH_SECRET, and BETTER_AUTH_URL.
+- [Phase 01-platform-foundation-security-and-authentication]: Use Caddy automatic TLS for HTTPS termination and forwarding
+- [Phase 01-platform-foundation-security-and-authentication]: Use encrypted PostgreSQL dumps (OpenSSL) as baseline at-rest backup control
 
 ### Pending Todos
 
@@ -68,6 +70,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-04T10:44:20.414Z
-**Stopped At:** Completed 01-01-PLAN.md
+**Last Date:** 2026-03-04T10:50:43.194Z
+**Stopped At:** Completed 01-04-PLAN.md
 **Resume File:** None
