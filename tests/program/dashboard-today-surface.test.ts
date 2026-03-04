@@ -6,6 +6,15 @@ import { createProgramTodayGetHandler } from '../../src/app/api/program/today/ro
 import { selectTodayWorkoutProjection } from '../../src/lib/program/select-today-session';
 import { pickDashboardSession } from '../../src/app/(private)/dashboard/page';
 import { getPrimaryActionLabel, resolveDisplayedSession } from '../../src/app/(private)/dashboard/_components/today-workout-card';
+import {
+  buildCompleteSessionPayload,
+  buildSkipPayload,
+  createInitialLoggerState,
+  formatElapsedSeconds,
+  reduceLoggerStateAfterCompletion,
+  reduceLoggerStateAfterSetSaved,
+  upsertLoggedSet,
+} from '../../src/app/(private)/dashboard/_components/session-logger';
 
 function createSessionSummary(overrides: Record<string, unknown> = {}) {
   return {
@@ -197,4 +206,47 @@ test('today workout card helper resolves displayed session deterministically', (
   });
   assert.equal(next.mode, 'next');
   assert.equal(next.session?.id, 'session_2');
+});
+
+test('session logger set autosave helpers preserve immediate payload and edit continuity', () => {
+  const saved = upsertLoggedSet(
+    [
+      { setIndex: 1, weight: 20, reps: 10, rpe: 7 },
+    ],
+    { setIndex: 1, weight: 22.5, reps: 8, rpe: 8 },
+  );
+
+  assert.equal(saved.length, 1);
+  assert.deepEqual(saved[0], { setIndex: 1, weight: 22.5, reps: 8, rpe: 8 });
+});
+
+test('session logger skip payload requires reason and supports revert semantics', () => {
+  assert.throws(() => buildSkipPayload('', 'left knee'), /reason/i);
+  assert.deepEqual(buildSkipPayload('pain', 'left knee'), { reasonCode: 'pain', reasonText: 'left knee' });
+});
+
+test('session logger timer starts on first set and stays visible until explicit completion', () => {
+  const idle = createInitialLoggerState();
+  const started = reduceLoggerStateAfterSetSaved(idle, { nowMs: 120_000 });
+  assert.equal(started.timerStartedAtMs, 120_000);
+  assert.equal(started.timerCompletedAtMs, null);
+  assert.equal(formatElapsedSeconds(started, 123_000), '00:03');
+
+  const completed = reduceLoggerStateAfterCompletion(started, { nowMs: 129_000 });
+  assert.equal(completed.timerCompletedAtMs, 129_000);
+  assert.equal(formatElapsedSeconds(completed, 150_000), '00:09');
+});
+
+test('session logger completion payload requires fatigue/readiness and allows optional comment', () => {
+  assert.throws(() => buildCompleteSessionPayload({ fatigue: null, readiness: 4, comment: 'ok' }), /fatigue/i);
+  assert.throws(() => buildCompleteSessionPayload({ fatigue: 3, readiness: null, comment: 'ok' }), /readiness/i);
+  assert.deepEqual(buildCompleteSessionPayload({ fatigue: 3, readiness: 4, comment: '' }), {
+    fatigue: 3,
+    readiness: 4,
+  });
+  assert.deepEqual(buildCompleteSessionPayload({ fatigue: 2, readiness: 5, comment: 'solid' }), {
+    fatigue: 2,
+    readiness: 5,
+    comment: 'solid',
+  });
 });
