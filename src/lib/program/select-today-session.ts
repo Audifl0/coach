@@ -1,6 +1,10 @@
 import {
+  parseProgramHistoryListResponse,
+  parseProgramHistorySessionDetailResponse,
   parseProgramSessionDetailResponse,
   parseProgramTodayResponse,
+  type ProgramHistoryListResponse,
+  type ProgramHistorySessionDetailResponse,
   type ProgramSessionDetailResponse,
   type ProgramSessionSummary,
   type ProgramTodayResponse,
@@ -30,12 +34,56 @@ type SessionRecordLike = {
   exercises: SessionExerciseLike[];
 };
 
+type LoggedSetLike = {
+  setIndex: number;
+  weight: number | string | { toString(): string };
+  reps: number;
+  rpe: number | null;
+};
+
+type SessionHistoryExerciseLike = {
+  id: string;
+  exerciseKey: string;
+  displayName: string;
+  movementPattern: string;
+  isSkipped: boolean;
+  skipReasonCode: string | null;
+  skipReasonText: string | null;
+  loggedSets: LoggedSetLike[];
+};
+
+type SessionHistoryRecordLike = {
+  id: string;
+  scheduledDate: Date | string;
+  effectiveDurationSec: number | null;
+  focusLabel: string;
+  exercises: SessionHistoryExerciseLike[];
+};
+
 function toIsoDate(value: Date | string): string {
   if (typeof value === 'string') {
     return value;
   }
 
   return value.toISOString().slice(0, 10);
+}
+
+function toNumericValue(value: number | string | { toString(): string }): number {
+  if (typeof value === 'number') {
+    return value;
+  }
+
+  return Number(value.toString());
+}
+
+function sumTotalLoad(exercises: SessionHistoryExerciseLike[]): number {
+  return exercises.reduce((accumulator, exercise) => {
+    const exerciseLoad = exercise.loggedSets.reduce(
+      (setAccumulator, setItem) => setAccumulator + (toNumericValue(setItem.weight) * setItem.reps),
+      0,
+    );
+    return accumulator + exerciseLoad;
+  }, 0);
 }
 
 export function mapSessionSummary(record: SessionRecordLike): ProgramSessionSummary {
@@ -80,5 +128,49 @@ export function selectTodayWorkoutProjection(input: {
 export function buildSessionDetailProjection(session: SessionRecordLike): ProgramSessionDetailResponse {
   return parseProgramSessionDetailResponse({
     session: mapSessionSummary(session),
+  });
+}
+
+export function buildProgramHistoryRowsProjection(sessions: SessionHistoryRecordLike[]): ProgramHistoryListResponse {
+  return parseProgramHistoryListResponse({
+    sessions: sessions.map((session) => ({
+      id: session.id,
+      date: toIsoDate(session.scheduledDate),
+      duration: session.effectiveDurationSec ?? 0,
+      exerciseCount: session.exercises.length,
+      totalLoad: sumTotalLoad(session.exercises),
+    })),
+  });
+}
+
+export function buildProgramHistorySessionDetailProjection(
+  session: SessionHistoryRecordLike,
+): ProgramHistorySessionDetailResponse {
+  return parseProgramHistorySessionDetailResponse({
+    session: {
+      id: session.id,
+      date: toIsoDate(session.scheduledDate),
+      duration: session.effectiveDurationSec ?? 0,
+      exerciseCount: session.exercises.length,
+      totalLoad: sumTotalLoad(session.exercises),
+      focusLabel: session.focusLabel,
+      exercises: session.exercises.map((exercise) => ({
+        id: exercise.id,
+        exerciseKey: exercise.exerciseKey,
+        displayName: exercise.displayName,
+        movementPattern: exercise.movementPattern,
+        isSkipped: exercise.isSkipped,
+        skipReasonCode: exercise.skipReasonCode,
+        skipReasonText: exercise.skipReasonText,
+        loggedSets: [...exercise.loggedSets]
+          .sort((a, b) => a.setIndex - b.setIndex)
+          .map((setItem) => ({
+            setIndex: setItem.setIndex,
+            weight: toNumericValue(setItem.weight),
+            reps: setItem.reps,
+            rpe: setItem.rpe,
+          })),
+      })),
+    },
   });
 }
