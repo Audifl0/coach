@@ -47,7 +47,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Dashboard
 
-- [ ] **DASH-01**: User can view today's planned workout and next actions on a single dashboard page.
+- [x] **DASH-01**: User can view today's planned workout and next actions on a single dashboard page.
 - [ ] **DASH-02**: User can view trend summaries (volume/intensity/adherence) over recent sessions.
 - [ ] **DASH-03**: User can view upcoming session forecast after adaptation.
 
@@ -109,7 +109,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SAFE-01 | 5 | Pending |
 | SAFE-02 | 5 | Pending |
 | SAFE-03 | 5 | Pending |
-| DASH-01 | 3 | Pending |
+| DASH-01 | 3 | Complete |
 | DASH-02 | 6 | Pending |
 | DASH-03 | 5 | Pending |
 | PLAT-01 | 1 | Complete |
