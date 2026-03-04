@@ -11,7 +11,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **AUTH-01**: User can create a personal account with username and password.
 - [x] **AUTH-02**: User can sign in and keep a persistent session across browser refresh.
-- [ ] **AUTH-03**: User can recover account access through a manual admin password reset flow.
+- [x] **AUTH-03**: User can recover account access through a manual admin password reset flow.
 
 ### Athlete Profile
 
@@ -91,7 +91,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | AUTH-01 | 1 | Complete |
 | AUTH-02 | 1 | Complete |
-| AUTH-03 | 1 | Pending |
+| AUTH-03 | 1 | Complete |
 | PROF-01 | 2 | Pending |
 | PROF-02 | 2 | Pending |
 | PROF-03 | 2 | Pending |

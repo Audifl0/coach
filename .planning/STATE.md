@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 1
 current_phase_name: Platform Foundation, Security, and Authentication
-current_plan: 4
+current_plan: 6
 status: executing
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-03-04T11:03:26.453Z"
+stopped_at: Completed 01-06-PLAN.md
+last_updated: "2026-03-04T11:08:23.964Z"
 last_activity: 2026-03-04
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 6
-  completed_plans: 4
-  percent: 67
+  completed_plans: 6
+  percent: 100
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 1
 **Current Phase Name:** Platform Foundation, Security, and Authentication
 **Total Phases:** 6
-**Current Plan:** 4
+**Current Plan:** 6
 **Total Plans in Phase:** 6
 **Status:** Ready to execute
 **Last Activity:** 2026-03-04
 **Last Activity Description:** Completed plan 01-04 VPS security and deployment baseline
-**Progress:** [███████░░░] 67%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -64,6 +64,11 @@ Recent decisions affecting current work:
 - [Phase 01-platform-foundation-security-and-authentication]: Require authenticated account scope through requireAccountScope before protected DAL queries.
 - [Phase 01-platform-foundation-security-and-authentication]: Return a generic invalid-credentials message for all login auth failures.
 - [Phase 01-platform-foundation-security-and-authentication]: Issue 30-day secure httpOnly sameSite=lax session cookies on successful login.
+- [Phase 01-platform-foundation-security-and-authentication]: Manual reset CLI uses generic completion messaging to avoid username enumeration.
+- [Phase 01-platform-foundation-security-and-authentication]: DAL account isolation now enforces ownership assertions and scoped query filters.
+- [Phase 01-platform-foundation-security-and-authentication]: Dashboard middleware gate redirects anonymous dashboard requests to /login with next path preservation.
+- [Phase 01-platform-foundation-security-and-authentication]: Logout endpoint revokes only the active session token hash and clears local session cookie idempotently.
+- [Phase 01-platform-foundation-security-and-authentication]: Task 2 followed TDD red/green with explicit multi-session lifecycle tests for persistence and current-session logout.
 
 ### Pending Todos
 
@@ -75,6 +80,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-04T11:03:06.893Z
-**Stopped At:** Completed 01-02-PLAN.md
+**Last Date:** 2026-03-04T11:08:23.962Z
+**Stopped At:** Completed 01-06-PLAN.md
 **Resume File:** None
