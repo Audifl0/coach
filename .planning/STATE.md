@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 03
 current_phase_name: Program Planning and Daily Workout Surface
-current_plan: 03-02
-status: active
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-03-04T17:47:59.093Z"
+current_plan: 4
+status: verifying
+stopped_at: Completed 03-04-PLAN.md
+last_updated: "2026-03-04T17:54:46.329Z"
 last_activity: 2026-03-04
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 15
-  completed_plans: 12
-  percent: 80
+  completed_plans: 14
+  percent: 93
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 03
 **Current Phase Name:** Program Planning and Daily Workout Surface
 **Total Phases:** 6
-**Current Plan:** 03-02
+**Current Plan:** 4
 **Total Plans in Phase:** 4
-**Status:** Active execution
+**Status:** Phase complete — ready for verification
 **Last Activity:** 2026-03-04
 **Last Activity Description:** Completed 03-01-PLAN.md
-**Progress:** [████████░░] 80%
+**Progress:** [█████████░] 93%
 
 ## Performance Metrics
 
@@ -75,6 +75,11 @@ Recent decisions affecting current work:
 - [Phase 03-program-planning-and-daily-workout-surface]: Program persistence uses explicit active/archived status with DAL-driven active-plan replacement
 - [Phase 03-program-planning-and-daily-workout-surface]: Program DAL methods enforce ownership strictly from authenticated session scope, never caller userId
 - [Phase 03-program-planning-and-daily-workout-surface]: Substitution compatibility metadata remains deterministic in code catalog for Phase 3 foundation
+- [Phase 03-program-planning-and-daily-workout-surface]: Planner generation is deterministic and rules-first, without LLM calls.
+- [Phase 03-program-planning-and-daily-workout-surface]: Generation endpoint derives account scope exclusively from authenticated session, never from payload.
+- [Phase 03-program-planning-and-daily-workout-surface]: Substitution eligibility remains deterministic and metadata-driven only (no fuzzy matching).
+- [Phase 03-program-planning-and-daily-workout-surface]: Equipment compatibility is strict-all-tags and limitation filtering is hard-fail.
+- [Phase 03-program-planning-and-daily-workout-surface]: Apply route enforces today-only semantics before mutation and updates only one planned exercise row.
 
 ### Pending Todos
 
@@ -86,6 +91,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-04T17:47:59.091Z
-**Stopped At:** Completed 03-01-PLAN.md
+**Last Date:** 2026-03-04T17:54:46.327Z
+**Stopped At:** Completed 03-04-PLAN.md
 **Resume File:** None
