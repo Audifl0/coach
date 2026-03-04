@@ -7,12 +7,13 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  username     String    @unique
-  passwordHash String
-  sessions     Session[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id             String          @id @default(cuid())
+  username       String          @unique
+  passwordHash   String
+  sessions       Session[]
+  athleteProfile AthleteProfile?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 }
 
 model Session {
@@ -25,4 +26,18 @@ model Session {
   revokedAt        DateTime?
 
   @@index([userId])
+}
+
+model AthleteProfile {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goal               String
+  weeklySessionTarget Int
+  sessionDuration    String
+  equipmentCategories Json
+  limitationsDeclared Boolean @default(false)
+  limitations        Json
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
