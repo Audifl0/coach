@@ -4,6 +4,8 @@ import test from 'node:test';
 import { createProgramSessionDetailGetHandler } from '../../src/app/api/program/sessions/[sessionId]/route';
 import { createProgramTodayGetHandler } from '../../src/app/api/program/today/route';
 import { selectTodayWorkoutProjection } from '../../src/lib/program/select-today-session';
+import { pickDashboardSession } from '../../src/app/(private)/dashboard/page';
+import { getPrimaryActionLabel, resolveDisplayedSession } from '../../src/app/(private)/dashboard/_components/today-workout-card';
 
 function createSessionSummary(overrides: Record<string, unknown> = {}) {
   return {
@@ -156,4 +158,43 @@ test('selection helper prioritizes today and carries start_workout primary actio
   assert.equal(projection.todaySession?.id, 'session_1');
   assert.equal(projection.nextSession, null);
   assert.equal(projection.primaryAction, 'start_workout');
+});
+
+test('dashboard session picker prefers today when both today and next are available', () => {
+  const picked = pickDashboardSession({
+    todaySession: createSessionSummary(),
+    nextSession: createSessionSummary({ id: 'session_2' }),
+    primaryAction: 'start_workout',
+  });
+
+  assert.equal(picked.mode, 'today');
+  assert.equal(picked.topSession?.id, 'session_1');
+});
+
+test('dashboard session picker falls back to next session when today is missing', () => {
+  const picked = pickDashboardSession({
+    todaySession: null,
+    nextSession: createSessionSummary({ id: 'session_2' }),
+    primaryAction: 'start_workout',
+  });
+
+  assert.equal(picked.mode, 'next');
+  assert.equal(picked.topSession?.id, 'session_2');
+  assert.equal(getPrimaryActionLabel('start_workout'), 'Commencer seance');
+});
+
+test('today workout card helper resolves displayed session deterministically', () => {
+  const today = resolveDisplayedSession({
+    todaySession: createSessionSummary(),
+    nextSession: createSessionSummary({ id: 'session_2' }),
+  });
+  assert.equal(today.mode, 'today');
+  assert.equal(today.session?.id, 'session_1');
+
+  const next = resolveDisplayedSession({
+    todaySession: null,
+    nextSession: createSessionSummary({ id: 'session_2' }),
+  });
+  assert.equal(next.mode, 'next');
+  assert.equal(next.session?.id, 'session_2');
 });

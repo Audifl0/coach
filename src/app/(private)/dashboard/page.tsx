@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation';
+import { cookies, headers } from 'next/headers';
 
+import { parseProgramTodayResponse, type ProgramTodayResponse } from '@/lib/program/contracts';
 import {
   buildDefaultSessionGateRepository,
   type SessionGateRepository,
@@ -7,6 +9,7 @@ import {
   validateSessionToken,
 } from '@/lib/auth/session-gate';
 import { isProfileComplete } from '@/lib/profile/completeness';
+import { TodayWorkoutCard } from './_components/today-workout-card';
 
 export async function resolveDashboardSession(
   sessionToken: string | null | undefined,
@@ -29,6 +32,50 @@ export async function resolveDashboardRoute(
   }
 
   return 'dashboard';
+}
+
+export function pickDashboardSession(data: ProgramTodayResponse | null) {
+  const todaySession = data?.todaySession ?? null;
+  const nextSession = data?.nextSession ?? null;
+
+  return {
+    topSession: todaySession ?? nextSession,
+    mode: todaySession ? 'today' : (nextSession ? 'next' : 'none'),
+    primaryAction: data?.primaryAction ?? 'start_workout',
+  };
+}
+
+function buildRequestOrigin(headersStore: Headers): string | null {
+  const host = headersStore.get('x-forwarded-host') ?? headersStore.get('host');
+  if (!host) {
+    return null;
+  }
+
+  const protocol = headersStore.get('x-forwarded-proto') ?? (host.includes('localhost') ? 'http' : 'https');
+  return `${protocol}://${host}`;
+}
+
+async function loadProgramTodayData(): Promise<ProgramTodayResponse | null> {
+  const headersStore = await headers();
+  const origin = buildRequestOrigin(headersStore);
+  if (!origin) {
+    return null;
+  }
+
+  const cookieStore = await cookies();
+  const response = await fetch(`${origin}/api/program/today`, {
+    method: 'GET',
+    cache: 'no-store',
+    headers: {
+      cookie: cookieStore.toString(),
+    },
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return parseProgramTodayResponse(await response.json());
 }
 
 export default async function DashboardPage() {
@@ -62,9 +109,19 @@ export default async function DashboardPage() {
     redirect('/onboarding');
   }
 
+  const programToday = await loadProgramTodayData();
+  const sessionSurface = pickDashboardSession(programToday);
+
   return (
     <main>
       <h1>Dashboard</h1>
+      <TodayWorkoutCard
+        data={{
+          todaySession: sessionSurface.mode === 'today' ? sessionSurface.topSession : null,
+          nextSession: sessionSurface.mode === 'next' ? sessionSurface.topSession : null,
+          primaryAction: sessionSurface.primaryAction,
+        }}
+      />
       <p>You are authenticated on this device.</p>
       <form action="/api/auth/logout" method="post">
         <button type="submit">Logout current device</button>
