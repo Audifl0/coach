@@ -10,6 +10,7 @@ import {
 } from '@/lib/auth/session-gate';
 import { isProfileComplete } from '@/lib/profile/completeness';
 import { TodayWorkoutCard } from './_components/today-workout-card';
+import { SessionHistoryCard } from './_components/session-history-card';
 
 export async function resolveDashboardSession(
   sessionToken: string | null | undefined,
@@ -122,6 +123,7 @@ export default async function DashboardPage() {
           primaryAction: sessionSurface.primaryAction,
         }}
       />
+      <SessionHistoryCard />
       <p>You are authenticated on this device.</p>
       <form action="/api/auth/logout" method="post">
         <button type="submit">Logout current device</button>
