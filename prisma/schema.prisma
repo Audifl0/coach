@@ -5,3 +5,24 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model User {
+  id           String    @id @default(cuid())
+  username     String    @unique
+  passwordHash String
+  sessions     Session[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Session {
+  id               String    @id @default(cuid())
+  sessionTokenHash String    @unique
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt        DateTime
+  createdAt        DateTime  @default(now())
+  revokedAt        DateTime?
+
+  @@index([userId])
+}

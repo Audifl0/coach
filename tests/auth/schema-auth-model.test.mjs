@@ -24,7 +24,7 @@ test('migration creates user and session tables with constraints', () => {
 
   assert.match(migration, /CREATE TABLE\s+"User"/i);
   assert.match(migration, /CREATE TABLE\s+"Session"/i);
-  assert.match(migration, /UNIQUE\s*\("username"\)/i);
+  assert.match(migration, /CREATE UNIQUE INDEX\s+"User_username_key"/i);
   assert.match(migration, /FOREIGN KEY\s*\("userId"\)\s*REFERENCES\s*"User"\s*\("id"\)/i);
   assert.match(migration, /CREATE UNIQUE INDEX\s+"Session_sessionTokenHash_key"/i);
   assert.match(migration, /CREATE INDEX\s+"Session_userId_idx"/i);
