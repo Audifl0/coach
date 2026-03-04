@@ -484,6 +484,13 @@ test('completeSession persists feedback once and rejects post-completion set edi
       async findFirst() {
         return null;
       },
+      async findUnique() {
+        return createSession({
+          id: 'session_1',
+          userId: 'user_1',
+          completedAt: completedAt as never,
+        } as never);
+      },
       async update() {
         completeUpdateCount += 1;
         completedAt = completedAt ?? new Date('2026-03-04T10:10:00.000Z');
@@ -599,6 +606,14 @@ test('history list/detail are account-scoped and include aggregated load with gr
     plannedSession: {
       async findFirst() {
         return null;
+      },
+      async findUnique() {
+        return createSession({
+          id: 'session_1',
+          userId: 'user_1',
+          completedAt: new Date('2026-03-04T09:00:00.000Z') as never,
+          effectiveDurationSec: 3600 as never,
+        } as never);
       },
       async update() {
         throw new Error('not used in this test');
