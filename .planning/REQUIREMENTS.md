@@ -89,38 +89,38 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 | TBD | Pending |
-| AUTH-02 | TBD | Pending |
-| AUTH-03 | TBD | Pending |
-| PROF-01 | TBD | Pending |
-| PROF-02 | TBD | Pending |
-| PROF-03 | TBD | Pending |
-| PROF-04 | TBD | Pending |
-| PROG-01 | TBD | Pending |
-| PROG-02 | TBD | Pending |
-| PROG-03 | TBD | Pending |
-| LOG-01 | TBD | Pending |
-| LOG-02 | TBD | Pending |
-| LOG-03 | TBD | Pending |
-| LOG-04 | TBD | Pending |
-| ADAP-01 | TBD | Pending |
-| ADAP-02 | TBD | Pending |
-| ADAP-03 | TBD | Pending |
-| SAFE-01 | TBD | Pending |
-| SAFE-02 | TBD | Pending |
-| SAFE-03 | TBD | Pending |
-| DASH-01 | TBD | Pending |
-| DASH-02 | TBD | Pending |
-| DASH-03 | TBD | Pending |
-| PLAT-01 | TBD | Pending |
-| PLAT-02 | TBD | Pending |
-| PLAT-03 | TBD | Pending |
+| AUTH-01 | 1 | Pending |
+| AUTH-02 | 1 | Pending |
+| AUTH-03 | 1 | Pending |
+| PROF-01 | 2 | Pending |
+| PROF-02 | 2 | Pending |
+| PROF-03 | 2 | Pending |
+| PROF-04 | 2 | Pending |
+| PROG-01 | 3 | Pending |
+| PROG-02 | 3 | Pending |
+| PROG-03 | 3 | Pending |
+| LOG-01 | 4 | Pending |
+| LOG-02 | 4 | Pending |
+| LOG-03 | 4 | Pending |
+| LOG-04 | 4 | Pending |
+| ADAP-01 | 5 | Pending |
+| ADAP-02 | 5 | Pending |
+| ADAP-03 | 5 | Pending |
+| SAFE-01 | 5 | Pending |
+| SAFE-02 | 5 | Pending |
+| SAFE-03 | 5 | Pending |
+| DASH-01 | 3 | Pending |
+| DASH-02 | 6 | Pending |
+| DASH-03 | 5 | Pending |
+| PLAT-01 | 1 | Pending |
+| PLAT-02 | 6 | Pending |
+| PLAT-03 | 1 | Pending |
 
 **Coverage:**
 - v1 requirements: 26 total
-- Mapped to phases: 0
-- Unmapped: 26 ⚠️
+- Mapped to phases: 26
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-04*
-*Last updated: 2026-03-04 after initial definition*
+*Last updated: 2026-03-04 after roadmap mapping*
