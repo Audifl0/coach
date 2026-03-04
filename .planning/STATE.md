@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 03
-current_phase_name: Program Planning and Daily Workout Surface
-current_plan: Not started
-status: completed
-stopped_at: Phase 4 context gathered
-last_updated: "2026-03-04T19:45:32.458Z"
+current_phase: 04
+current_phase_name: Session Logging and History
+current_plan: 2
+status: executing
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-03-04T20:06:33.461Z"
 last_activity: 2026-03-04
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 15
-  completed_plans: 15
-  percent: 100
+  total_plans: 19
+  completed_plans: 16
+  percent: 84
 ---
 
 # Project State
@@ -24,19 +24,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Fournir un coaching musculation personnalisé, sûr et adaptatif au quotidien, sans perdre la simplicité d'usage.
-**Current focus:** Phase 3 - Program Planning and Daily Workout Surface
+**Current focus:** Phase 4 - Session Logging and History
 
 ## Current Position
 
-**Current Phase:** 03
-**Current Phase Name:** Program Planning and Daily Workout Surface
+**Current Phase:** 04
+**Current Phase Name:** Session Logging and History
 **Total Phases:** 6
-**Current Plan:** Not started
+**Current Plan:** 2
 **Total Plans in Phase:** 4
-**Status:** Milestone complete
+**Status:** Ready to execute
 **Last Activity:** 2026-03-04
-**Last Activity Description:** Phase 03 complete
-**Progress:** [██████████] 100%
+**Last Activity Description:** Completed 04-01 plan
+**Progress:** [████████░░] 84%
 
 ## Performance Metrics
 
@@ -82,6 +82,9 @@ Recent decisions affecting current work:
 - [Phase 03-program-planning-and-daily-workout-surface]: Apply route enforces today-only semantics before mutation and updates only one planned exercise row.
 - [Phase 03]: Dashboard daily workout surface uses today-first then next-session fallback.
 - [Phase 03]: Session detail route filters exercise payload by authenticated account ownership before returning prescriptions.
+- [Phase 04-session-logging-and-history]: Stored execution logs under existing ProgramPlan->PlannedSession->PlannedExercise ownership to preserve account scoping.
+- [Phase 04-session-logging-and-history]: History query parsing is strict: custom requires ordered from/to and preset windows reject explicit date bounds.
+- [Phase 04-session-logging-and-history]: History projection outputs are contract-validated via shared parse helpers to prevent route-local shape drift.
 
 ### Pending Todos
 
@@ -93,6 +96,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-04T19:45:32.413Z
-**Stopped At:** Phase 4 context gathered
-**Resume File:** .planning/phases/04-session-logging-and-history/04-CONTEXT.md
+**Last Date:** 2026-03-04T20:06:29.489Z
+**Stopped At:** Completed 04-01-PLAN.md
+**Resume File:** None

@@ -28,10 +28,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Session Logging
 
-- [ ] **LOG-01**: User can log completed sets with weight, reps, and perceived effort (RPE/RIR).
-- [ ] **LOG-02**: User can mark an exercise as skipped and provide a reason.
-- [ ] **LOG-03**: User can submit post-session readiness/fatigue feedback.
-- [ ] **LOG-04**: User can review recent session history.
+- [x] **LOG-01**: User can log completed sets with weight, reps, and perceived effort (RPE/RIR).
+- [x] **LOG-02**: User can mark an exercise as skipped and provide a reason.
+- [x] **LOG-03**: User can submit post-session readiness/fatigue feedback.
+- [x] **LOG-04**: User can review recent session history.
 
 ### Adaptation & Coaching
 
@@ -99,10 +99,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROG-01 | 3 | Complete |
 | PROG-02 | 3 | Complete |
 | PROG-03 | 3 | Complete |
-| LOG-01 | 4 | Pending |
-| LOG-02 | 4 | Pending |
-| LOG-03 | 4 | Pending |
-| LOG-04 | 4 | Pending |
+| LOG-01 | 4 | Complete |
+| LOG-02 | 4 | Complete |
+| LOG-03 | 4 | Complete |
+| LOG-04 | 4 | Complete |
 | ADAP-01 | 5 | Pending |
 | ADAP-02 | 5 | Pending |
 | ADAP-03 | 5 | Pending |
