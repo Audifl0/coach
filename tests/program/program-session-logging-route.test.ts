@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   createProgramSessionCompletePostHandler,
 } from '../../src/app/api/program/sessions/[sessionId]/complete/route';
+import { createProgramHistoryGetHandler } from '../../src/app/api/program/history/route';
 import {
   createProgramSessionDurationPatchHandler,
 } from '../../src/app/api/program/sessions/[sessionId]/duration/route';
@@ -18,6 +19,7 @@ import {
 import {
   createProgramSessionNotePatchHandler,
 } from '../../src/app/api/program/sessions/[sessionId]/note/route';
+import { createProgramSessionDetailGetHandler } from '../../src/app/api/program/sessions/[sessionId]/route';
 
 function mutationRouteContext() {
   return {
@@ -421,4 +423,139 @@ test('happy path mutation routes persist set autosave, skip/revert, note, comple
     calls.map((entry) => entry.kind),
     ['set-post', 'set-patch', 'skip-post', 'skip-delete', 'note-patch', 'complete-post', 'duration-patch'],
   );
+});
+
+test('GET /api/program/history validates period filters and rejects malformed custom range', async () => {
+  const getHistory = createProgramHistoryGetHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    getHistoryList: async () => [],
+    now: () => new Date('2026-03-04T12:00:00.000Z'),
+  });
+
+  const missingCustomBounds = await getHistory(new Request('http://localhost/api/program/history?period=custom'));
+  assert.equal(missingCustomBounds.status, 400);
+
+  const invalidBounds = await getHistory(
+    new Request('http://localhost/api/program/history?period=custom&from=2026-03-05&to=2026-03-01'),
+  );
+  assert.equal(invalidBounds.status, 400);
+
+  const invalidPresetWithBounds = await getHistory(
+    new Request('http://localhost/api/program/history?period=7d&from=2026-03-01&to=2026-03-04'),
+  );
+  assert.equal(invalidPresetWithBounds.status, 400);
+});
+
+test('GET /api/program/history returns period-filtered account-scoped summary rows', async () => {
+  const historyCalls: Array<{ from: Date; to: Date; userId: string }> = [];
+  const getHistory = createProgramHistoryGetHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    getHistoryList: async ({ from, to }, userId) => {
+      historyCalls.push({ from, to, userId: userId ?? '' });
+      return [
+        {
+          id: 'session_1',
+          date: '2026-03-03',
+          duration: 3600,
+          exerciseCount: 3,
+          totalLoad: 1100,
+        },
+      ];
+    },
+    now: () => new Date('2026-03-04T12:00:00.000Z'),
+  });
+
+  const response = await getHistory(new Request('http://localhost/api/program/history?period=7d'));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.sessions.length, 1);
+  assert.equal(body.sessions[0]?.date, '2026-03-03');
+  assert.equal(body.sessions[0]?.duration, 3600);
+  assert.equal(body.sessions[0]?.exerciseCount, 3);
+  assert.equal(body.sessions[0]?.totalLoad, 1100);
+  assert.equal(historyCalls.length, 1);
+  assert.equal(historyCalls[0]?.userId, 'user_1');
+});
+
+test('GET /api/program/sessions/:sessionId includes grouped logged sets, skip metadata, and feedback fields', async () => {
+  const getDetail = createProgramSessionDetailGetHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    getSessionDetail: async () => ({
+      id: 'session_1',
+      scheduledDate: '2026-03-04',
+      dayIndex: 0,
+      focusLabel: 'Lower Body',
+      state: 'completed',
+      startedAt: '2026-03-04T08:00:00.000Z',
+      completedAt: '2026-03-04T09:05:00.000Z',
+      effectiveDurationSec: 3900,
+      durationCorrectedAt: '2026-03-04T09:10:00.000Z',
+      note: 'Felt strong',
+      postSessionFatigue: 3,
+      postSessionReadiness: 4,
+      postSessionComment: 'Solid progression',
+      exercises: [
+        {
+          id: 'exercise_1',
+          userId: 'user_1',
+          exerciseKey: 'goblet_squat',
+          displayName: 'Goblet Squat',
+          movementPattern: 'squat',
+          sets: 4,
+          targetReps: 8,
+          targetLoad: '24kg',
+          restMinSec: 90,
+          restMaxSec: 120,
+          isSubstituted: false,
+          originalExerciseKey: null,
+          isSkipped: false,
+          skipReasonCode: null,
+          skipReasonText: null,
+          loggedSets: [
+            { setIndex: 2, weight: 22.5, reps: 8, rpe: 8 },
+            { setIndex: 1, weight: 20, reps: 10, rpe: null },
+          ],
+        },
+      ],
+    }),
+  });
+
+  const response = await getDetail(new Request('http://localhost/api/program/sessions/session_1'), {
+    params: Promise.resolve({ sessionId: 'session_1' }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.session.startedAt, '2026-03-04T08:00:00.000Z');
+  assert.equal(body.session.completedAt, '2026-03-04T09:05:00.000Z');
+  assert.equal(body.session.effectiveDurationSec, 3900);
+  assert.equal(body.session.postSessionFatigue, 3);
+  assert.equal(body.session.exercises.length, 1);
+  assert.equal(body.session.exercises[0]?.isSkipped, false);
+  assert.equal(body.session.exercises[0]?.loggedSets.length, 2);
+  assert.equal(body.session.exercises[0]?.loggedSets[0]?.setIndex, 1);
+  assert.equal(body.session.exercises[0]?.loggedSets[1]?.setIndex, 2);
+});
+
+test('GET /api/program/history and session detail block unauthorized or non-owned access', async () => {
+  const unauthorizedHistory = createProgramHistoryGetHandler({
+    resolveSession: async () => null,
+    getHistoryList: async () => [],
+    now: () => new Date('2026-03-04T12:00:00.000Z'),
+  });
+
+  const unauthorizedHistoryResponse = await unauthorizedHistory(
+    new Request('http://localhost/api/program/history?period=7d'),
+  );
+  assert.equal(unauthorizedHistoryResponse.status, 401);
+
+  const hiddenSessionDetail = createProgramSessionDetailGetHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    getSessionDetail: async () => null,
+  });
+
+  const missingDetailResponse = await hiddenSessionDetail(new Request('http://localhost/api/program/sessions/session_404'), {
+    params: Promise.resolve({ sessionId: 'session_404' }),
+  });
+  assert.equal(missingDetailResponse.status, 404);
 });
