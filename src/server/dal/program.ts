@@ -185,8 +185,12 @@ type ProgramDalClient = {
   plannedExercise: {
     findUnique(args: {
       where: { id: string };
-      include: { plannedSession: { select: { id: true; userId: true; scheduledDate: true } } };
-    }): Promise<(PlannedExerciseRecord & { plannedSession: { id: string; userId: string; scheduledDate: Date } }) | null>;
+      include: { plannedSession: { select: { id: true; userId: true; scheduledDate: true; completedAt?: true; startedAt?: true } } };
+    }): Promise<
+      (PlannedExerciseRecord & {
+        plannedSession: { id: string; userId: string; scheduledDate: Date; completedAt?: Date | null; startedAt?: Date | null };
+      }) | null
+    >;
     update(args: {
       where: { id: string; userId: string };
       data: {
@@ -855,6 +859,26 @@ export function createProgramDal(db: ProgramDalClient, session: SessionContext |
         totalLoad,
         focusLabel: session.focusLabel,
         exercises: detailExercises,
+      };
+    },
+
+    async getSessionLifecycle(plannedSessionId: string): Promise<{
+      plannedSessionId: string;
+      startedAt: Date | null;
+      completedAt: Date | null;
+      effectiveDurationSec: number | null;
+    } | null> {
+      const session = await getOwnedSession(plannedSessionId);
+
+      if (!session) {
+        return null;
+      }
+
+      return {
+        plannedSessionId: session.id,
+        startedAt: session.startedAt ?? null,
+        completedAt: session.completedAt ?? null,
+        effectiveDurationSec: session.effectiveDurationSec ?? null,
       };
     },
   };
