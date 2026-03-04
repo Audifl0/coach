@@ -15,10 +15,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Athlete Profile
 
-- [ ] **PROF-01**: User can define training goal (hypertrophy, strength, recomposition) during onboarding.
-- [ ] **PROF-02**: User can declare constraints (available days, session duration, equipment access).
-- [ ] **PROF-03**: User can declare physical limitations or pain flags used by recommendation safety checks.
-- [ ] **PROF-04**: User can update profile constraints at any time.
+- [x] **PROF-01**: User can define training goal (hypertrophy, strength, recomposition) during onboarding.
+- [x] **PROF-02**: User can declare constraints (available days, session duration, equipment access).
+- [x] **PROF-03**: User can declare physical limitations or pain flags used by recommendation safety checks.
+- [x] **PROF-04**: User can update profile constraints at any time.
 
 ### Program Planning
 
@@ -92,10 +92,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTH-01 | 1 | Complete |
 | AUTH-02 | 1 | Complete |
 | AUTH-03 | 1 | Complete |
-| PROF-01 | 2 | Pending |
-| PROF-02 | 2 | Pending |
-| PROF-03 | 2 | Pending |
-| PROF-04 | 2 | Pending |
+| PROF-01 | 2 | Complete |
+| PROF-02 | 2 | Complete |
+| PROF-03 | 2 | Complete |
+| PROF-04 | 2 | Complete |
 | PROG-01 | 3 | Pending |
 | PROG-02 | 3 | Pending |
 | PROG-03 | 3 | Pending |
