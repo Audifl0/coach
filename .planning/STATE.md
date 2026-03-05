@@ -6,8 +6,8 @@ current_phase: 05.2
 current_phase_name: pipeline web autonome corpus scientifique veille synth se validation continue
 current_plan: Not started
 status: planning
-stopped_at: Completed 05.1-04-PLAN.md
-last_updated: "2026-03-05T10:34:53.717Z"
+stopped_at: Phase 05.2 context gathered
+last_updated: "2026-03-05T10:56:13.362Z"
 last_activity: 2026-03-05
 progress:
   total_phases: 4
@@ -139,6 +139,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-05T10:33:17.020Z
-**Stopped At:** Completed 05.1-04-PLAN.md
-**Resume File:** None
+**Last Date:** 2026-03-05T10:56:13.351Z
+**Stopped At:** Phase 05.2 context gathered
+**Resume File:** .planning/phases/05.2-pipeline-web-autonome-corpus-scientifique-veille-synth-se-validation-continue/05.2-CONTEXT.md
