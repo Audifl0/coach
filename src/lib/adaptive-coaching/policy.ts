@@ -44,15 +44,30 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function normalizeToken(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, '_');
+}
+
 export function detectLimitationConflict(input: {
   recommendation: AdaptiveRecommendation;
   athleteContext: AthleteSafetyContext;
 }): LimitationConflictWarning {
-  const _ = input;
+  const limitationZones = input.athleteContext.limitations
+    .filter((item) => item.severity !== 'none')
+    .map((item) => normalizeToken(item.zone));
+  const painZones = input.athleteContext.painFlags.map(normalizeToken);
+  const protectedZones = new Set([...limitationZones, ...painZones]);
+  const recommendationZones = [
+    ...input.recommendation.movementTags.map(normalizeToken),
+    ...input.recommendation.equipmentTags.map(normalizeToken),
+  ];
+  const conflictZones = recommendationZones.filter((zone) => protectedZones.has(zone));
+  const uniqueConflictZones = Array.from(new Set(conflictZones));
+
   return {
-    limitationConflict: false,
-    reasonCodes: [],
-    conflictZones: [],
+    limitationConflict: uniqueConflictZones.length > 0,
+    reasonCodes: uniqueConflictZones.length > 0 ? ['limitation_conflict'] : [],
+    conflictZones: uniqueConflictZones,
   };
 }
 
