@@ -8,10 +8,10 @@ function buildEnabledEnv(overrides: Partial<Record<string, string | undefined>> 
     LLM_REAL_PROVIDER_ENABLED: 'true',
     LLM_PROVIDER_PRIMARY: 'openai',
     LLM_PROVIDER_FALLBACK: 'anthropic',
-    LLM_PROVIDER_OPENAI_MODEL: 'gpt-4.1-mini',
-    LLM_PROVIDER_ANTHROPIC_MODEL: 'claude-3-5-haiku-latest',
-    LLM_PROVIDER_OPENAI_API_KEY: 'sk-openai',
-    LLM_PROVIDER_ANTHROPIC_API_KEY: 'sk-anthropic',
+    LLM_OPENAI_MODEL: 'gpt-4.1-mini',
+    LLM_ANTHROPIC_MODEL: 'claude-3-5-haiku-latest',
+    LLM_OPENAI_API_KEY: 'sk-openai',
+    LLM_ANTHROPIC_API_KEY: 'sk-anthropic',
     LLM_PRIMARY_TIMEOUT_MS: '2500',
     LLM_PRIMARY_MAX_RETRIES: '1',
     LLM_FALLBACK_TIMEOUT_MS: '3000',
@@ -35,21 +35,17 @@ test('LLM_REAL_PROVIDER_ENABLED=true requires full primary+fallback contract', (
   const parsed = parseLlmRuntimeConfig(buildEnabledEnv());
 
   assert.equal(parsed.enabled, true);
-  assert.equal(parsed.providers?.primary.provider, 'openai');
-  assert.equal(parsed.providers?.fallback.provider, 'anthropic');
-  assert.equal(parsed.providers?.primary.maxRetries, 1);
-  assert.equal(parsed.providers?.fallback.maxAttempts, 1);
+  assert.equal(parsed.primaryProvider, 'openai');
+  assert.equal(parsed.fallbackProvider, 'anthropic');
+  assert.equal(parsed.primaryMaxRetries, 1);
+  assert.equal(parsed.fallbackMaxAttempts, 1);
 
   assert.throws(() => parseLlmRuntimeConfig(buildEnabledEnv({ LLM_PROVIDER_PRIMARY: undefined })));
   assert.throws(() => parseLlmRuntimeConfig(buildEnabledEnv({ LLM_PROVIDER_FALLBACK: undefined })));
-  assert.throws(() => parseLlmRuntimeConfig(buildEnabledEnv({ LLM_PROVIDER_OPENAI_MODEL: undefined })));
-  assert.throws(() => parseLlmRuntimeConfig(buildEnabledEnv({ LLM_PROVIDER_ANTHROPIC_MODEL: undefined })));
-  assert.throws(() => parseLlmRuntimeConfig(buildEnabledEnv({ LLM_PROVIDER_OPENAI_API_KEY: undefined })));
-  assert.throws(() => parseLlmRuntimeConfig(buildEnabledEnv({ LLM_PROVIDER_ANTHROPIC_API_KEY: undefined })));
-  assert.throws(() => parseLlmRuntimeConfig(buildEnabledEnv({ LLM_PRIMARY_TIMEOUT_MS: undefined })));
-  assert.throws(() => parseLlmRuntimeConfig(buildEnabledEnv({ LLM_PRIMARY_MAX_RETRIES: undefined })));
-  assert.throws(() => parseLlmRuntimeConfig(buildEnabledEnv({ LLM_FALLBACK_TIMEOUT_MS: undefined })));
-  assert.throws(() => parseLlmRuntimeConfig(buildEnabledEnv({ LLM_FALLBACK_MAX_ATTEMPTS: undefined })));
+  assert.throws(() => parseLlmRuntimeConfig(buildEnabledEnv({ LLM_OPENAI_MODEL: undefined })));
+  assert.throws(() => parseLlmRuntimeConfig(buildEnabledEnv({ LLM_ANTHROPIC_MODEL: undefined })));
+  assert.throws(() => parseLlmRuntimeConfig(buildEnabledEnv({ LLM_OPENAI_API_KEY: undefined })));
+  assert.throws(() => parseLlmRuntimeConfig(buildEnabledEnv({ LLM_ANTHROPIC_API_KEY: undefined })));
 });
 
 test('missing global max latency or invalid timeout/retry values fail with deterministic error', () => {
