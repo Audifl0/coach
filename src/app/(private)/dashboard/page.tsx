@@ -11,6 +11,8 @@ import {
 import { isProfileComplete } from '@/lib/profile/completeness';
 import { TodayWorkoutCard } from './_components/today-workout-card';
 import { SessionHistoryCard } from './_components/session-history-card';
+import { createAdaptiveCoachingDal } from '@/server/dal/adaptive-coaching';
+import { AdaptiveConfirmationBanner } from './components/adaptive-confirmation-banner';
 
 export async function resolveDashboardSession(
   sessionToken: string | null | undefined,
@@ -43,6 +45,38 @@ export function pickDashboardSession(data: ProgramTodayResponse | null) {
     topSession: todaySession ?? nextSession,
     mode: todaySession ? 'today' : (nextSession ? 'next' : 'none'),
     primaryAction: data?.primaryAction ?? 'start_workout',
+  };
+}
+
+function toPendingConfirmationBannerData(record: {
+  id: string;
+  actionType: string;
+  status: string;
+  reasons: unknown;
+  expiresAt: Date | null;
+}) {
+  if (record.status !== 'pending_confirmation') {
+    return null;
+  }
+
+  if (record.actionType !== 'deload' && record.actionType !== 'substitution') {
+    return null;
+  }
+
+  if (!record.expiresAt) {
+    return null;
+  }
+
+  const reasons = Array.isArray(record.reasons) ? record.reasons.filter((item): item is string => typeof item === 'string') : [];
+  if (reasons.length < 1) {
+    return null;
+  }
+
+  return {
+    id: record.id,
+    actionType: record.actionType,
+    reasons,
+    expiresAt: record.expiresAt.toISOString(),
   };
 }
 
@@ -112,10 +146,20 @@ export default async function DashboardPage() {
 
   const programToday = await loadProgramTodayData();
   const sessionSurface = pickDashboardSession(programToday);
+  const adaptiveDal = createAdaptiveCoachingDal(prisma as never, { userId: session.userId });
+  const latestRecommendation = sessionSurface.topSession
+    ? await adaptiveDal.listLatestAdaptiveRecommendation(sessionSurface.topSession.id)
+    : null;
+  const pendingConfirmationRecommendation = latestRecommendation
+    ? toPendingConfirmationBannerData(latestRecommendation)
+    : null;
 
   return (
     <main>
       <h1>Dashboard</h1>
+      {pendingConfirmationRecommendation ? (
+        <AdaptiveConfirmationBanner recommendation={pendingConfirmationRecommendation} />
+      ) : null}
       <TodayWorkoutCard
         data={{
           todaySession: sessionSurface.mode === 'today' ? sessionSurface.topSession : null,
