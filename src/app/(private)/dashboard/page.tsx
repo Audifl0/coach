@@ -13,6 +13,11 @@ import { TodayWorkoutCard } from './_components/today-workout-card';
 import { SessionHistoryCard } from './_components/session-history-card';
 import { createAdaptiveCoachingDal } from '@/server/dal/adaptive-coaching';
 import { AdaptiveConfirmationBanner } from './components/adaptive-confirmation-banner';
+import { AdaptiveForecastCard } from './components/adaptive-forecast-card';
+import {
+  buildAdaptiveForecastViewModel,
+  type AdaptiveForecastViewModel,
+} from '@/lib/adaptive-coaching/forecast';
 
 export async function resolveDashboardSession(
   sessionToken: string | null | undefined,
@@ -46,6 +51,42 @@ export function pickDashboardSession(data: ProgramTodayResponse | null) {
     mode: todaySession ? 'today' : (nextSession ? 'next' : 'none'),
     primaryAction: data?.primaryAction ?? 'start_workout',
   };
+}
+
+type DashboardAdaptiveForecastSource = {
+  actionType: 'progress' | 'hold' | 'deload' | 'substitution';
+  status: 'proposed' | 'validated' | 'pending_confirmation' | 'applied' | 'rejected' | 'fallback_applied';
+  warningFlag: boolean;
+  warningText: string | null;
+  fallbackApplied: boolean;
+  fallbackReason: string | null;
+  reasons: unknown;
+  evidenceTags: unknown;
+  forecastPayload: unknown;
+  progressionDeltaLoadPct: number | null;
+  progressionDeltaReps: number | null;
+};
+
+export function resolveAdaptiveForecastCard(
+  recommendation: DashboardAdaptiveForecastSource | null,
+): AdaptiveForecastViewModel | null {
+  if (!recommendation) {
+    return null;
+  }
+
+  return buildAdaptiveForecastViewModel({
+    actionType: recommendation.actionType,
+    status: recommendation.status,
+    warningFlag: recommendation.warningFlag,
+    warningText: recommendation.warningText,
+    fallbackApplied: recommendation.fallbackApplied,
+    fallbackReason: recommendation.fallbackReason,
+    reasons: recommendation.reasons,
+    evidenceTags: recommendation.evidenceTags,
+    forecastPayload: recommendation.forecastPayload,
+    progressionDeltaLoadPct: recommendation.progressionDeltaLoadPct,
+    progressionDeltaReps: recommendation.progressionDeltaReps,
+  });
 }
 
 function toPendingConfirmationBannerData(record: {
@@ -150,6 +191,7 @@ export default async function DashboardPage() {
   const latestRecommendation = sessionSurface.topSession
     ? await adaptiveDal.listLatestAdaptiveRecommendation(sessionSurface.topSession.id)
     : null;
+  const adaptiveForecast = resolveAdaptiveForecastCard(latestRecommendation);
   const pendingConfirmationRecommendation = latestRecommendation
     ? toPendingConfirmationBannerData(latestRecommendation)
     : null;
@@ -167,6 +209,7 @@ export default async function DashboardPage() {
           primaryAction: sessionSurface.primaryAction,
         }}
       />
+      {adaptiveForecast ? <AdaptiveForecastCard forecast={adaptiveForecast} /> : null}
       <SessionHistoryCard />
       <p>You are authenticated on this device.</p>
       <form action="/api/auth/logout" method="post">
