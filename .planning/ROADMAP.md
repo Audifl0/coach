@@ -75,7 +75,7 @@
 
 Plans:
 - [x] 05.1-01 - Provider contracts/schema/env gate
-- [ ] 05.1-02 - OpenAI primary + Anthropic fallback runtime
+- [x] 05.1-02 - OpenAI primary + Anthropic fallback runtime
 - [ ] 05.1-03 - Service wiring + integration tests SAFE-03
 
 ### Phase 05.2: Pipeline web autonome corpus scientifique: veille, synthèse, validation continue (INSERTED)

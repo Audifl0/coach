@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 05
-current_phase_name: Adaptive Coaching and Safety Guardrails
-current_plan: Not started
-status: completed
+current_phase: "05.1"
+current_phase_name: LLM provider réel + structured output + SAFE-03 tests
+current_plan: 05.1-03
+status: in_progress
 stopped_at: Completed 05.1-02-PLAN.md
 last_updated: "2026-03-05T10:05:01.819Z"
 last_activity: 2026-03-05
@@ -24,18 +24,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Fournir un coaching musculation personnalisé, sûr et adaptatif au quotidien, sans perdre la simplicité d'usage.
-**Current focus:** Phase 5 - Adaptive Coaching and Safety Guardrails
+**Current focus:** Phase 05.1 - LLM provider reel + structured output + SAFE-03 tests
 
 ## Current Position
 
-**Current Phase:** 05
-**Current Phase Name:** Adaptive Coaching and Safety Guardrails
+**Current Phase:** 05.1
+**Current Phase Name:** LLM provider reel + structured output + SAFE-03 tests
 **Total Phases:** 4
-**Current Plan:** Not started
-**Total Plans in Phase:** 5
-**Status:** Milestone complete
+**Current Plan:** 05.1-03
+**Total Plans in Phase:** 3
+**Status:** In progress
 **Last Activity:** 2026-03-05
-**Last Activity Description:** Phase 05 complete
+**Last Activity Description:** Completed 05.1-02
 **Progress:** [██████████] 96%
 
 ## Performance Metrics
