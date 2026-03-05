@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: "05.1"
-current_phase_name: LLM provider réel + structured output + SAFE-03 tests
+current_phase: 05.1
+current_phase_name: LLM provider reel + structured output + SAFE-03 tests
 current_plan: 05.1-03
-status: in_progress
-stopped_at: Completed 05.1-02-PLAN.md
-last_updated: "2026-03-05T10:05:01.819Z"
+status: verifying
+stopped_at: Completed 05.1-03-PLAN.md
+last_updated: "2026-03-05T10:13:26.470Z"
 last_activity: 2026-03-05
 progress:
   total_phases: 4
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 28
-  completed_plans: 27
-  percent: 96
+  completed_plans: 28
+  percent: 100
 ---
 
 # Project State
@@ -33,10 +33,10 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Total Phases:** 4
 **Current Plan:** 05.1-03
 **Total Plans in Phase:** 3
-**Status:** In progress
+**Status:** Phase complete — ready for verification
 **Last Activity:** 2026-03-05
 **Last Activity Description:** Completed 05.1-02
-**Progress:** [██████████] 96%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -48,6 +48,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 05 P04 | 5min | 3 tasks | 6 files |
 | Phase 05.1 P01 | 5min | 2 tasks | 9 files |
 | Phase 05.1 P02 | 10 min | 3 tasks | 12 files |
+| Phase 05.1 P03 | 5 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -117,6 +118,8 @@ Recent decisions affecting current work:
 - [Phase 05.1-llm-provider-r-el-openai-anthropic-env-model-key-structured-output-strict-tests-safe-03]: Treat schema/JSON parse failures as retryable invalid_payload on the primary provider boundary.
 - [Phase 05.1-llm-provider-r-el-openai-anthropic-env-model-key-structured-output-strict-tests-safe-03]: Keep provider chain deterministic and bounded: OpenAI attempt, one retry, then one Anthropic fallback attempt.
 - [Phase 05.1-llm-provider-r-el-openai-anthropic-env-model-key-structured-output-strict-tests-safe-03]: Emit only allowlisted attempt metadata (provider/model/latency/parse/fallback/request-id) to preserve non-PII observability.
+- [Phase 05.1]: Real-provider mode never falls back to local deterministic proposal; null candidate is delegated to SAFE-03.
+- [Phase 05.1]: Provider payload status is stripped before orchestration parse so lifecycle status remains server-owned.
 
 ### Roadmap Evolution
 
@@ -133,6 +136,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-05T10:05:01.817Z
-**Stopped At:** Completed 05.1-02-PLAN.md
+**Last Date:** 2026-03-05T10:13:26.467Z
+**Stopped At:** Completed 05.1-03-PLAN.md
 **Resume File:** None

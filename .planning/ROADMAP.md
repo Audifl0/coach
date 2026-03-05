@@ -71,7 +71,7 @@
 **Goal:** Brancher un provider LLM reel (OpenAI principal + Anthropic fallback) avec sortie structuree stricte et fallback SAFE-03 deterministic.
 **Requirements**: ADAP-01, ADAP-02, ADAP-03, SAFE-03
 **Depends on:** Phase 5
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 05.1-01 - Provider contracts/schema/env gate
@@ -109,7 +109,7 @@ Plans:
 | 03 - Program Planning and Daily Workout Surface | 4/4 | 4 | Complete | 2026-03-04 |
 | 04 - Session Logging and History | 5/5 | 5 | Complete | 2026-03-04 |
 | 05 - Adaptive Coaching and Safety Guardrails | 5/5 | 5 | Complete | 2026-03-05 |
-| 05.1 - LLM provider réel + structured output + SAFE-03 tests | 2/3 | In Progress|  | 2026-03-05 |
+| 05.1 - LLM provider réel + structured output + SAFE-03 tests | 3/3 | Complete   | 2026-03-05 | 2026-03-05 |
 | 05.2 - Pipeline web autonome corpus scientifique | 0/0 | 0 | Not Started | 2026-03-05 |
 | 06 - Trends and Operational Reliability | 0/0 | 0 | Not Started | - |
 
