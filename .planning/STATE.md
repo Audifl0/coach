@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 04
-current_phase_name: Session Logging and History
-current_plan: Not started
-status: completed
-stopped_at: Completed 04-05-PLAN.md
-last_updated: "2026-03-04T20:48:23.352Z"
-last_activity: 2026-03-04
+current_phase: 05
+current_phase_name: Adaptive Coaching and Safety Guardrails
+current_plan: 3
+status: executing
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-03-05T08:48:31.855Z"
+last_activity: 2026-03-05
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 20
-  completed_plans: 20
-  percent: 100
+  total_plans: 25
+  completed_plans: 22
+  percent: 88
 ---
 
 # Project State
@@ -24,26 +24,26 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Fournir un coaching musculation personnalisé, sûr et adaptatif au quotidien, sans perdre la simplicité d'usage.
-**Current focus:** Phase 4 - Session Logging and History
+**Current focus:** Phase 5 - Adaptive Coaching and Safety Guardrails
 
 ## Current Position
 
-**Current Phase:** 04
-**Current Phase Name:** Session Logging and History
+**Current Phase:** 05
+**Current Phase Name:** Adaptive Coaching and Safety Guardrails
 **Total Phases:** 6
-**Current Plan:** Not started
-**Total Plans in Phase:** 4
-**Status:** Milestone complete
-**Last Activity:** 2026-03-04
-**Last Activity Description:** Phase 04 complete
-**Progress:** [██████████] 100%
+**Current Plan:** 3
+**Total Plans in Phase:** 5
+**Status:** Ready to execute
+**Last Activity:** 2026-03-05
+**Last Activity Description:** Completed 05-02-PLAN.md
+**Progress:** [█████████░] 88%
 
 ## Performance Metrics
 
-**Velocity:**
-- Total plans completed: 1
-- Average duration: 3 min
-- Total execution time: 0.1 hours
+| Plan | Duration | Scope | Files |
+|------|----------|-------|-------|
+| Phase 05 P01 | 33min | 3 tasks | 6 files |
+| Phase 05 P02 | 4 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -94,6 +94,11 @@ Recent decisions affecting current work:
 - [Phase 04-session-logging-and-history]: Drilldown detail reuses /api/program/sessions/:sessionId to avoid introducing a new history-detail endpoint.
 - [Phase 04-session-logging-and-history]: Kept auth + not-found masking in route while moving payload shaping to buildSessionDetailProjection.
 - [Phase 04-session-logging-and-history]: Expanded ProgramSessionDetailResponse schema to validate enriched execution metadata instead of route-local loose shaping.
+- [Phase 05]: SAFE-01 bounds centralized at +/-5% load and +/-2 reps in one policy module to prevent route/UI drift.
+- [Phase 05]: SAFE-03 fallback reuses last recommendation only when already within SAFE-01 bounds; otherwise return conservative hold with prudence flag.
+- [Phase 05]: Use Prisma enums for adaptive action/status/decision lifecycle to keep persistence and contracts aligned.
+- [Phase 05]: Keep DAL not-found behavior masked with account-scoped filters by returning null for missing recommendation reads/transitions.
+- [Phase 05]: Record every status transition in append-only AdaptiveRecommendationDecision rows with previous and next status.
 
 ### Pending Todos
 
@@ -105,6 +110,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-04T20:44:50.514Z
-**Stopped At:** Completed 04-05-PLAN.md
+**Last Date:** 2026-03-05T08:47:49.765Z
+**Stopped At:** Completed 05-01-PLAN.md
 **Resume File:** None

@@ -35,15 +35,15 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Adaptation & Coaching
 
-- [ ] **ADAP-01**: User can receive next-session recommendation (progress, hold, deload, or substitution) based on latest logs.
-- [ ] **ADAP-02**: User can see an explicit reason for each recommended change.
-- [ ] **ADAP-03**: User must confirm high-impact recommendation changes before they are applied.
+- [x] **ADAP-01**: User can receive next-session recommendation (progress, hold, deload, or substitution) based on latest logs.
+- [x] **ADAP-02**: User can see an explicit reason for each recommended change.
+- [x] **ADAP-03**: User must confirm high-impact recommendation changes before they are applied.
 
 ### Safety Guardrails
 
-- [ ] **SAFE-01**: User cannot receive recommendations exceeding configured conservative progression bounds.
-- [ ] **SAFE-02**: User receives warning when recommendation conflicts with declared limitation/pain flags.
-- [ ] **SAFE-03**: User falls back to conservative default plan when recommendation confidence is insufficient.
+- [x] **SAFE-01**: User cannot receive recommendations exceeding configured conservative progression bounds.
+- [x] **SAFE-02**: User receives warning when recommendation conflicts with declared limitation/pain flags.
+- [x] **SAFE-03**: User falls back to conservative default plan when recommendation confidence is insufficient.
 
 ### Dashboard
 
@@ -103,12 +103,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LOG-02 | 4 | Complete |
 | LOG-03 | 4 | Complete |
 | LOG-04 | 4 | Complete |
-| ADAP-01 | 5 | Pending |
-| ADAP-02 | 5 | Pending |
-| ADAP-03 | 5 | Pending |
-| SAFE-01 | 5 | Pending |
-| SAFE-02 | 5 | Pending |
-| SAFE-03 | 5 | Pending |
+| ADAP-01 | 5 | Complete |
+| ADAP-02 | 5 | Complete |
+| ADAP-03 | 5 | Complete |
+| SAFE-01 | 5 | Complete |
+| SAFE-02 | 5 | Complete |
+| SAFE-03 | 5 | Complete |
 | DASH-01 | 3 | Complete |
 | DASH-02 | 6 | Pending |
 | DASH-03 | 5 | Pending |
