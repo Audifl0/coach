@@ -7,6 +7,7 @@ import test from 'node:test';
 
 import type { ConnectorFetchResult } from '../../scripts/adaptive-knowledge/connectors/shared';
 import { runAdaptiveKnowledgePipeline } from '../../scripts/adaptive-knowledge/pipeline-run';
+import { rollbackCorpusSnapshot } from '../../scripts/adaptive-knowledge/publish';
 import { evaluateCorpusQualityGate } from '../../scripts/adaptive-knowledge/quality-gates';
 
 function buildConnectorSuccess(source: 'pubmed' | 'crossref' | 'openalex'): ConnectorFetchResult {
@@ -135,4 +136,94 @@ test('run report includes deterministic publish-block reason codes', async () =>
   const publishStage = report.stageReports.find((stage) => stage.stage === 'publish');
   assert.equal(publishStage?.message?.includes('score_below_threshold'), true);
   assert.equal(publishStage?.message?.includes('critical_contradiction'), true);
+});
+
+test('successful publish atomically swaps active pointer and persists previous active in rollback pointer', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-publish-'));
+  const activePointerPath = path.join(outputRootDir, 'active.json');
+  const rollbackPointerPath = path.join(outputRootDir, 'rollback.json');
+
+  await runAdaptiveKnowledgePipeline({
+    runId: 'run-publish-baseline',
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    outputRootDir,
+    qualityGateOverrides: {
+      threshold: 0.2,
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const baselinePointer = (await loadJson(activePointerPath)) as { snapshotId: string };
+  assert.equal(baselinePointer.snapshotId, 'run-publish-baseline');
+  await assert.rejects(() => access(rollbackPointerPath, constants.F_OK));
+
+  await runAdaptiveKnowledgePipeline({
+    runId: 'run-publish-next',
+    now: new Date('2026-03-06T00:00:00.000Z'),
+    outputRootDir,
+    qualityGateOverrides: {
+      threshold: 0.2,
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const activePointer = (await loadJson(activePointerPath)) as { snapshotId: string };
+  const rollbackPointer = (await loadJson(rollbackPointerPath)) as { snapshotId: string };
+  assert.equal(activePointer.snapshotId, 'run-publish-next');
+  assert.equal(rollbackPointer.snapshotId, 'run-publish-baseline');
+});
+
+test('rollback restores previous active pointer atomically and writes run-report rollback event', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-publish-'));
+  const reportPath = path.join(outputRootDir, 'run-report.json');
+
+  await runAdaptiveKnowledgePipeline({
+    runId: 'run-rollback-baseline',
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    outputRootDir,
+    qualityGateOverrides: {
+      threshold: 0.2,
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  await runAdaptiveKnowledgePipeline({
+    runId: 'run-rollback-current',
+    now: new Date('2026-03-06T00:00:00.000Z'),
+    outputRootDir,
+    qualityGateOverrides: {
+      threshold: 0.2,
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const rollback = await rollbackCorpusSnapshot({
+    outputRootDir,
+    runId: 'run-rollback-command',
+    now: new Date('2026-03-07T00:00:00.000Z'),
+    reportPath,
+  });
+
+  const activePointer = (await loadJson(path.join(outputRootDir, 'active.json'))) as { snapshotId: string };
+  assert.equal(activePointer.snapshotId, 'run-rollback-baseline');
+  assert.equal(rollback.restoredSnapshotId, 'run-rollback-baseline');
+
+  const rollbackReport = (await loadJson(reportPath)) as { events: Array<{ type: string; snapshotId: string }> };
+  assert.equal(rollbackReport.events.some((event) => event.type === 'rollback' && event.snapshotId === 'run-rollback-baseline'), true);
 });
