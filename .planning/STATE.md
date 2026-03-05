@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 05.2
 current_phase_name: pipeline web autonome corpus scientifique veille synth se validation continue
 current_plan: 05.2-02
-status: executing
-stopped_at: Completed 05.2-01-PLAN.md
-last_updated: "2026-03-05T11:24:28Z"
+status: verifying
+stopped_at: Completed 05.2-02-PLAN.md
+last_updated: "2026-03-05T11:34:43.167Z"
 last_activity: 2026-03-05
 progress:
   total_phases: 4
   completed_phases: 6
-  total_plans: 29
-  completed_plans: 29
-  percent: 100
+  total_plans: 32
+  completed_plans: 31
+  percent: 97
 ---
 
 # Project State
@@ -33,10 +33,10 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Total Phases:** 4
 **Current Plan:** 05.2-02
 **Total Plans in Phase:** 3
-**Status:** In progress
+**Status:** Phase complete — ready for verification
 **Last Activity:** 2026-03-05
 **Last Activity Description:** Completed Phase 05.2 plan 05.2-01 contract/config boundary
-**Progress:** [██████████] 100%
+**Progress:** [██████████] 97%
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 05.1 P03 | 5 min | 3 tasks | 4 files |
 | Phase 05.1 P05.1-04 | 2 min | 2 tasks | 1 files |
 | Phase 05.2 P05.2-01 | 3 min | 3 tasks | 5 files |
+| Phase 05.2 P05.2-02 | 19 min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -127,6 +128,9 @@ Recent decisions affecting current work:
 - [Phase 05.2]: Corpus contracts are strict and shared across normalized evidence, FR synthesis principles, manifests, and run reports.
 - [Phase 05.2]: Pipeline config is parsed from a single PIPELINE_* contract with approved-domain perimeter and bounded retries.
 - [Phase 05.2]: refresh-corpus entrypoint now validates through shared contracts/config while keeping --check compatibility.
+- [Phase 05.2]: Connector retries terminate as source-level skips with telemetry, never run-fatal throw.
+- [Phase 05.2]: Pipeline writes only candidate artifacts under snapshots/<run-id>/candidate and leaves active corpus untouched.
+- [Phase 05.2]: Synthesis stage failures persist run-report with synthesize=failed and validate=skipped before deterministic error.
 
 ### Roadmap Evolution
 
@@ -143,6 +147,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-05T11:24:28Z
-**Stopped At:** Completed 05.2-01-PLAN.md
-**Resume File:** .planning/phases/05.2-pipeline-web-autonome-corpus-scientifique-veille-synth-se-validation-continue/05.2-02-PLAN.md
+**Last Date:** 2026-03-05T11:34:43.165Z
+**Stopped At:** Completed 05.2-02-PLAN.md
+**Resume File:** None
