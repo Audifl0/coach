@@ -41,9 +41,9 @@ export type AdaptiveCoachingServiceDeps = {
   }>;
   getHistoryList: (userId: string, range: { from: Date; to: Date }) => Promise<Array<{ id: string }>>;
   listLatestAdaptiveRecommendation: (userId: string) => Promise<AdaptiveRecommendationRecord | null>;
-  getAdaptiveRecommendationById: (userId: string, recommendationId: string) => Promise<AdaptiveRecommendationRecord | null>;
+  getAdaptiveRecommendationById?: (userId: string, recommendationId: string) => Promise<AdaptiveRecommendationRecord | null>;
   createAdaptiveRecommendation: (userId: string, input: RecommendationCreateInput) => Promise<AdaptiveRecommendationRecord>;
-  updateAdaptiveRecommendationStatus: (
+  updateAdaptiveRecommendationStatus?: (
     userId: string,
     input: {
       recommendationId: string;
@@ -314,6 +314,10 @@ export function createAdaptiveCoachingService(deps: AdaptiveCoachingServiceDeps)
       userId: string;
       recommendationId: string;
     }) {
+      if (!deps.getAdaptiveRecommendationById || !deps.updateAdaptiveRecommendationStatus) {
+        throw new AdaptiveCoachingError('Confirmation transitions are not configured', 500);
+      }
+
       const recommendation = await deps.getAdaptiveRecommendationById(input.userId, input.recommendationId);
       if (!recommendation) {
         throw new AdaptiveCoachingError('Recommendation not found', 404);
@@ -353,6 +357,10 @@ export function createAdaptiveCoachingService(deps: AdaptiveCoachingServiceDeps)
       recommendationId: string;
       reason?: string;
     }) {
+      if (!deps.getAdaptiveRecommendationById || !deps.updateAdaptiveRecommendationStatus) {
+        throw new AdaptiveCoachingError('Rejection transitions are not configured', 500);
+      }
+
       const recommendation = await deps.getAdaptiveRecommendationById(input.userId, input.recommendationId);
       if (!recommendation) {
         throw new AdaptiveCoachingError('Recommendation not found', 404);
