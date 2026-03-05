@@ -260,3 +260,15 @@ export function parseSessionDurationCorrectionInput(input: unknown): SessionDura
 export function parseHistoryQueryInput(input: unknown): HistoryQueryInput {
   return historyQueryInputSchema.parse(input);
 }
+
+export {
+  parseProgramTrendQueryInput,
+  parseProgramTrendsExerciseResponse,
+  parseProgramTrendsSummaryResponse,
+  programTrendQueryInputSchema,
+  programTrendsExerciseResponseSchema,
+  programTrendsSummaryResponseSchema,
+  trendPeriodValues,
+} from './trends';
+
+export type { ProgramTrendQueryInput, ProgramTrendsExerciseResponse, ProgramTrendsSummaryResponse } from './trends';
