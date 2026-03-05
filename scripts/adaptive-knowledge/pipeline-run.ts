@@ -14,6 +14,11 @@ import { fetchCrossrefEvidenceBatch } from './connectors/crossref';
 import { fetchOpenAlexEvidenceBatch } from './connectors/openalex';
 import { fetchPubmedEvidenceBatch } from './connectors/pubmed';
 import type { ConnectorFetchInput, ConnectorFetchResult } from './connectors/shared';
+import {
+  evaluateCorpusQualityGate,
+  type CorpusQualityGateResult,
+  type QualityGateContradiction,
+} from './quality-gates';
 import { synthesizeCorpusPrinciples } from './synthesis';
 
 type PipelineConnectorFn = (input: ConnectorFetchInput) => Promise<ConnectorFetchResult>;
@@ -48,6 +53,10 @@ export type RunAdaptiveKnowledgePipelineInput = {
   }>;
   connectors?: Partial<PipelineConnectors>;
   synthesizeImpl?: (records: NormalizedEvidenceRecord[]) => CorpusPrinciple[] | Promise<CorpusPrinciple[]>;
+  qualityGateOverrides?: Partial<{
+    threshold: number;
+    criticalContradictions: QualityGateContradiction[];
+  }>;
 };
 
 export type AdaptivePipelineRunResult = {
@@ -57,6 +66,7 @@ export type AdaptivePipelineRunResult = {
   normalizedRecords: NormalizedEvidenceRecord[];
   principles: CorpusPrinciple[];
   runReport: CorpusRunReport;
+  publish: CorpusQualityGateResult;
 };
 
 const DEFAULT_CONNECTORS: PipelineConnectors = {
@@ -118,6 +128,12 @@ export async function runAdaptiveKnowledgePipeline(
 
   let principles: CorpusPrinciple[] = [];
   let synthesisErrorMessage: string | null = null;
+  let qualityGateResult = evaluateCorpusQualityGate({
+    now,
+    records: [],
+    threshold: input.qualityGateOverrides?.threshold,
+    criticalContradictions: input.qualityGateOverrides?.criticalContradictions,
+  });
   try {
     principles = await Promise.resolve(synthesize(normalizedRecords));
     stageReports.push({
@@ -132,6 +148,13 @@ export async function runAdaptiveKnowledgePipeline(
       stage: 'validate',
       status: 'succeeded',
       message: 'contracts=ok',
+    });
+
+    qualityGateResult = evaluateCorpusQualityGate({
+      now,
+      records: normalizedRecords,
+      threshold: input.qualityGateOverrides?.threshold,
+      criticalContradictions: input.qualityGateOverrides?.criticalContradictions,
     });
   } catch (error) {
     synthesisErrorMessage = error instanceof Error ? error.message : String(error);
@@ -150,7 +173,11 @@ export async function runAdaptiveKnowledgePipeline(
   stageReports.push({
     stage: 'publish',
     status: 'skipped',
-    message: 'pointer swap disabled in this phase',
+    message: synthesisErrorMessage
+      ? 'blocked-by-synthesis-failure'
+      : qualityGateResult.publishable
+        ? 'blocked:publish_not_enabled'
+        : `blocked:${qualityGateResult.reasons.join(',')}`,
   });
 
   const runReport = parseCorpusRunReport({
@@ -220,5 +247,6 @@ export async function runAdaptiveKnowledgePipeline(
     normalizedRecords,
     principles,
     runReport,
+    publish: qualityGateResult,
   };
 }
