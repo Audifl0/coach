@@ -94,3 +94,12 @@ export function applyAdaptiveSafetyPolicy(input: ApplyAdaptiveSafetyPolicyInput)
     }),
   };
 }
+
+export function isRecommendationWithinSafetyBounds(recommendation: AdaptiveRecommendation): boolean {
+  return (
+    recommendation.deltaLoadPct >= SAFE_PROGRESSION_BOUNDS.deltaLoadPctMin &&
+    recommendation.deltaLoadPct <= SAFE_PROGRESSION_BOUNDS.deltaLoadPctMax &&
+    recommendation.deltaRep >= SAFE_PROGRESSION_BOUNDS.deltaRepMin &&
+    recommendation.deltaRep <= SAFE_PROGRESSION_BOUNDS.deltaRepMax
+  );
+}
