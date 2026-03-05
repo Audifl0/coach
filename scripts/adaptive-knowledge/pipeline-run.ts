@@ -14,6 +14,7 @@ import { fetchCrossrefEvidenceBatch } from './connectors/crossref';
 import { fetchOpenAlexEvidenceBatch } from './connectors/openalex';
 import { fetchPubmedEvidenceBatch } from './connectors/pubmed';
 import type { ConnectorFetchInput, ConnectorFetchResult } from './connectors/shared';
+import { promoteCandidateSnapshot } from './publish';
 import {
   evaluateCorpusQualityGate,
   type CorpusQualityGateResult,
@@ -128,6 +129,7 @@ export async function runAdaptiveKnowledgePipeline(
 
   let principles: CorpusPrinciple[] = [];
   let synthesisErrorMessage: string | null = null;
+  let publishErrorMessage: string | null = null;
   let qualityGateResult = evaluateCorpusQualityGate({
     now,
     records: [],
@@ -176,7 +178,7 @@ export async function runAdaptiveKnowledgePipeline(
     message: synthesisErrorMessage
       ? 'blocked-by-synthesis-failure'
       : qualityGateResult.publishable
-        ? 'blocked:publish_not_enabled'
+        ? 'pending-artifact-write'
         : `blocked:${qualityGateResult.reasons.join(',')}`,
   });
 
@@ -236,8 +238,38 @@ export async function runAdaptiveKnowledgePipeline(
   );
   await writeFile(path.join(candidateDir, 'run-report.json'), JSON.stringify(runReport, null, 2) + '\n', 'utf8');
 
+  if (!synthesisErrorMessage && qualityGateResult.publishable) {
+    try {
+      const publish = await promoteCandidateSnapshot({
+        outputRootDir,
+        snapshotId: runId,
+        candidateDir,
+        now,
+      });
+      const publishStage = runReport.stageReports.find((stage) => stage.stage === 'publish');
+      if (publishStage) {
+        publishStage.status = 'succeeded';
+        publishStage.message = publish.previousSnapshotId
+          ? `promoted:${runId};rollback=${publish.previousSnapshotId}`
+          : `promoted:${runId};rollback=none`;
+      }
+      await writeFile(path.join(candidateDir, 'run-report.json'), JSON.stringify(runReport, null, 2) + '\n', 'utf8');
+    } catch (error) {
+      publishErrorMessage = error instanceof Error ? error.message : String(error);
+      const publishStage = runReport.stageReports.find((stage) => stage.stage === 'publish');
+      if (publishStage) {
+        publishStage.status = 'failed';
+        publishStage.message = publishErrorMessage;
+      }
+      await writeFile(path.join(candidateDir, 'run-report.json'), JSON.stringify(runReport, null, 2) + '\n', 'utf8');
+    }
+  }
+
   if (synthesisErrorMessage) {
     throw new Error(`synthesize stage failed: ${synthesisErrorMessage}`);
+  }
+  if (publishErrorMessage) {
+    throw new Error(`publish stage failed: ${publishErrorMessage}`);
   }
 
   return {
