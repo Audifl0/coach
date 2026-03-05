@@ -11,6 +11,7 @@ import {
   createAdaptiveCoachingService,
   type AdaptiveCoachingServiceDeps,
 } from '../../src/server/services/adaptive-coaching';
+import { createProgramAdaptationPostHandler } from '../../src/app/api/program/adaptation/route';
 
 test('evidence retrieval returns deterministic top-k snippets with short refs and source classes', () => {
   const evidence = retrieveAdaptiveEvidence({
@@ -254,4 +255,85 @@ test('invalid model output follows fallback path and returns contract-valid reco
   const result = await service.generate('user_1');
   assert.equal(result.recommendation.fallbackApplied, true);
   assert.equal(result.recommendation.status, 'fallback_applied');
+});
+
+test('authenticated adaptation request returns validated recommendation with explanation and warning/fallback metadata', async () => {
+  const post = createProgramAdaptationPostHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    generateRecommendation: async () => ({
+      recommendation: {
+        id: 'rec_10',
+        actionType: 'hold',
+        status: 'validated',
+        plannedSessionId: 'session_10',
+        confidence: 0.7,
+        confidenceLabel: 'medium',
+        confidenceReason: 'signals mixed',
+        warningFlag: true,
+        warningText: 'Limitation conflict warning',
+        fallbackApplied: false,
+        reasons: ['Fatigue trend elevated', 'Recent adherence dipped'],
+        evidenceTags: ['G-001', 'R-101'],
+        forecastProjection: {
+          projectedReadiness: 3,
+          projectedRpe: 7.6,
+        },
+      },
+      meta: { traceSteps: ['parse'] },
+    }),
+  });
+
+  const response = await post(
+    new Request('http://localhost/api/program/adaptation', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ userId: 'ignored' }),
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.recommendation.id, 'rec_10');
+  assert.equal(body.recommendation.reasons.length, 2);
+  assert.equal(body.recommendation.warningFlag, true);
+  assert.equal(body.recommendation.fallbackApplied, false);
+});
+
+test('cross-account recommendation path is masked as not-found', async () => {
+  const post = createProgramAdaptationPostHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    generateRecommendation: async () => {
+      throw new Error('Mismatched account context');
+    },
+  });
+
+  const response = await post(
+    new Request('http://localhost/api/program/adaptation', {
+      method: 'POST',
+    }),
+  );
+
+  assert.equal(response.status, 404);
+});
+
+test('endpoint parse-validates service payload and rejects malformed recommendation shape', async () => {
+  const post = createProgramAdaptationPostHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    generateRecommendation: async () => ({
+      recommendation: {
+        id: 'rec_bad',
+        actionType: 'hold',
+        status: 'validated',
+      },
+      meta: { traceSteps: [] },
+    }),
+  });
+
+  const response = await post(
+    new Request('http://localhost/api/program/adaptation', {
+      method: 'POST',
+    }),
+  );
+
+  assert.equal(response.status, 500);
 });
