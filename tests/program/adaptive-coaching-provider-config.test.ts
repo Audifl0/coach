@@ -28,8 +28,7 @@ test('LLM_REAL_PROVIDER_ENABLED=false keeps real-provider config optional', () =
 
   assert.equal(isRealProviderEnabled(env), false);
   const parsed = parseLlmRuntimeConfig(env);
-  assert.equal(parsed.enabled, false);
-  assert.equal(parsed.providers, null);
+  assert.equal(parsed, null);
 });
 
 test('LLM_REAL_PROVIDER_ENABLED=true requires full primary+fallback contract', () => {
