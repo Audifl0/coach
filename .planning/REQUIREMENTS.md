@@ -48,13 +48,13 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Dashboard
 
 - [x] **DASH-01**: User can view today's planned workout and next actions on a single dashboard page.
-- [ ] **DASH-02**: User can view trend summaries (volume/intensity/adherence) over recent sessions.
+- [x] **DASH-02**: User can view trend summaries (volume/intensity/adherence) over recent sessions.
 - [x] **DASH-03**: User can view upcoming session forecast after adaptation.
 
 ### Deployment & Reliability
 
 - [x] **PLAT-01**: User can access the web app on a VPS-hosted HTTPS endpoint.
-- [ ] **PLAT-02**: User data is backed up and can be restored in case of failure.
+- [x] **PLAT-02**: User data is backed up and can be restored in case of failure.
 - [x] **PLAT-03**: User-related sensitive data is protected in transit and at rest.
 
 ## v2 Requirements
@@ -110,10 +110,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SAFE-02 | 5 | Complete |
 | SAFE-03 | 5, 05.1 | Complete |
 | DASH-01 | 3 | Complete |
-| DASH-02 | 6 | Pending |
+| DASH-02 | 6 | Complete |
 | DASH-03 | 5 | Complete |
 | PLAT-01 | 1 | Complete |
-| PLAT-02 | 6 | Pending |
+| PLAT-02 | 6 | Complete |
 | PLAT-03 | 1 | Complete |
 
 **Coverage:**
