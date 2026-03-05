@@ -73,7 +73,7 @@ function createDeps(options?: {
   targetSessionId?: string | null;
   proposalActionType?: 'progress' | 'hold' | 'deload' | 'substitution';
 }): AdaptiveCoachingServiceDeps {
-  const recommendation = options?.recommendation ?? buildRecommendation({});
+  let recommendation = options?.recommendation ?? buildRecommendation({});
   const targetSessionId = options?.targetSessionId ?? 'session_next';
   const proposalActionType = options?.proposalActionType ?? 'hold';
 
@@ -97,6 +97,7 @@ function createDeps(options?: {
     }),
     getHistoryList: async () => [{ id: 'h1' }],
     listLatestAdaptiveRecommendation: async () => recommendation,
+    getAdaptiveRecommendationById: async () => recommendation,
     createAdaptiveRecommendation: async (_userId, input) => buildRecommendation({
       id: 'rec_new',
       actionType: input.actionType,
@@ -116,6 +117,18 @@ function createDeps(options?: {
       appliedAt: input.status === 'applied' ? (options?.now ?? new Date('2026-03-05T09:00:00.000Z')) : null,
       rejectedAt: null,
     }),
+    updateAdaptiveRecommendationStatus: async (_userId, input) => {
+      recommendation = buildRecommendation({
+        ...recommendation,
+        id: input.recommendationId,
+        status: input.nextStatus,
+        expiresAt: input.expiresAt ?? recommendation.expiresAt,
+        appliedAt: input.nextStatus === 'applied' ? (options?.now ?? new Date('2026-03-05T09:00:00.000Z')) : recommendation.appliedAt,
+        rejectedAt: input.nextStatus === 'rejected' ? (options?.now ?? new Date('2026-03-05T09:00:00.000Z')) : recommendation.rejectedAt,
+        fallbackReason: input.fallbackReason ?? recommendation.fallbackReason,
+      });
+      return recommendation;
+    },
     appendDecisionTrace: async () => ({ id: 'decision' }),
     proposeRecommendation: async () => ({
       actionType: proposalActionType,
@@ -126,6 +139,7 @@ function createDeps(options?: {
       forecastProjection: { projectedReadiness: 3, projectedRpe: 7 },
       modelConfidence: 0.8,
     }),
+    now: options?.now ? () => options.now as Date : undefined,
   };
 }
 

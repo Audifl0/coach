@@ -1,5 +1,6 @@
 import { validateProfileInput } from '@/lib/profile/contracts';
 import { generateAdaptiveRecommendation } from '@/lib/adaptive-coaching/orchestrator';
+import { parseAdaptiveRecommendation } from '@/lib/adaptive-coaching/contracts';
 import { createAdaptiveCoachingDal, type AdaptiveRecommendationRecord } from '@/server/dal/adaptive-coaching';
 import { createProfileDal } from '@/server/dal/profile';
 import { createProgramDal } from '@/server/dal/program';
@@ -40,7 +41,22 @@ export type AdaptiveCoachingServiceDeps = {
   }>;
   getHistoryList: (userId: string, range: { from: Date; to: Date }) => Promise<Array<{ id: string }>>;
   listLatestAdaptiveRecommendation: (userId: string) => Promise<AdaptiveRecommendationRecord | null>;
+  getAdaptiveRecommendationById: (userId: string, recommendationId: string) => Promise<AdaptiveRecommendationRecord | null>;
   createAdaptiveRecommendation: (userId: string, input: RecommendationCreateInput) => Promise<AdaptiveRecommendationRecord>;
+  updateAdaptiveRecommendationStatus: (
+    userId: string,
+    input: {
+      recommendationId: string;
+      nextStatus: 'proposed' | 'validated' | 'pending_confirmation' | 'applied' | 'rejected' | 'fallback_applied';
+      decisionType: 'policy' | 'user' | 'execution' | 'fallback';
+      decisionReason: string;
+      evidenceTags: unknown;
+      metadata?: unknown;
+      expiresAt?: Date | null;
+      fallbackReason?: string | null;
+      expectedCurrentStatus?: 'proposed' | 'validated' | 'pending_confirmation' | 'applied' | 'rejected' | 'fallback_applied';
+    },
+  ) => Promise<AdaptiveRecommendationRecord | null>;
   appendDecisionTrace: (userId: string, input: {
     recommendationId: string;
     previousStatus: 'proposed' | 'validated' | 'pending_confirmation' | 'applied' | 'rejected' | 'fallback_applied' | null;
@@ -56,6 +72,7 @@ export type AdaptiveCoachingServiceDeps = {
     profile: ReturnType<typeof validateProfileInput>;
     historyCount: number;
   }) => Promise<unknown>;
+  now?: () => Date;
 };
 
 export class AdaptiveCoachingError extends Error {
@@ -108,6 +125,69 @@ function buildDefaultProposal(input: {
   };
 }
 
+function toAdaptiveRecommendationPayload(record: AdaptiveRecommendationRecord) {
+  const reasons = Array.isArray(record.reasons) ? record.reasons : [];
+  const evidenceTags = Array.isArray(record.evidenceTags) ? record.evidenceTags : [];
+  const forecastPayload = (record.forecastPayload ?? {}) as {
+    projectedReadiness?: unknown;
+    projectedRpe?: unknown;
+  };
+
+  return parseAdaptiveRecommendation({
+    id: record.id,
+    actionType: record.actionType,
+    status: record.status,
+    plannedSessionId: record.plannedSessionId,
+    confidence: record.confidence,
+    confidenceLabel: record.confidenceLabel,
+    confidenceReason: record.confidenceReason,
+    warningFlag: record.warningFlag,
+    warningText: record.warningText ?? undefined,
+    fallbackApplied: record.fallbackApplied,
+    fallbackReason: record.fallbackReason ?? undefined,
+    reasons,
+    evidenceTags,
+    forecastProjection: {
+      projectedReadiness: Number(forecastPayload.projectedReadiness ?? 3),
+      projectedRpe: Number(forecastPayload.projectedRpe ?? 7),
+    },
+    progressionDeltaLoadPct: record.progressionDeltaLoadPct ?? undefined,
+    progressionDeltaReps: record.progressionDeltaReps ?? undefined,
+    progressionDeltaSets: record.progressionDeltaSets ?? undefined,
+    substitutionTarget: record.substitutionExerciseKey
+      ? {
+        exerciseKey: record.substitutionExerciseKey,
+        displayName: record.substitutionDisplayName ?? record.substitutionExerciseKey.replace(/_/g, ' '),
+      }
+      : undefined,
+    expiresAt: record.expiresAt ? record.expiresAt.toISOString() : undefined,
+    appliedAt: record.appliedAt ? record.appliedAt.toISOString() : undefined,
+    rejectedAt: record.rejectedAt ? record.rejectedAt.toISOString() : undefined,
+  });
+}
+
+function assertPendingConfirmationScope(input: {
+  recommendation: AdaptiveRecommendationRecord;
+  expectedSessionId: string;
+  now: Date;
+}) {
+  if (input.recommendation.status !== 'pending_confirmation') {
+    throw new AdaptiveCoachingError('Recommendation is not pending confirmation', 409);
+  }
+
+  if (input.recommendation.actionType !== 'deload' && input.recommendation.actionType !== 'substitution') {
+    throw new AdaptiveCoachingError('Recommendation action does not require confirmation', 409);
+  }
+
+  if (!input.recommendation.expiresAt || input.recommendation.expiresAt.getTime() <= input.now.getTime()) {
+    throw new AdaptiveCoachingError('Recommendation confirmation window has expired', 409);
+  }
+
+  if (input.recommendation.plannedSessionId !== input.expectedSessionId) {
+    throw new AdaptiveCoachingError('Recommendation no longer targets the next planned session', 409);
+  }
+}
+
 export function createAdaptiveCoachingService(deps: AdaptiveCoachingServiceDeps) {
   return {
     async generate(userId: string): Promise<{
@@ -148,7 +228,7 @@ export function createAdaptiveCoachingService(deps: AdaptiveCoachingServiceDeps)
         throw new AdaptiveCoachingError('Planned session not found', 404);
       }
 
-      const now = new Date();
+      const now = deps.now ? deps.now() : new Date();
       const thirtyDaysAgo = new Date(now);
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const history = await deps.getHistoryList(userId, { from: thirtyDaysAgo, to: now });
@@ -230,6 +310,118 @@ export function createAdaptiveCoachingService(deps: AdaptiveCoachingServiceDeps)
         },
       };
     },
+    async confirmAdaptiveRecommendation(input: {
+      userId: string;
+      recommendationId: string;
+    }) {
+      const recommendation = await deps.getAdaptiveRecommendationById(input.userId, input.recommendationId);
+      if (!recommendation) {
+        throw new AdaptiveCoachingError('Recommendation not found', 404);
+      }
+
+      const candidates = await deps.getTodayOrNextSessionCandidates(input.userId);
+      const targetSession = candidates.nextSession ?? candidates.todaySession;
+      if (!targetSession) {
+        throw new AdaptiveCoachingError('Planned session not found', 404);
+      }
+
+      const now = deps.now ? deps.now() : new Date();
+      assertPendingConfirmationScope({
+        recommendation,
+        expectedSessionId: targetSession.id,
+        now,
+      });
+
+      const updated = await deps.updateAdaptiveRecommendationStatus(input.userId, {
+        recommendationId: recommendation.id,
+        nextStatus: 'applied',
+        decisionType: 'user',
+        decisionReason: 'user_confirmed_high_impact_recommendation',
+        evidenceTags: recommendation.evidenceTags,
+        expectedCurrentStatus: 'pending_confirmation',
+        expiresAt: null,
+      });
+
+      if (!updated) {
+        throw new AdaptiveCoachingError('Recommendation not found', 404);
+      }
+
+      return toAdaptiveRecommendationPayload(updated);
+    },
+    async rejectAdaptiveRecommendation(input: {
+      userId: string;
+      recommendationId: string;
+      reason?: string;
+    }) {
+      const recommendation = await deps.getAdaptiveRecommendationById(input.userId, input.recommendationId);
+      if (!recommendation) {
+        throw new AdaptiveCoachingError('Recommendation not found', 404);
+      }
+
+      const candidates = await deps.getTodayOrNextSessionCandidates(input.userId);
+      const targetSession = candidates.nextSession ?? candidates.todaySession;
+      if (!targetSession) {
+        throw new AdaptiveCoachingError('Planned session not found', 404);
+      }
+
+      const now = deps.now ? deps.now() : new Date();
+      assertPendingConfirmationScope({
+        recommendation,
+        expectedSessionId: targetSession.id,
+        now,
+      });
+
+      await deps.updateAdaptiveRecommendationStatus(input.userId, {
+        recommendationId: recommendation.id,
+        nextStatus: 'rejected',
+        decisionType: 'user',
+        decisionReason: input.reason?.trim() || 'user_rejected_high_impact_recommendation',
+        evidenceTags: recommendation.evidenceTags,
+        expectedCurrentStatus: 'pending_confirmation',
+        expiresAt: null,
+      });
+
+      const conservative = await deps.createAdaptiveRecommendation(input.userId, {
+        plannedSessionId: recommendation.plannedSessionId,
+        actionType: 'hold',
+        status: 'applied',
+        confidence: Math.min(recommendation.confidence, 0.7),
+        confidenceLabel: recommendation.confidenceLabel,
+        confidenceReason: 'Conservative hold applied after user rejection',
+        warningFlag: recommendation.warningFlag,
+        warningText: recommendation.warningText,
+        fallbackApplied: true,
+        fallbackReason: 'user_rejected_high_impact',
+        progressionDeltaLoadPct: 0,
+        progressionDeltaReps: 0,
+        progressionDeltaSets: recommendation.progressionDeltaSets ?? 0,
+        substitutionExerciseKey: null,
+        substitutionDisplayName: null,
+        substitutionReason: null,
+        reasons: [
+          'High-impact recommendation was rejected by user',
+          'Conservative hold applied for next planned session',
+        ],
+        evidenceTags: recommendation.evidenceTags,
+        forecastPayload: recommendation.forecastPayload,
+        expiresAt: null,
+      });
+
+      await deps.appendDecisionTrace(input.userId, {
+        recommendationId: conservative.id,
+        previousStatus: null,
+        nextStatus: conservative.status,
+        decisionType: 'fallback',
+        decisionReason: 'conservative_hold_after_rejection',
+        evidenceTags: conservative.evidenceTags,
+        metadata: {
+          sourceRecommendationId: recommendation.id,
+          rejectedReason: input.reason?.trim() || null,
+        },
+      });
+
+      return toAdaptiveRecommendationPayload(conservative);
+    },
   };
 }
 
@@ -251,9 +443,17 @@ export async function buildDefaultAdaptiveCoachingService() {
       const dal = createAdaptiveCoachingDal(prisma as never, { userId });
       return dal.listLatestAdaptiveRecommendation();
     },
+    getAdaptiveRecommendationById: (userId, recommendationId) => {
+      const dal = createAdaptiveCoachingDal(prisma as never, { userId });
+      return dal.getAdaptiveRecommendationById(recommendationId);
+    },
     createAdaptiveRecommendation: (userId, input) => {
       const dal = createAdaptiveCoachingDal(prisma as never, { userId });
       return dal.createAdaptiveRecommendation(input);
+    },
+    updateAdaptiveRecommendationStatus: (userId, input) => {
+      const dal = createAdaptiveCoachingDal(prisma as never, { userId });
+      return dal.updateAdaptiveRecommendationStatus(input);
     },
     appendDecisionTrace: (userId, input) => {
       const dal = createAdaptiveCoachingDal(prisma as never, { userId });
