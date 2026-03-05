@@ -4,6 +4,11 @@ import { parseAdaptiveRecommendation } from '@/lib/adaptive-coaching/contracts';
 import { createAdaptiveCoachingDal, type AdaptiveRecommendationRecord } from '@/server/dal/adaptive-coaching';
 import { createProfileDal } from '@/server/dal/profile';
 import { createProgramDal } from '@/server/dal/program';
+import { parseLlmRuntimeConfig, type LlmRuntimeConfig } from '@/server/llm/config';
+import { createLlmProposalClient } from '@/server/llm/client';
+import { createOpenAiProposalClient } from '@/server/llm/providers/openai-client';
+import { createAnthropicProposalClient } from '@/server/llm/providers/anthropic-client';
+import type { LlmProposalProviderClient } from '@/server/llm/contracts';
 
 type PlannedSessionRef = {
   id: string;
@@ -72,6 +77,13 @@ export type AdaptiveCoachingServiceDeps = {
     profile: ReturnType<typeof validateProfileInput>;
     historyCount: number;
   }) => Promise<unknown>;
+  realProviderEnabled?: boolean;
+  proposeRecommendationWithProvider?: (input: {
+    userId: string;
+    plannedSessionId: string;
+    profile: ReturnType<typeof validateProfileInput>;
+    historyCount: number;
+  }) => Promise<unknown>;
   now?: () => Date;
 };
 
@@ -122,6 +134,64 @@ function buildDefaultProposal(input: {
     },
     modelConfidence: input.historyCount >= 3 ? 0.8 : 0.6,
   };
+}
+
+function buildProviderPrompts(input: {
+  plannedSessionId: string;
+  profile: ReturnType<typeof validateProfileInput>;
+  historyCount: number;
+}) {
+  const limitationSummary =
+    input.profile.limitations.length > 0
+      ? input.profile.limitations
+        .map((item) => `${item.zone}:${item.severity}`)
+        .join(', ')
+      : 'none';
+
+  return {
+    systemPrompt:
+      'Return one adaptive recommendation proposal as strict JSON using only: actionType, plannedSessionId, reasons, evidenceTags, forecastProjection, substitutionTarget.',
+    userPrompt: [
+      `planned_session_id=${input.plannedSessionId}`,
+      `goal=${input.profile.goal}`,
+      `history_count_30d=${input.historyCount}`,
+      `weekly_session_target=${input.profile.weeklySessionTarget}`,
+      `session_duration=${input.profile.sessionDuration}`,
+      `limitations=${limitationSummary}`,
+    ].join('\n'),
+  };
+}
+
+function sanitizeProviderProposal(input: unknown): unknown {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return input;
+  }
+
+  const record = { ...(input as Record<string, unknown>) };
+  if ('status' in record) {
+    delete record.status;
+  }
+
+  return record;
+}
+
+function createProviderClientByName(input: {
+  provider: 'openai' | 'anthropic';
+  config: LlmRuntimeConfig;
+}): LlmProposalProviderClient {
+  if (input.provider === 'openai') {
+    return createOpenAiProposalClient({
+      apiKey: input.config.openAi.apiKey,
+      model: input.config.openAi.model,
+      timeoutMs: input.config.openAi.timeoutMs,
+    });
+  }
+
+  return createAnthropicProposalClient({
+    apiKey: input.config.anthropic.apiKey,
+    model: input.config.anthropic.model,
+    timeoutMs: input.config.anthropic.timeoutMs,
+  });
 }
 
 function toAdaptiveRecommendationPayload(record: AdaptiveRecommendationRecord) {
@@ -233,20 +303,34 @@ export function createAdaptiveCoachingService(deps: AdaptiveCoachingServiceDeps)
       const history = await deps.getHistoryList(userId, { from: thirtyDaysAgo, to: now });
 
       const latestRecommendation = await deps.listLatestAdaptiveRecommendation(userId);
-      const rawProposal =
-        (await deps.proposeRecommendation({
-          userId,
-          plannedSessionId: targetSession.id,
-          profile,
-          historyCount: history.length,
-        })) ?? buildDefaultProposal({ plannedSessionId: targetSession.id, historyCount: history.length });
+      const proposalInput = {
+        userId,
+        plannedSessionId: targetSession.id,
+        profile,
+        historyCount: history.length,
+      };
+
+      let rawProposal: unknown = null;
+      if (deps.realProviderEnabled && deps.proposeRecommendationWithProvider) {
+        try {
+          rawProposal = await deps.proposeRecommendationWithProvider(proposalInput);
+        } catch {
+          rawProposal = null;
+        }
+      } else {
+        rawProposal = await deps.proposeRecommendation(proposalInput);
+      }
+
+      if (rawProposal == null && !deps.realProviderEnabled) {
+        rawProposal = buildDefaultProposal({ plannedSessionId: targetSession.id, historyCount: history.length });
+      }
 
       const scheduledAt = toDate(targetSession.scheduledDate);
       const confirmationExpiresAt = new Date(scheduledAt);
       confirmationExpiresAt.setDate(confirmationExpiresAt.getDate() + 1);
 
       const result = generateAdaptiveRecommendation({
-        rawProposal,
+        rawProposal: sanitizeProviderProposal(rawProposal),
         plannedSessionId: targetSession.id,
         queryTags: ['fatigue', 'adherence', 'readiness'],
         modelConfidence:
@@ -435,6 +519,42 @@ export function createAdaptiveCoachingService(deps: AdaptiveCoachingServiceDeps)
 export async function buildDefaultAdaptiveCoachingService() {
   const { prisma } = await import('@/lib/db/prisma');
   const profileDal = createProfileDal(prisma as never);
+  const runtimeConfig = parseLlmRuntimeConfig(process.env);
+
+  const providerProposalSource =
+    runtimeConfig === null
+      ? null
+      : (() => {
+        const primary = createProviderClientByName({
+          provider: runtimeConfig.primaryProvider,
+          config: runtimeConfig,
+        });
+        const fallback = createProviderClientByName({
+          provider: runtimeConfig.fallbackProvider,
+          config: runtimeConfig,
+        });
+        const client = createLlmProposalClient({
+          primary,
+          fallback,
+          primaryMaxRetries: runtimeConfig.primaryMaxRetries,
+        });
+
+        return async (input: {
+          userId: string;
+          plannedSessionId: string;
+          profile: ReturnType<typeof validateProfileInput>;
+          historyCount: number;
+        }) => {
+          const prompts = buildProviderPrompts(input);
+          const result = await client.generate({
+            systemPrompt: prompts.systemPrompt,
+            userPrompt: prompts.userPrompt,
+            plannedSessionId: input.plannedSessionId,
+          });
+
+          return result.candidate;
+        };
+      })();
 
   return createAdaptiveCoachingService({
     getProfile: (userId) => profileDal.getProfileByUserId(userId),
@@ -467,5 +587,7 @@ export async function buildDefaultAdaptiveCoachingService() {
       return dal.appendDecisionTrace(input);
     },
     proposeRecommendation: async (input) => buildDefaultProposal(input),
+    realProviderEnabled: runtimeConfig !== null,
+    proposeRecommendationWithProvider: providerProposalSource ?? undefined,
   });
 }

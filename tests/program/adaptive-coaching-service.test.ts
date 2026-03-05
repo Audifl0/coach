@@ -297,7 +297,6 @@ test('feature flag disabled keeps deterministic local proposal path', async () =
           projectedReadiness: 4,
           projectedRpe: 7.4,
         },
-        modelConfidence: 0.9,
       };
     },
     realProviderEnabled: false,
@@ -378,7 +377,6 @@ test('feature flag enabled uses provider proposal path when payload is valid', a
           projectedReadiness: 4,
           projectedRpe: 7.3,
         },
-        modelConfidence: 0.95,
       };
     },
   });
@@ -438,7 +436,6 @@ test('provider status field is ignored and final lifecycle status stays server-o
         projectedReadiness: 4,
         projectedRpe: 7.2,
       },
-      modelConfidence: 0.93,
     }),
   });
 
