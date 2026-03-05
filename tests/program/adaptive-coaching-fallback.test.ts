@@ -79,3 +79,17 @@ test('missing or unsafe reuse candidate falls back to conservative hold with pru
   assert.equal(result.fallbackReasonCode, 'conservative_hold');
   assert.equal(result.prudenceForecast, true);
 });
+
+test('conservative hold fallback keeps SAFE-01 bounded deltas deterministic', () => {
+  const result = resolveAdaptiveRecommendationPolicy({
+    candidateRecommendation: null,
+    modelConfidence: null,
+    contextQuality: 0.2,
+    lastAppliedRecommendation: null,
+  });
+
+  assert.equal(result.usedFallback, true);
+  assert.equal(result.recommendation.deltaLoadPct, 0);
+  assert.equal(result.recommendation.deltaRep, 0);
+  assert.equal(result.fallbackReasonCode, 'conservative_hold');
+});
