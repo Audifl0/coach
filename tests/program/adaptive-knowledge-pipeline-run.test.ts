@@ -132,3 +132,76 @@ test('backfill window passed to source fetch is bounded by active freshness wind
 
   assert.deepEqual(windows, [730, 730, 730]);
 });
+
+test('synthesis output includes FR fields and non-empty provenance references', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+
+  const result = await runAdaptiveKnowledgePipeline({
+    runId: 'run-synthesis-fr',
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    outputRootDir,
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  assert.equal(result.principles.length >= 1, true);
+  for (const principle of result.principles) {
+    assert.equal(principle.summaryFr.length > 0, true);
+    assert.equal(principle.guidanceFr.length > 0, true);
+    assert.equal(principle.provenanceRecordIds.length > 0, true);
+  }
+});
+
+test('synthesis provenance references map only to records ingested in current run', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+
+  const result = await runAdaptiveKnowledgePipeline({
+    runId: 'run-synthesis-provenance',
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    outputRootDir,
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const validRecordIds = new Set(result.normalizedRecords.map((record) => record.id));
+  for (const principle of result.principles) {
+    for (const provenanceId of principle.provenanceRecordIds) {
+      assert.equal(validRecordIds.has(provenanceId), true);
+    }
+  }
+});
+
+test('synthesis failure yields deterministic stage error and blocks validation stage', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+
+  await assert.rejects(
+    () =>
+      runAdaptiveKnowledgePipeline({
+        runId: 'run-synthesis-failure',
+        now: new Date('2026-03-05T00:00:00.000Z'),
+        outputRootDir,
+        connectors: {
+          pubmed: async () => buildConnectorSuccess('pubmed'),
+          crossref: async () => buildConnectorSuccess('crossref'),
+          openalex: async () => buildConnectorSuccess('openalex'),
+        },
+        synthesizeImpl: async () => {
+          throw new Error('forced synthesis failure');
+        },
+      }),
+    /synthesize stage failed/i,
+  );
+
+  const reportPath = path.join(outputRootDir, 'snapshots', 'run-synthesis-failure', 'candidate', 'run-report.json');
+  const report = (await loadJson(reportPath)) as {
+    stageReports: Array<{ stage: string; status: string }>;
+  };
+  assert.equal(report.stageReports.find((stage) => stage.stage === 'synthesize')?.status, 'failed');
+  assert.equal(report.stageReports.find((stage) => stage.stage === 'validate')?.status, 'skipped');
+});
