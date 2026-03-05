@@ -9,6 +9,11 @@ import {
   createDefaultTrendsSummaryState,
   createSummaryToggleOptions,
 } from '../../src/app/(private)/dashboard/_components/trends-summary-card';
+import {
+  TrendsDrilldown,
+  buildExerciseTrendRequestPath,
+  mapExerciseSeries,
+} from '../../src/app/(private)/dashboard/_components/trends-drilldown';
 
 function createSummaryFixture(): ProgramTrendsSummaryResponse {
   return {
@@ -46,6 +51,22 @@ function createSummaryFixture(): ProgramTrendsSummaryResponse {
   };
 }
 
+function createExerciseSeriesFixture() {
+  return {
+    period: '30d' as const,
+    exercise: {
+      key: 'goblet_squat',
+      displayName: 'Goblet Squat',
+      movementPattern: 'squat' as const,
+    },
+    points: [
+      { date: '2026-03-03', reps: 32, load: 22.5 },
+      { date: '2026-03-04', reps: 30, load: 24 },
+      { date: '2026-03-05', reps: 28, load: 25 },
+    ],
+  };
+}
+
 test('summary card renders exactly three KPI mini-chart cards for volume intensity and adherence', () => {
   const html = renderToStaticMarkup(React.createElement(TrendsSummaryCard, { initialData: createSummaryFixture() }));
 
@@ -74,4 +95,38 @@ test('summary helpers remain visual-only and never output delta arrows or interp
   assert.equal(html.includes('▼'), false);
   assert.equal(html.includes('badge'), false);
   assert.equal(html.includes('delta'), false);
+});
+
+test('drilldown renders separate reps and load series for selected exercise', () => {
+  const mapped = mapExerciseSeries(createExerciseSeriesFixture());
+  const html = renderToStaticMarkup(
+    React.createElement(TrendsDrilldown, {
+      period: '30d',
+      exerciseKey: 'goblet_squat',
+      data: createExerciseSeriesFixture(),
+    }),
+  );
+
+  assert.equal(mapped.repsPoints.length, 3);
+  assert.equal(mapped.loadPoints.length, 3);
+  assert.match(html, /Reps evolution/);
+  assert.match(html, /Load evolution/);
+});
+
+test('dashboard summary remains compact and does not embed exercise-level charts inline', () => {
+  const html = renderToStaticMarkup(React.createElement(TrendsSummaryCard, { initialData: createSummaryFixture() }));
+
+  assert.equal(html.includes('Reps evolution'), false);
+  assert.equal(html.includes('Load evolution'), false);
+});
+
+test('drilldown request path is scoped to selected period and selected exercise key', () => {
+  assert.equal(
+    buildExerciseTrendRequestPath({ period: '7d', exerciseKey: 'barbell_row' }),
+    '/api/program/trends/barbell_row?period=7d',
+  );
+  assert.equal(
+    buildExerciseTrendRequestPath({ period: '90d', exerciseKey: 'goblet_squat' }),
+    '/api/program/trends/goblet_squat?period=90d',
+  );
 });
