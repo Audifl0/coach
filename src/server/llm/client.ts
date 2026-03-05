@@ -1,5 +1,6 @@
 import { parseAdaptiveRecommendationProposal, type AdaptiveRecommendationProposal } from '@/lib/adaptive-coaching/contracts';
 import type { LlmAttemptResult, LlmProposalProviderClient, LlmRequestInput } from '@/server/llm/contracts';
+import { createProviderAttemptAuditEnvelope } from '@/server/llm/observability';
 
 type ProviderAttemptSummary = {
   provider: 'openai' | 'anthropic';
@@ -27,6 +28,7 @@ export type LlmClientDeps = {
   primary: LlmProposalProviderClient;
   fallback: LlmProposalProviderClient;
   primaryMaxRetries?: number;
+  onAttemptAudit?: (event: Record<string, unknown>) => void;
 };
 
 function toSummary(result: LlmAttemptResult): ProviderAttemptSummary {
@@ -65,6 +67,15 @@ function toInvalidPayloadFailure(result: LlmAttemptResult): LlmAttemptResult {
 
 export function createLlmProposalClient(deps: LlmClientDeps): LlmProposalClient {
   const primaryRetries = Math.max(0, Math.min(1, deps.primaryMaxRetries ?? 1));
+  const onAttemptAudit = deps.onAttemptAudit;
+
+  function recordAttempt(result: LlmAttemptResult, attempts: ProviderAttemptSummary[]) {
+    const summary = toSummary(result);
+    attempts.push(summary);
+    if (onAttemptAudit) {
+      onAttemptAudit(createProviderAttemptAuditEnvelope(summary as Record<string, unknown>));
+    }
+  }
 
   return {
     async generate(input) {
@@ -78,7 +89,7 @@ export function createLlmProposalClient(deps: LlmClientDeps): LlmProposalClient 
         if (primaryResult.ok) {
           const validated = validateCandidate(primaryResult.proposal);
           if (validated) {
-            attempts.push(toSummary(primaryResult));
+            recordAttempt(primaryResult, attempts);
             return {
               candidate: validated,
               meta: {
@@ -90,13 +101,13 @@ export function createLlmProposalClient(deps: LlmClientDeps): LlmProposalClient 
           }
 
           const invalidFailure = toInvalidPayloadFailure(primaryResult);
-          attempts.push(toSummary(invalidFailure));
+          recordAttempt(invalidFailure, attempts);
           lastPrimaryFailure = invalidFailure;
           fallbackReason = invalidFailure.fallbackReason;
           continue;
         }
 
-        attempts.push(toSummary(primaryResult));
+        recordAttempt(primaryResult, attempts);
         lastPrimaryFailure = primaryResult;
         fallbackReason = primaryResult.fallbackReason;
         if (!primaryResult.retryable || attempt >= primaryRetries) {
@@ -108,7 +119,7 @@ export function createLlmProposalClient(deps: LlmClientDeps): LlmProposalClient 
       if (fallbackResult.ok) {
         const validated = validateCandidate(fallbackResult.proposal);
         if (validated) {
-          attempts.push(toSummary(fallbackResult));
+          recordAttempt(fallbackResult, attempts);
           return {
             candidate: validated,
             meta: {
@@ -120,7 +131,7 @@ export function createLlmProposalClient(deps: LlmClientDeps): LlmProposalClient 
         }
 
         const invalidFallback = toInvalidPayloadFailure(fallbackResult);
-        attempts.push(toSummary(invalidFallback));
+        recordAttempt(invalidFallback, attempts);
         return {
           candidate: null,
           meta: {
@@ -131,7 +142,7 @@ export function createLlmProposalClient(deps: LlmClientDeps): LlmProposalClient 
         };
       }
 
-      attempts.push(toSummary(fallbackResult));
+      recordAttempt(fallbackResult, attempts);
       const terminalFallbackReason =
         fallbackResult.fallbackReason ??
         (lastPrimaryFailure && !lastPrimaryFailure.ok ? lastPrimaryFailure.fallbackReason : null);
