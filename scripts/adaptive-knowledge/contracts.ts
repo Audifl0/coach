@@ -1,83 +1,101 @@
 import { z } from 'zod';
 
 const SOURCE_TYPE_VALUES = ['guideline', 'review', 'expertise'] as const;
+const STAGE_VALUES = ['discover', 'ingest', 'synthesize', 'validate', 'publish'] as const;
+const STAGE_STATUS_VALUES = ['succeeded', 'failed', 'skipped'] as const;
 
 export const normalizedEvidenceRecordSchema = z
   .object({
     id: z.string().min(1),
-    source: z.string().min(1),
     sourceType: z.enum(SOURCE_TYPE_VALUES),
-    title: z.string().min(1),
-    url: z.string().url(),
-    domain: z.string().min(1),
+    sourceUrl: z.string().url(),
+    sourceDomain: z.string().min(1),
     publishedAt: z.string().date(),
-    summary: z.string().min(1),
-    language: z.string().min(1).default('en'),
-    provenanceId: z.string().min(1),
-    provenanceUrl: z.string().url(),
+    title: z.string().min(1),
+    summaryEn: z.string().min(1),
     tags: z.array(z.string().min(1)).min(1),
-  })
-  .strict();
-
-const principleProvenanceSchema = z
-  .object({
-    recordId: z.string().min(1),
-    url: z.string().url(),
-    source: z.string().min(1),
+    provenanceIds: z.array(z.string().min(1)).min(1),
   })
   .strict();
 
 export const corpusPrincipleSchema = z
   .object({
     id: z.string().min(1),
-    titleFr: z.string().min(1),
+    title: z.string().min(1),
     summaryFr: z.string().min(1),
-    recommendationFr: z.string().min(1),
-    provenance: z.array(principleProvenanceSchema).min(1),
+    guidanceFr: z.string().min(1),
+    provenanceRecordIds: z.array(z.string().min(1)).min(1),
+    evidenceLevel: z.string().min(1),
+    guardrail: z.enum(['SAFE-01', 'SAFE-02', 'SAFE-03']),
   })
   .strict();
 
-const stageNameSchema = z.enum(['discover', 'fetch', 'synthesize', 'validate']);
-const stageStatusSchema = z.enum(['success', 'failed', 'skipped']);
-
-const runStageSchema = z
+const stageReportSchema = z
   .object({
-    stage: stageNameSchema,
-    status: stageStatusSchema,
+    stage: z.enum(STAGE_VALUES),
+    status: z.enum(STAGE_STATUS_VALUES),
     message: z.string().min(1).optional(),
   })
   .strict();
 
-export const corpusRunReportSchema = z
+const artifactPointerSchema = z
   .object({
-    runId: z.string().min(1),
-    generatedAt: z.string().datetime(),
-    stageOrder: z.array(stageNameSchema).length(4),
-    stages: z.array(runStageSchema).min(1),
-    sources: z.array(
-      z
-        .object({
-          source: z.string().min(1),
-          skipped: z.boolean(),
-          recordsFetched: z.number().int().nonnegative(),
-          recordsSkipped: z.number().int().nonnegative(),
-          attempts: z.number().int().positive(),
-          error: z.string().min(1).optional(),
-        })
-        .strict(),
-    ),
+    indexPath: z.string().min(1),
+    principlesPath: z.string().min(1),
+    reportPath: z.string().min(1),
   })
   .strict();
 
 export const corpusSnapshotManifestSchema = z
   .object({
-    runId: z.string().min(1),
-    candidatePath: z.string().min(1),
-    sourcesFile: z.string().min(1),
-    principlesFile: z.string().min(1),
-    runReportFile: z.string().min(1),
+    snapshotId: z.string().min(1),
+    schemaVersion: z.string().min(1),
+    generatedAt: z.string().datetime(),
+    evidenceRecordCount: z.number().int().nonnegative(),
+    principleCount: z.number().int().nonnegative(),
+    sourceDomains: z.array(z.string().min(1)).min(1),
+    artifacts: artifactPointerSchema,
   })
   .strict();
+
+const orderedStages = [...STAGE_VALUES];
+
+export const corpusRunReportSchema = z
+  .object({
+    runId: z.string().min(1),
+    mode: z.enum(['refresh', 'check']),
+    startedAt: z.string().datetime(),
+    completedAt: z.string().datetime(),
+    snapshotId: z.string().min(1),
+    stageReports: z.array(stageReportSchema).min(1),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const observed = value.stageReports.map((stage) => stage.stage);
+    const expectedPrefix = orderedStages.slice(0, observed.length);
+    for (let index = 0; index < observed.length; index += 1) {
+      if (observed[index] !== expectedPrefix[index]) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'stageReports must follow discover->ingest->synthesize->validate->publish order',
+          path: ['stageReports', index, 'stage'],
+        });
+      }
+    }
+
+    const firstFailureIndex = value.stageReports.findIndex((stage) => stage.status === 'failed');
+    if (firstFailureIndex >= 0) {
+      for (let index = firstFailureIndex + 1; index < value.stageReports.length; index += 1) {
+        if (value.stageReports[index]?.status === 'succeeded') {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'stageReports cannot mark later stages as succeeded after a failed stage',
+            path: ['stageReports', index, 'status'],
+          });
+        }
+      }
+    }
+  });
 
 export type NormalizedEvidenceRecord = z.infer<typeof normalizedEvidenceRecordSchema>;
 export type CorpusPrinciple = z.infer<typeof corpusPrincipleSchema>;
