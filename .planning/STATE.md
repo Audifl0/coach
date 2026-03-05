@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 05
 current_phase_name: Adaptive Coaching and Safety Guardrails
 current_plan: 5
-status: executing
-stopped_at: Completed 05-04-PLAN.md
-last_updated: "2026-03-05T09:06:15.180Z"
+status: verifying
+stopped_at: Completed 05-05-PLAN.md
+last_updated: "2026-03-05T09:14:46.577Z"
 last_activity: 2026-03-05
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 25
-  completed_plans: 24
+  completed_plans: 25
   percent: 96
 ---
 
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Total Phases:** 6
 **Current Plan:** 5
 **Total Plans in Phase:** 5
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 **Last Activity:** 2026-03-05
 **Last Activity Description:** Completed 05-02-PLAN.md
 **Progress:** [██████████] 96%
@@ -107,6 +107,8 @@ Recent decisions affecting current work:
 - [Phase 05-adaptive-coaching-and-safety-guardrails]: Confirmation validity enforces pending status, unexpired window, and match to current next session.
 - [Phase 05-adaptive-coaching-and-safety-guardrails]: Reject flow records user rejection then applies a conservative hold recommendation as applied fallback.
 - [Phase 05-adaptive-coaching-and-safety-guardrails]: Dashboard banner waits for server success before showing resolved state.
+- [Phase 05]: Forecast prudence is explicit prevision_prudente state derived from warning/fallback flags, not implicit UI inference.
+- [Phase 05]: Dashboard consumes a single server-resolved forecast contract via resolveAdaptiveForecastCard to avoid view-model drift.
 
 ### Pending Todos
 
@@ -118,6 +120,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-05T09:06:15.177Z
-**Stopped At:** Completed 05-04-PLAN.md
+**Last Date:** 2026-03-05T09:14:46.574Z
+**Stopped At:** Completed 05-05-PLAN.md
 **Resume File:** None
