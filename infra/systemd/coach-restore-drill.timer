@@ -1,0 +1,12 @@
+[Unit]
+Description=Schedule monthly Coach restore drill
+
+[Timer]
+OnCalendar=monthly
+Persistent=true
+AccuracySec=1h
+RandomizedDelaySec=15m
+Unit=coach-restore-drill.service
+
+[Install]
+WantedBy=timers.target

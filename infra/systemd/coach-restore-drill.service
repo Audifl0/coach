@@ -1,0 +1,14 @@
+[Unit]
+Description=Coach monthly backup restore drill
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/coach
+EnvironmentFile=/opt/coach/.env.production
+Environment=RESTORE_DRILL_EVIDENCE_DIR=/opt/coach/backups/restore-drills
+ExecStart=/opt/coach/infra/scripts/run-restore-drill.sh /opt/coach/.env.production /opt/coach/backups
+
+[Install]
+WantedBy=multi-user.target
