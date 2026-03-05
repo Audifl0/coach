@@ -53,10 +53,14 @@ infra/scripts/restore.sh backups/coach-YYYYMMDDTHHMMSSZ.sql.enc .env.production
 
 Run a periodic restore drill to confirm recoverability:
 
-1. Create encrypted backup.
-2. Restore into a staging database on same VPS (or alternate host).
-3. Validate schema and key auth tables are present.
-4. Record date and outcome in operational notes.
+1. Export backup passphrase.
+2. Run `infra/scripts/run-restore-drill.sh .env.production backups`.
+3. Confirm smoke reachability checks for `/login` and `/dashboard`.
+4. Archive the timestamped evidence log under `backups/restore-drills/`.
+
+Detailed incident procedure and failure handling:
+
+- [Restore Drill Runbook](./restore-drill-runbook.md)
 
 ## Deferred Hardening (Out of Current Scope)
 
