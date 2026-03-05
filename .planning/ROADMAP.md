@@ -87,8 +87,8 @@ Plans:
 
 Plans:
 - [x] 05.2-01 - Contracts/config boundary (whitelist + freshness + synthesis contract)
-- [ ] 05.2-02 - Ingestion connectors + stage runner + synthesis candidate
-- [ ] 05.2-03 - Quality gate + atomic publish/rollback + runtime active snapshot + cron ops
+- [x] 05.2-02 - Ingestion connectors + stage runner + synthesis candidate
+- [x] 05.2-03 - Quality gate + atomic publish/rollback + runtime active snapshot + cron ops
 
 ## Phase 6: Trends and Operational Reliability
 
