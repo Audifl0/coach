@@ -6,14 +6,14 @@ current_phase: 05.1
 current_phase_name: LLM provider reel + structured output + SAFE-03 tests
 current_plan: 05.1-03
 status: verifying
-stopped_at: Completed 05.1-03-PLAN.md
-last_updated: "2026-03-05T10:13:26.470Z"
+stopped_at: Completed 05.1-04-PLAN.md
+last_updated: "2026-03-05T10:33:17.022Z"
 last_activity: 2026-03-05
 progress:
   total_phases: 4
   completed_phases: 6
-  total_plans: 28
-  completed_plans: 28
+  total_plans: 29
+  completed_plans: 29
   percent: 100
 ---
 
@@ -49,6 +49,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 05.1 P01 | 5min | 2 tasks | 9 files |
 | Phase 05.1 P02 | 10 min | 3 tasks | 12 files |
 | Phase 05.1 P03 | 5 min | 3 tasks | 4 files |
+| Phase 05.1 P05.1-04 | 2 min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -120,6 +121,8 @@ Recent decisions affecting current work:
 - [Phase 05.1-llm-provider-r-el-openai-anthropic-env-model-key-structured-output-strict-tests-safe-03]: Emit only allowlisted attempt metadata (provider/model/latency/parse/fallback/request-id) to preserve non-PII observability.
 - [Phase 05.1]: Real-provider mode never falls back to local deterministic proposal; null candidate is delegated to SAFE-03.
 - [Phase 05.1]: Provider payload status is stripped before orchestration parse so lifecycle status remains server-owned.
+- [Phase 05.1]: Disabled provider mode contract is null runtime config; tests assert parseLlmRuntimeConfig(...) === null.
+- [Phase 05.1]: Enabled-mode provider config tests now enforce LLM_OPENAI_* and LLM_ANTHROPIC_* model/API-key env names and current parser shape.
 
 ### Roadmap Evolution
 
@@ -136,6 +139,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-05T10:13:26.467Z
-**Stopped At:** Completed 05.1-03-PLAN.md
+**Last Date:** 2026-03-05T10:33:17.020Z
+**Stopped At:** Completed 05.1-04-PLAN.md
 **Resume File:** None
