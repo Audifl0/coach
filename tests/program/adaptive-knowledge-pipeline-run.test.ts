@@ -37,7 +37,7 @@ async function loadJson(filePath: string): Promise<unknown> {
   return JSON.parse(raw) as unknown;
 }
 
-test('pipeline executes deterministic stage order and writes candidate artifacts', async () => {
+test('pipeline executes deterministic stage order and writes snapshot artifacts', async () => {
   const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
 
   const result = await runAdaptiveKnowledgePipeline({
@@ -51,14 +51,17 @@ test('pipeline executes deterministic stage order and writes candidate artifacts
     },
   });
 
-  const candidateDir = path.join(outputRootDir, 'snapshots', 'run-order-test', 'candidate');
-  const sources = (await loadJson(path.join(candidateDir, 'sources.json'))) as { records: unknown[] };
-  const principles = (await loadJson(path.join(candidateDir, 'principles.json'))) as { principles: unknown[] };
-  const report = (await loadJson(path.join(candidateDir, 'run-report.json'))) as {
+  const activePointerPath = path.join(outputRootDir, 'active.json');
+  const activePointer = (await loadJson(activePointerPath)) as { snapshotId: string };
+  const snapshotDir = path.join(outputRootDir, 'snapshots', activePointer.snapshotId, 'validated');
+  const sources = (await loadJson(path.join(snapshotDir, 'sources.json'))) as { records: unknown[] };
+  const principles = (await loadJson(path.join(snapshotDir, 'principles.json'))) as { principles: unknown[] };
+  const report = (await loadJson(path.join(snapshotDir, 'run-report.json'))) as {
     stageReports: Array<{ stage: string }>;
   };
 
-  assert.equal(result.candidateDir, candidateDir);
+  assert.equal(result.candidateDir, path.join(outputRootDir, 'snapshots', 'run-order-test', 'candidate'));
+  assert.equal(activePointer.snapshotId, 'run-order-test');
   assert.equal(sources.records.length, 3);
   assert.equal(principles.principles.length >= 1, true);
   assert.deepEqual(
