@@ -1,0 +1,42 @@
+{
+  "version": "2026-03-05",
+  "generated_at": "2026-03-05T00:00:00.000Z",
+  "entries": [
+    {
+      "id": "guideline-acsm-progressive-overload-2024",
+      "title": "ACSM Resistance Training Progression Framework",
+      "url": "https://www.acsm.org/docs/default-source/files-for-resource-library/resistance-training-progression.pdf",
+      "date": "2024-01-15",
+      "source_type": "guideline",
+      "evidence_level": "consensus_guideline",
+      "freshness_days": 780,
+      "tags": ["progression", "load", "readiness"],
+      "summary": "Recommends conservative step-wise overload and prioritization of technique when readiness declines.",
+      "principle_ids": ["principle-safe-progressive-overload", "principle-readiness-first"]
+    },
+    {
+      "id": "review-fatigue-autoregulation-2023",
+      "title": "Autoregulation and Fatigue Management in Resistance Training",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/37265095/",
+      "date": "2023-08-10",
+      "source_type": "review",
+      "evidence_level": "systematic_review",
+      "freshness_days": 940,
+      "tags": ["fatigue", "rpe", "autoregulation"],
+      "summary": "Supports hold or deload decisions when fatigue markers rise and session quality degrades.",
+      "principle_ids": ["principle-readiness-first", "principle-fatigue-guardrail"]
+    },
+    {
+      "id": "expertise-jts-substitution-2022",
+      "title": "Practical Substitution Heuristics for Pain-Limited Training",
+      "url": "https://www.jtsstrength.com/substitution-heuristics-pain-limited-training/",
+      "date": "2022-11-02",
+      "source_type": "expertise",
+      "evidence_level": "expert_consensus",
+      "freshness_days": 1221,
+      "tags": ["substitution", "pain", "limitations"],
+      "summary": "Advises targeted substitutions when pain persists while maintaining movement intent and training adherence.",
+      "principle_ids": ["principle-limitation-aware-substitution", "principle-fatigue-guardrail"]
+    }
+  ]
+}

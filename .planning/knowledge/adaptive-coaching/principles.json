@@ -1,0 +1,38 @@
+{
+  "version": "2026-03-05",
+  "generated_at": "2026-03-05T00:00:00.000Z",
+  "principles": [
+    {
+      "id": "principle-safe-progressive-overload",
+      "title": "Safe Progressive Overload",
+      "description": "Progression should remain conservative and bounded when recent execution quality or recovery confidence is uncertain.",
+      "priority": 1,
+      "guardrail": "SAFE-01",
+      "tags": ["progression", "load", "safety"]
+    },
+    {
+      "id": "principle-readiness-first",
+      "title": "Readiness Before Intensity",
+      "description": "When readiness and fatigue indicators diverge, preserve adherence and reduce risk with hold or deload actions.",
+      "priority": 2,
+      "guardrail": "SAFE-03",
+      "tags": ["readiness", "fatigue", "deload"]
+    },
+    {
+      "id": "principle-limitation-aware-substitution",
+      "title": "Limitation-Aware Substitution",
+      "description": "Substitution should keep session intent while avoiding limitation-conflicting movement patterns.",
+      "priority": 3,
+      "guardrail": "SAFE-02",
+      "tags": ["limitations", "pain", "substitution"]
+    },
+    {
+      "id": "principle-fatigue-guardrail",
+      "title": "Fatigue Guardrail",
+      "description": "Escalating fatigue signals require explicit caution messaging and a prudent forecast for the next session.",
+      "priority": 4,
+      "guardrail": "SAFE-03",
+      "tags": ["fatigue", "forecast", "prudence"]
+    }
+  ]
+}
