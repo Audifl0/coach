@@ -255,6 +255,198 @@ test('invalid model output follows fallback path and returns contract-valid reco
   assert.equal(result.recommendation.status, 'fallback_applied');
 });
 
+test('feature flag disabled keeps deterministic local proposal path', async () => {
+  let localCalls = 0;
+  let providerCalls = 0;
+
+  const service = createAdaptiveCoachingService({
+    getProfile: async () => ({
+      goal: 'strength',
+      weeklySessionTarget: 4,
+      sessionDuration: '45_to_75m',
+      equipmentCategories: ['dumbbells'],
+      limitationsDeclared: false,
+      limitations: [],
+    }),
+    getTodayOrNextSessionCandidates: async () => ({
+      todaySession: null,
+      nextSession: {
+        id: 'session_flag_off',
+        scheduledDate: new Date('2026-03-06T08:00:00.000Z'),
+      },
+    }),
+    getHistoryList: async () => [{ id: 'h1' }, { id: 'h2' }, { id: 'h3' }],
+    listLatestAdaptiveRecommendation: async () => null,
+    createAdaptiveRecommendation: async (payload) => ({
+      ...payload,
+      id: 'rec_flag_off',
+      createdAt: new Date('2026-03-05T08:50:00.000Z'),
+      updatedAt: new Date('2026-03-05T08:50:00.000Z'),
+      appliedAt: null,
+      rejectedAt: null,
+    }),
+    appendDecisionTrace: async () => ({ id: 'decision_flag_off' }),
+    proposeRecommendation: async () => {
+      localCalls += 1;
+      return {
+        actionType: 'progress',
+        plannedSessionId: 'session_flag_off',
+        reasons: ['Deterministic local proposal path', 'Feature flag disabled'],
+        evidenceTags: ['local-model-default'],
+        forecastProjection: {
+          projectedReadiness: 4,
+          projectedRpe: 7.4,
+        },
+        modelConfidence: 0.9,
+      };
+    },
+    realProviderEnabled: false,
+    proposeRecommendationWithProvider: async () => {
+      providerCalls += 1;
+      return {
+        actionType: 'hold',
+        plannedSessionId: 'session_flag_off',
+        reasons: ['Provider should not run', 'Flag disabled'],
+        evidenceTags: ['G-001'],
+        forecastProjection: {
+          projectedReadiness: 3,
+          projectedRpe: 7,
+        },
+      };
+    },
+  });
+
+  const result = await service.generate('user_1');
+  assert.equal(result.recommendation.actionType, 'progress');
+  assert.equal(localCalls, 1);
+  assert.equal(providerCalls, 0);
+});
+
+test('feature flag enabled uses provider proposal path when payload is valid', async () => {
+  let localCalls = 0;
+  let providerCalls = 0;
+
+  const service = createAdaptiveCoachingService({
+    getProfile: async () => ({
+      goal: 'strength',
+      weeklySessionTarget: 4,
+      sessionDuration: '45_to_75m',
+      equipmentCategories: ['dumbbells'],
+      limitationsDeclared: false,
+      limitations: [],
+    }),
+    getTodayOrNextSessionCandidates: async () => ({
+      todaySession: {
+        id: 'session_flag_on',
+        scheduledDate: new Date('2026-03-05T08:00:00.000Z'),
+      },
+      nextSession: null,
+    }),
+    getHistoryList: async () => [{ id: 'h1' }, { id: 'h2' }, { id: 'h3' }],
+    listLatestAdaptiveRecommendation: async () => null,
+    createAdaptiveRecommendation: async (payload) => ({
+      ...payload,
+      id: 'rec_flag_on',
+      createdAt: new Date('2026-03-05T08:50:00.000Z'),
+      updatedAt: new Date('2026-03-05T08:50:00.000Z'),
+      appliedAt: null,
+      rejectedAt: null,
+    }),
+    appendDecisionTrace: async () => ({ id: 'decision_flag_on' }),
+    proposeRecommendation: async () => {
+      localCalls += 1;
+      return {
+        actionType: 'hold',
+        plannedSessionId: 'session_flag_on',
+        reasons: ['Should not be used', 'Provider path should win'],
+        evidenceTags: ['local-fallback'],
+        forecastProjection: {
+          projectedReadiness: 3,
+          projectedRpe: 7,
+        },
+      };
+    },
+    realProviderEnabled: true,
+    proposeRecommendationWithProvider: async () => {
+      providerCalls += 1;
+      return {
+        actionType: 'progress',
+        plannedSessionId: 'session_flag_on',
+        reasons: ['Provider output accepted', 'Structured payload valid'],
+        evidenceTags: ['G-001'],
+        forecastProjection: {
+          projectedReadiness: 4,
+          projectedRpe: 7.3,
+        },
+        modelConfidence: 0.95,
+      };
+    },
+  });
+
+  const result = await service.generate('user_1');
+  assert.equal(result.recommendation.actionType, 'progress');
+  assert.equal(localCalls, 0);
+  assert.equal(providerCalls, 1);
+});
+
+test('provider status field is ignored and final lifecycle status stays server-owned', async () => {
+  const service = createAdaptiveCoachingService({
+    getProfile: async () => ({
+      goal: 'strength',
+      weeklySessionTarget: 4,
+      sessionDuration: '45_to_75m',
+      equipmentCategories: ['dumbbells'],
+      limitationsDeclared: false,
+      limitations: [],
+    }),
+    getTodayOrNextSessionCandidates: async () => ({
+      todaySession: {
+        id: 'session_status_ignored',
+        scheduledDate: new Date('2026-03-05T08:00:00.000Z'),
+      },
+      nextSession: null,
+    }),
+    getHistoryList: async () => [{ id: 'h1' }, { id: 'h2' }, { id: 'h3' }],
+    listLatestAdaptiveRecommendation: async () => null,
+    createAdaptiveRecommendation: async (payload) => ({
+      ...payload,
+      id: 'rec_status_ignored',
+      createdAt: new Date('2026-03-05T08:50:00.000Z'),
+      updatedAt: new Date('2026-03-05T08:50:00.000Z'),
+      appliedAt: null,
+      rejectedAt: null,
+    }),
+    appendDecisionTrace: async () => ({ id: 'decision_status_ignored' }),
+    proposeRecommendation: async () => ({
+      actionType: 'hold',
+      plannedSessionId: 'session_status_ignored',
+      reasons: ['Should not be used', 'Provider path should win'],
+      evidenceTags: ['local-fallback'],
+      forecastProjection: {
+        projectedReadiness: 3,
+        projectedRpe: 7,
+      },
+    }),
+    realProviderEnabled: true,
+    proposeRecommendationWithProvider: async () => ({
+      actionType: 'progress',
+      status: 'applied',
+      plannedSessionId: 'session_status_ignored',
+      reasons: ['Provider sent status that must be ignored', 'Server assigns lifecycle status'],
+      evidenceTags: ['G-001'],
+      forecastProjection: {
+        projectedReadiness: 4,
+        projectedRpe: 7.2,
+      },
+      modelConfidence: 0.93,
+    }),
+  });
+
+  const result = await service.generate('user_1');
+  assert.equal(result.recommendation.actionType, 'progress');
+  assert.equal(result.recommendation.status, 'validated');
+});
+
 test('authenticated adaptation request returns validated recommendation with explanation and warning/fallback metadata', async () => {
   const post = createProgramAdaptationPostHandler({
     resolveSession: async () => ({ userId: 'user_1' }),
