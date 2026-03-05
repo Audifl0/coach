@@ -324,6 +324,10 @@ export function createAdaptiveCoachingService(deps: AdaptiveCoachingServiceDeps)
       if (rawProposal == null && !deps.realProviderEnabled) {
         rawProposal = buildDefaultProposal({ plannedSessionId: targetSession.id, historyCount: history.length });
       }
+      const rawProposalRecord =
+        rawProposal && typeof rawProposal === 'object' && !Array.isArray(rawProposal)
+          ? (rawProposal as { modelConfidence?: unknown })
+          : null;
 
       const scheduledAt = toDate(targetSession.scheduledDate);
       const confirmationExpiresAt = new Date(scheduledAt);
@@ -333,10 +337,7 @@ export function createAdaptiveCoachingService(deps: AdaptiveCoachingServiceDeps)
         rawProposal: sanitizeProviderProposal(rawProposal),
         plannedSessionId: targetSession.id,
         queryTags: ['fatigue', 'adherence', 'readiness'],
-        modelConfidence:
-          typeof (rawProposal as { modelConfidence?: unknown }).modelConfidence === 'number'
-            ? (rawProposal as { modelConfidence: number }).modelConfidence
-            : 0.6,
+        modelConfidence: typeof rawProposalRecord?.modelConfidence === 'number' ? rawProposalRecord.modelConfidence : 0.6,
         athleteContext: {
           limitations: profile.limitations.map((item) => ({
             zone: item.zone,
