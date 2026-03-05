@@ -7,6 +7,10 @@ import {
   deriveEvidenceContextQuality,
   retrieveAdaptiveEvidence,
 } from '../../src/lib/adaptive-coaching/evidence';
+import {
+  createAdaptiveCoachingService,
+  type AdaptiveCoachingServiceDeps,
+} from '../../src/server/services/adaptive-coaching';
 
 test('evidence retrieval returns deterministic top-k snippets with short refs and source classes', () => {
   const evidence = retrieveAdaptiveEvidence({
@@ -69,4 +73,185 @@ test('missing evidence corpus hits lower context quality and trigger SAFE-03 con
 
   assert.equal(result.fallbackRequired, true);
   assert.equal(result.reasonCodes.includes('low_context_quality'), true);
+});
+
+test('orchestrator uses fixed guardrail ordering parse -> integrity -> SAFE-01/02 -> SAFE-03 -> status assignment', async () => {
+  const deps: AdaptiveCoachingServiceDeps = {
+    getProfile: async () => ({
+      goal: 'strength',
+      weeklySessionTarget: 4,
+      sessionDuration: '45_to_75m',
+      equipmentCategories: ['dumbbells'],
+      limitationsDeclared: false,
+      limitations: [],
+    }),
+    getTodayOrNextSessionCandidates: async () => ({
+      todaySession: {
+        id: 'session_1',
+        scheduledDate: new Date('2026-03-05T08:00:00.000Z'),
+      },
+      nextSession: null,
+    }),
+    getHistoryList: async () => [{ id: 'h1' }],
+    listLatestAdaptiveRecommendation: async () => null,
+    createAdaptiveRecommendation: async (payload) => ({
+      ...payload,
+      id: 'rec_1',
+      createdAt: new Date('2026-03-05T08:30:00.000Z'),
+      updatedAt: new Date('2026-03-05T08:30:00.000Z'),
+      appliedAt: null,
+      rejectedAt: null,
+    }),
+    appendDecisionTrace: async () => ({
+      id: 'decision_1',
+      recommendationId: 'rec_1',
+      userId: 'user_1',
+      decisionType: 'policy',
+      previousStatus: null,
+      nextStatus: 'validated',
+      decisionReason: 'ok',
+      evidenceTags: [],
+      metadata: null,
+      createdAt: new Date('2026-03-05T08:30:00.000Z'),
+    }),
+    proposeRecommendation: async () => ({
+      actionType: 'progress',
+      status: 'proposed',
+      plannedSessionId: 'session_1',
+      reasons: ['Readiness trend improved', 'Adherence was stable'],
+      evidenceTags: ['ignored-model-tag'],
+      forecastProjection: {
+        projectedReadiness: 4,
+        projectedRpe: 7.5,
+      },
+      modelConfidence: 0.88,
+    }),
+  };
+
+  const service = createAdaptiveCoachingService(deps);
+  const result = await service.generate('user_1');
+
+  assert.deepEqual(result.meta.traceSteps, [
+    'parse',
+    'integrity',
+    'safe_01_02',
+    'safe_03',
+    'status_assignment',
+  ]);
+});
+
+test('valid model proposal returns allowed adaptive action with 2-3 reasons', async () => {
+  const service = createAdaptiveCoachingService({
+    getProfile: async () => ({
+      goal: 'hypertrophy',
+      weeklySessionTarget: 4,
+      sessionDuration: '45_to_75m',
+      equipmentCategories: ['dumbbells'],
+      limitationsDeclared: false,
+      limitations: [],
+    }),
+    getTodayOrNextSessionCandidates: async () => ({
+      todaySession: null,
+      nextSession: {
+        id: 'session_2',
+        scheduledDate: new Date('2026-03-06T08:00:00.000Z'),
+      },
+    }),
+    getHistoryList: async () => [{ id: 'h1' }, { id: 'h2' }],
+    listLatestAdaptiveRecommendation: async () => null,
+    createAdaptiveRecommendation: async (payload) => ({
+      ...payload,
+      id: 'rec_2',
+      createdAt: new Date('2026-03-05T08:40:00.000Z'),
+      updatedAt: new Date('2026-03-05T08:40:00.000Z'),
+      appliedAt: null,
+      rejectedAt: null,
+    }),
+    appendDecisionTrace: async () => ({
+      id: 'decision_2',
+      recommendationId: 'rec_2',
+      userId: 'user_1',
+      decisionType: 'policy',
+      previousStatus: null,
+      nextStatus: 'validated',
+      decisionReason: 'ok',
+      evidenceTags: [],
+      metadata: null,
+      createdAt: new Date('2026-03-05T08:40:00.000Z'),
+    }),
+    proposeRecommendation: async () => ({
+      actionType: 'progress',
+      status: 'proposed',
+      plannedSessionId: 'session_2',
+      reasons: ['Readiness trend improved', 'Fatigue remains controlled'],
+      evidenceTags: ['model-tag'],
+      forecastProjection: {
+        projectedReadiness: 4,
+        projectedRpe: 7.2,
+      },
+      modelConfidence: 0.85,
+    }),
+  });
+
+  const result = await service.generate('user_1');
+
+  assert.ok(['progress', 'hold', 'deload', 'substitution'].includes(result.recommendation.actionType));
+  assert.equal(result.recommendation.reasons.length >= 2 && result.recommendation.reasons.length <= 3, true);
+});
+
+test('invalid model output follows fallback path and returns contract-valid recommendation payload', async () => {
+  const service = createAdaptiveCoachingService({
+    getProfile: async () => ({
+      goal: 'strength',
+      weeklySessionTarget: 4,
+      sessionDuration: '45_to_75m',
+      equipmentCategories: ['dumbbells'],
+      limitationsDeclared: false,
+      limitations: [],
+    }),
+    getTodayOrNextSessionCandidates: async () => ({
+      todaySession: {
+        id: 'session_3',
+        scheduledDate: new Date('2026-03-05T08:00:00.000Z'),
+      },
+      nextSession: null,
+    }),
+    getHistoryList: async () => [],
+    listLatestAdaptiveRecommendation: async () => null,
+    createAdaptiveRecommendation: async (payload) => ({
+      ...payload,
+      id: 'rec_3',
+      createdAt: new Date('2026-03-05T08:50:00.000Z'),
+      updatedAt: new Date('2026-03-05T08:50:00.000Z'),
+      appliedAt: null,
+      rejectedAt: null,
+    }),
+    appendDecisionTrace: async () => ({
+      id: 'decision_3',
+      recommendationId: 'rec_3',
+      userId: 'user_1',
+      decisionType: 'fallback',
+      previousStatus: null,
+      nextStatus: 'fallback_applied',
+      decisionReason: 'fallback',
+      evidenceTags: [],
+      metadata: null,
+      createdAt: new Date('2026-03-05T08:50:00.000Z'),
+    }),
+    proposeRecommendation: async () => ({
+      actionType: 'invalid',
+      plannedSessionId: 'session_3',
+      reasons: ['x'],
+      evidenceTags: [],
+      forecastProjection: {
+        projectedReadiness: 4,
+        projectedRpe: 7.2,
+      },
+      modelConfidence: 0.2,
+    }),
+  });
+
+  const result = await service.generate('user_1');
+  assert.equal(result.recommendation.fallbackApplied, true);
+  assert.equal(result.recommendation.status, 'fallback_applied');
 });
