@@ -15,20 +15,21 @@ const adaptiveForecastProjectionSchema = z.object({
   projectedRpe: z.number().min(1).max(10),
 });
 
-export const adaptiveRecommendationProposalSchema = z.object({
-  actionType: z.enum(adaptiveRecommendationActionValues),
-  status: z.enum(adaptiveRecommendationStatusValues),
-  plannedSessionId: z.string().trim().min(1),
-  reasons: z.array(adaptiveReasonSchema).min(2).max(3),
-  evidenceTags: z.array(adaptiveEvidenceTagSchema).min(1),
-  forecastProjection: adaptiveForecastProjectionSchema,
-  substitutionTarget: z
-    .object({
-      exerciseKey: z.string().trim().min(1),
-      displayName: z.string().trim().min(1),
-    })
-    .optional(),
-});
+export const adaptiveRecommendationProposalSchema = z
+  .object({
+    actionType: z.enum(adaptiveRecommendationActionValues),
+    plannedSessionId: z.string().trim().min(1),
+    reasons: z.array(adaptiveReasonSchema).min(2).max(3),
+    evidenceTags: z.array(adaptiveEvidenceTagSchema).min(1),
+    forecastProjection: adaptiveForecastProjectionSchema,
+    substitutionTarget: z
+      .object({
+        exerciseKey: z.string().trim().min(1),
+        displayName: z.string().trim().min(1),
+      })
+      .optional(),
+  })
+  .strict();
 
 export const adaptiveRecommendationSchema = z
   .object({

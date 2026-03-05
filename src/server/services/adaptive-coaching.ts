@@ -110,7 +110,6 @@ function buildDefaultProposal(input: {
 }): unknown {
   return {
     actionType: input.historyCount >= 3 ? 'progress' : 'hold',
-    status: 'proposed',
     plannedSessionId: input.plannedSessionId,
     reasons:
       input.historyCount >= 3

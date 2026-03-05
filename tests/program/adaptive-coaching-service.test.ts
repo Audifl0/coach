@@ -117,7 +117,6 @@ test('orchestrator uses fixed guardrail ordering parse -> integrity -> SAFE-01/0
     }),
     proposeRecommendation: async () => ({
       actionType: 'progress',
-      status: 'proposed',
       plannedSessionId: 'session_1',
       reasons: ['Readiness trend improved', 'Adherence was stable'],
       evidenceTags: ['ignored-model-tag'],
@@ -182,7 +181,6 @@ test('valid model proposal returns allowed adaptive action with 2-3 reasons', as
     }),
     proposeRecommendation: async () => ({
       actionType: 'progress',
-      status: 'proposed',
       plannedSessionId: 'session_2',
       reasons: ['Readiness trend improved', 'Fatigue remains controlled'],
       evidenceTags: ['model-tag'],

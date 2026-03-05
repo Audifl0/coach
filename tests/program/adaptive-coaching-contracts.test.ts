@@ -10,7 +10,6 @@ import {
 test('proposal parser accepts only allowed action/state values', () => {
   const parsed = parseAdaptiveRecommendationProposal({
     actionType: 'progress',
-    status: 'proposed',
     plannedSessionId: 'session_1',
     reasons: ['ready to progress', 'all sets completed with margin'],
     evidenceTags: ['load_trend'],
@@ -21,12 +20,11 @@ test('proposal parser accepts only allowed action/state values', () => {
   });
 
   assert.equal(parsed.actionType, 'progress');
-  assert.equal(parsed.status, 'proposed');
+  assert.equal(Object.hasOwn(parsed, 'status'), false);
 
   assert.throws(() =>
     parseAdaptiveRecommendationProposal({
       actionType: 'jump',
-      status: 'proposed',
       plannedSessionId: 'session_1',
       reasons: ['x', 'y'],
       evidenceTags: ['load_trend'],
