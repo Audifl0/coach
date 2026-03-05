@@ -14,6 +14,7 @@ import { fetchCrossrefEvidenceBatch } from './connectors/crossref';
 import { fetchOpenAlexEvidenceBatch } from './connectors/openalex';
 import { fetchPubmedEvidenceBatch } from './connectors/pubmed';
 import type { ConnectorFetchInput, ConnectorFetchResult } from './connectors/shared';
+import { synthesizeCorpusPrinciples } from './synthesis';
 
 type PipelineConnectorFn = (input: ConnectorFetchInput) => Promise<ConnectorFetchResult>;
 
@@ -46,6 +47,7 @@ export type RunAdaptiveKnowledgePipelineInput = {
     timeoutMs: number;
   }>;
   connectors?: Partial<PipelineConnectors>;
+  synthesizeImpl?: (records: NormalizedEvidenceRecord[]) => CorpusPrinciple[] | Promise<CorpusPrinciple[]>;
 };
 
 export type AdaptivePipelineRunResult = {
@@ -73,26 +75,6 @@ function deterministicRunId(now: Date): string {
   return now.toISOString().replace(/[:.]/g, '-');
 }
 
-function buildDefaultPrinciples(records: NormalizedEvidenceRecord[]): CorpusPrinciple[] {
-  const provenance = [...new Set(records.map((record) => record.id))];
-  if (provenance.length === 0) {
-    return [];
-  }
-
-  const principle = parseCorpusPrinciple({
-    id: 'principle-evidence-freshness-first',
-    title: 'Evidence Freshness First',
-    summaryFr: 'La priorite est donnee aux recommandations basees sur des preuves recentes et filtrees.',
-    guidanceFr:
-      'Maintenir une progression prudente et verifier la recuperation avant toute augmentation de charge.',
-    provenanceRecordIds: provenance,
-    evidenceLevel: 'review',
-    guardrail: 'SAFE-03',
-  });
-
-  return [principle];
-}
-
 export async function runAdaptiveKnowledgePipeline(
   input: RunAdaptiveKnowledgePipelineInput = {},
 ): Promise<AdaptivePipelineRunResult> {
@@ -106,6 +88,7 @@ export async function runAdaptiveKnowledgePipeline(
     ...DEFAULT_CONNECTORS,
     ...(input.connectors ?? {}),
   };
+  const synthesize = input.synthesizeImpl ?? synthesizeCorpusPrinciples;
 
   const stageReports: PipelineStage[] = [];
 
@@ -133,25 +116,40 @@ export async function runAdaptiveKnowledgePipeline(
     message: `sources=${sourceResults.length}; skipped=${skippedSources}; records=${normalizedRecords.length}`,
   });
 
-  const principles = buildDefaultPrinciples(normalizedRecords);
-  stageReports.push({
-    stage: 'synthesize',
-    status: 'succeeded',
-    message: `principles=${principles.length}`,
-  });
-
-  for (const principle of principles) {
-    parseCorpusPrinciple(principle);
+  let principles: CorpusPrinciple[] = [];
+  let synthesisErrorMessage: string | null = null;
+  try {
+    principles = await Promise.resolve(synthesize(normalizedRecords));
+    stageReports.push({
+      stage: 'synthesize',
+      status: 'succeeded',
+      message: `principles=${principles.length}`,
+    });
+    for (const principle of principles) {
+      parseCorpusPrinciple(principle);
+    }
+    stageReports.push({
+      stage: 'validate',
+      status: 'succeeded',
+      message: 'contracts=ok',
+    });
+  } catch (error) {
+    synthesisErrorMessage = error instanceof Error ? error.message : String(error);
+    stageReports.push({
+      stage: 'synthesize',
+      status: 'failed',
+      message: synthesisErrorMessage,
+    });
+    stageReports.push({
+      stage: 'validate',
+      status: 'skipped',
+      message: 'blocked-by-synthesis-failure',
+    });
   }
-  stageReports.push({
-    stage: 'validate',
-    status: 'succeeded',
-    message: 'contracts=ok',
-  });
 
   stageReports.push({
     stage: 'publish',
-    status: mode === 'refresh' ? 'skipped' : 'skipped',
+    status: 'skipped',
     message: 'pointer swap disabled in this phase',
   });
 
@@ -170,7 +168,10 @@ export async function runAdaptiveKnowledgePipeline(
     generatedAt: now.toISOString(),
     evidenceRecordCount: normalizedRecords.length,
     principleCount: principles.length,
-    sourceDomains: [...new Set(normalizedRecords.map((record) => record.sourceDomain))].sort(),
+    sourceDomains:
+      [...new Set(normalizedRecords.map((record) => record.sourceDomain))].sort().length > 0
+        ? [...new Set(normalizedRecords.map((record) => record.sourceDomain))].sort()
+        : ['unavailable'],
     artifacts: {
       indexPath: path.join('snapshots', runId, 'candidate', 'sources.json'),
       principlesPath: path.join('snapshots', runId, 'candidate', 'principles.json'),
@@ -207,6 +208,10 @@ export async function runAdaptiveKnowledgePipeline(
     'utf8',
   );
   await writeFile(path.join(candidateDir, 'run-report.json'), JSON.stringify(runReport, null, 2) + '\n', 'utf8');
+
+  if (synthesisErrorMessage) {
+    throw new Error(`synthesize stage failed: ${synthesisErrorMessage}`);
+  }
 
   return {
     runId,
