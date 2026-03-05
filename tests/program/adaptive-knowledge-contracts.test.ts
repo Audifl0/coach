@@ -49,6 +49,13 @@ test('normalized evidence schema accepts only guideline/review/expertise with re
   });
   assert.throws(() => parseNormalizedEvidenceRecord(buildEvidenceRecord({ sourceUrl: 'notaurl' })));
   assert.throws(() => parseNormalizedEvidenceRecord(buildEvidenceRecord({ provenanceIds: [] })));
+  assert.throws(() =>
+    parseNormalizedEvidenceRecord(
+      buildEvidenceRecord({
+        source_url: 'https://www.acsm.org/docs/resistance-training.pdf',
+      }),
+    ),
+  );
 });
 
 test('principle synthesis schema requires FR fields and non-empty provenance references', () => {
@@ -106,6 +113,17 @@ test('snapshot manifest and run report schemas reject unknown fields and invalid
     ],
   });
   assert.equal(runReport.stageReports.length, 5);
+
+  assert.throws(() =>
+    parseCorpusRunReport({
+      ...runReport,
+      stageReports: [
+        { stage: 'discover', status: 'succeeded' },
+        { stage: 'ingest', status: 'failed' },
+        { stage: 'validate', status: 'succeeded' },
+      ],
+    }),
+  );
 
   assert.throws(() =>
     parseCorpusRunReport({
