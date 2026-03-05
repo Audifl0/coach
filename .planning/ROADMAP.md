@@ -112,7 +112,7 @@ Plans:
 | 04 - Session Logging and History | 5/5 | 5 | Complete | 2026-03-04 |
 | 05 - Adaptive Coaching and Safety Guardrails | 5/5 | 5 | Complete | 2026-03-05 |
 | 05.1 - LLM provider réel + structured output + SAFE-03 tests | 4/4 | Complete    | 2026-03-05 | 2026-03-05 |
-| 05.2 - Pipeline web autonome corpus scientifique | 3/3 | Complete   | 2026-03-05 | 2026-03-05 |
+| 05.2 - Pipeline web autonome corpus scientifique | 3/3 | Complete    | 2026-03-05 | 2026-03-05 |
 | 06 - Trends and Operational Reliability | 0/0 | 0 | Not Started | - |
 
 - Total v1 requirements: 26

@@ -4,10 +4,10 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 05.2
 current_phase_name: pipeline web autonome corpus scientifique veille synth se validation continue
-current_plan: 05.2-02
-status: verifying
+current_plan: Not started
+status: completed
 stopped_at: Completed 05.2-03-PLAN.md
-last_updated: "2026-03-05T11:43:13.686Z"
+last_updated: "2026-03-05T11:45:28.363Z"
 last_activity: 2026-03-05
 progress:
   total_phases: 4
@@ -31,11 +31,11 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 05.2
 **Current Phase Name:** pipeline web autonome corpus scientifique veille synth se validation continue
 **Total Phases:** 4
-**Current Plan:** 05.2-02
+**Current Plan:** Not started
 **Total Plans in Phase:** 3
-**Status:** Phase complete — ready for verification
+**Status:** Milestone complete
 **Last Activity:** 2026-03-05
-**Last Activity Description:** Completed Phase 05.2 plan 05.2-01 contract/config boundary
+**Last Activity Description:** Phase 05.2 complete
 **Progress:** [██████████] 100%
 
 ## Performance Metrics
