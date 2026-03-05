@@ -32,7 +32,7 @@ patterns-established:
   - "Restore drills run in deterministic stage order: backup selection, restore, login smoke, dashboard smoke."
   - "Operational runbooks must map directly to script outputs and evidence markers."
 requirements-completed: [PLAT-02]
-duration: 18 min
+duration: 5 min
 completed: 2026-03-05
 ---
 
@@ -42,9 +42,9 @@ completed: 2026-03-05
 
 ## Performance
 
-- **Duration:** 18 min
+- **Duration:** 5 min
 - **Started:** 2026-03-05T14:37:22Z
-- **Completed:** 2026-03-05T14:55:53Z
+- **Completed:** 2026-03-05T14:42:03Z
 - **Tasks:** 3
 - **Files modified:** 7
 
