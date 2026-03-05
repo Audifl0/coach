@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 05
 current_phase_name: Adaptive Coaching and Safety Guardrails
-current_plan: 3
+current_plan: 4
 status: executing
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-03-05T08:48:31.855Z"
+stopped_at: Completed 05-03-PLAN.md
+last_updated: "2026-03-05T08:58:13.332Z"
 last_activity: 2026-03-05
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 25
-  completed_plans: 22
-  percent: 88
+  completed_plans: 23
+  percent: 92
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 05
 **Current Phase Name:** Adaptive Coaching and Safety Guardrails
 **Total Phases:** 6
-**Current Plan:** 3
+**Current Plan:** 4
 **Total Plans in Phase:** 5
 **Status:** Ready to execute
 **Last Activity:** 2026-03-05
 **Last Activity Description:** Completed 05-02-PLAN.md
-**Progress:** [█████████░] 88%
+**Progress:** [█████████░] 92%
 
 ## Performance Metrics
 
@@ -44,6 +44,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 |------|----------|-------|-------|
 | Phase 05 P01 | 33min | 3 tasks | 6 files |
 | Phase 05 P02 | 4 min | 3 tasks | 5 files |
+| Phase 05 P03 | 5min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,9 @@ Recent decisions affecting current work:
 - [Phase 05]: Use Prisma enums for adaptive action/status/decision lifecycle to keep persistence and contracts aligned.
 - [Phase 05]: Keep DAL not-found behavior masked with account-scoped filters by returning null for missing recommendation reads/transitions.
 - [Phase 05]: Record every status transition in append-only AdaptiveRecommendationDecision rows with previous and next status.
+- [Phase 05-adaptive-coaching-and-safety-guardrails]: Orchestrator enforces fixed parse->integrity->SAFE-01/02->SAFE-03->status ordering with trace metadata.
+- [Phase 05-adaptive-coaching-and-safety-guardrails]: User-facing evidence tags are always derived from local corpus retrieval, not model-provided tags.
+- [Phase 05-adaptive-coaching-and-safety-guardrails]: Adaptation API parse-validates service payloads before response to prevent contract drift.
 
 ### Pending Todos
 
@@ -110,6 +114,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-05T08:47:49.765Z
-**Stopped At:** Completed 05-01-PLAN.md
+**Last Date:** 2026-03-05T08:58:13.330Z
+**Stopped At:** Completed 05-03-PLAN.md
 **Resume File:** None
