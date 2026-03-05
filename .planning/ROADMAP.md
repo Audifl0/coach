@@ -119,7 +119,7 @@ Plans:
 | 05 - Adaptive Coaching and Safety Guardrails | 5/5 | 5 | Complete | 2026-03-05 |
 | 05.1 - LLM provider réel + structured output + SAFE-03 tests | 4/4 | Complete    | 2026-03-05 | 2026-03-05 |
 | 05.2 - Pipeline web autonome corpus scientifique | 3/3 | Complete    | 2026-03-05 | 2026-03-05 |
-| 06 - Trends and Operational Reliability | 1/3 | 3 | In Progress | 2026-03-05 |
+| 06 - Trends and Operational Reliability | 2/3 | In Progress|  | 2026-03-05 |
 
 - Total v1 requirements: 26
 - Mapped to phases: 26

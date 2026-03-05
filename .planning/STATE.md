@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 06
 current_phase_name: trends and operational reliability
-current_plan: 1 of 3
-status: in_progress
-stopped_at: Completed 06-03-PLAN.md
-last_updated: "2026-03-05T14:42:03.000Z"
+current_plan: 2
+status: executing
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-03-05T14:44:22.401Z"
 last_activity: 2026-03-05
 progress:
   total_phases: 4
   completed_phases: 7
   total_plans: 35
-  completed_plans: 33
-  percent: 94
+  completed_plans: 34
+  percent: 97
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 06
 **Current Phase Name:** trends and operational reliability
 **Total Phases:** 4
-**Current Plan:** 1 of 3
+**Current Plan:** 2
 **Total Plans in Phase:** 3
-**Status:** In progress
+**Status:** Ready to execute
 **Last Activity:** 2026-03-05
 **Last Activity Description:** Phase 06 plan 06-03 complete
-**Progress:** [█████████░] 94%
+**Progress:** [██████████] 97%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 05.2 P05.2-02 | 19 min | 3 tasks | 10 files |
 | Phase 05.2 P05.2-03 | 7 min | 3 tasks | 8 files |
 | Phase 06-trends-and-operational-reliability P06-03 | 5 min | 3 tasks | 7 files |
+| Phase 06-trends-and-operational-reliability P06-01 | 5 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -139,6 +140,9 @@ Recent decisions affecting current work:
 - [Phase 06-trends-and-operational-reliability]: Require RESTORE_TARGET_DB and block restores targeting production database name.
 - [Phase 06-trends-and-operational-reliability]: Use psql -X with ON_ERROR_STOP and single-transaction restore semantics for fail-fast drills.
 - [Phase 06-trends-and-operational-reliability]: Drive monthly drills via systemd timer with Persistent=true and timestamped evidence logs.
+- [Phase 06-trends-and-operational-reliability]: Trend query contract is restricted to 7d/30d/90d with default 30d for deterministic toggles.
+- [Phase 06-trends-and-operational-reliability]: Intensity metric is computed from key-exercise set loads (first exercise by order index per session).
+- [Phase 06-trends-and-operational-reliability]: Drilldown route returns deterministic 404 when no account-scoped series exists.
 
 ### Roadmap Evolution
 
@@ -155,6 +159,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-05T14:41:25.536Z
-**Stopped At:** Completed 06-03-PLAN.md
+**Last Date:** 2026-03-05T14:44:22.399Z
+**Stopped At:** Completed 06-01-PLAN.md
 **Resume File:** None
