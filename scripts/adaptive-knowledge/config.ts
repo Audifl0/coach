@@ -2,6 +2,7 @@ const APPROVED_ALLOWED_DOMAINS = [
   'acsm.org',
   'pubmed.ncbi.nlm.nih.gov',
   'crossref.org',
+  'doi.org',
   'openalex.org',
   'jtsstrength.com',
 ] as const;
