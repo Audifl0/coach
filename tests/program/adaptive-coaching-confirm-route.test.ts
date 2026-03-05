@@ -5,6 +5,8 @@ import {
   createAdaptiveCoachingService,
   type AdaptiveCoachingServiceDeps,
 } from '../../src/server/services/adaptive-coaching';
+import { createProgramAdaptationConfirmPostHandler } from '../../src/app/api/program/adaptation/[recommendationId]/confirm/route';
+import { createProgramAdaptationRejectPostHandler } from '../../src/app/api/program/adaptation/[recommendationId]/reject/route';
 
 type RecommendationRecord = {
   id: string;
@@ -249,4 +251,112 @@ test('reject transitions to conservative outcome with explicit rejection trace',
   assert.equal(result.status, 'applied');
   assert.equal(result.fallbackApplied, true);
   assert.equal(result.fallbackReason, 'user_rejected_high_impact');
+});
+
+test('authenticated owner can confirm pending recommendation and receives updated state payload', async () => {
+  const post = createProgramAdaptationConfirmPostHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    confirmRecommendation: async () => ({
+      id: 'rec_1',
+      actionType: 'deload',
+      status: 'applied',
+      plannedSessionId: 'session_next',
+      confidence: 0.71,
+      confidenceLabel: 'medium',
+      confidenceReason: 'confirmed',
+      warningFlag: false,
+      fallbackApplied: false,
+      reasons: ['Reason 1', 'Reason 2'],
+      evidenceTags: ['G-001', 'R-101'],
+      forecastProjection: { projectedReadiness: 3, projectedRpe: 7.4 },
+      appliedAt: '2026-03-05T09:00:00.000Z',
+    }),
+  });
+
+  const response = await post(
+    new Request('http://localhost/api/program/adaptation/rec_1/confirm', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ decision: 'accept' }),
+    }),
+    { params: Promise.resolve({ recommendationId: 'rec_1' }) },
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.recommendation.id, 'rec_1');
+  assert.equal(body.recommendation.status, 'applied');
+});
+
+test('authenticated owner can reject pending recommendation and receives conservative applied state', async () => {
+  const post = createProgramAdaptationRejectPostHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    rejectRecommendation: async () => ({
+      id: 'rec_safe',
+      actionType: 'hold',
+      status: 'applied',
+      plannedSessionId: 'session_next',
+      confidence: 0.64,
+      confidenceLabel: 'medium',
+      confidenceReason: 'conservative hold',
+      warningFlag: false,
+      fallbackApplied: true,
+      fallbackReason: 'user_rejected_high_impact',
+      reasons: ['Reason 1', 'Reason 2'],
+      evidenceTags: ['G-001'],
+      forecastProjection: { projectedReadiness: 3, projectedRpe: 7.2 },
+      appliedAt: '2026-03-05T09:00:00.000Z',
+    }),
+  });
+
+  const response = await post(
+    new Request('http://localhost/api/program/adaptation/rec_1/reject', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ decision: 'reject', reason: 'not today' }),
+    }),
+    { params: Promise.resolve({ recommendationId: 'rec_1' }) },
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.recommendation.actionType, 'hold');
+  assert.equal(body.recommendation.status, 'applied');
+  assert.equal(body.recommendation.fallbackApplied, true);
+});
+
+test('non-owner or missing recommendation responses are masked as not-found', async () => {
+  const confirmPost = createProgramAdaptationConfirmPostHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    confirmRecommendation: async () => {
+      throw new Error('Mismatched account context');
+    },
+  });
+  const rejectPost = createProgramAdaptationRejectPostHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    rejectRecommendation: async () => {
+      throw new Error('Recommendation not found');
+    },
+  });
+
+  const confirmResponse = await confirmPost(
+    new Request('http://localhost/api/program/adaptation/rec_404/confirm', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ decision: 'accept' }),
+    }),
+    { params: Promise.resolve({ recommendationId: 'rec_404' }) },
+  );
+
+  const rejectResponse = await rejectPost(
+    new Request('http://localhost/api/program/adaptation/rec_404/reject', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ decision: 'reject' }),
+    }),
+    { params: Promise.resolve({ recommendationId: 'rec_404' }) },
+  );
+
+  assert.equal(confirmResponse.status, 404);
+  assert.equal(rejectResponse.status, 404);
 });
