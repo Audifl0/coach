@@ -4,6 +4,7 @@ import test from 'node:test';
 import { createAdaptiveCoachingService } from '../../src/server/services/adaptive-coaching';
 import { createLlmProposalClient } from '../../src/server/llm/client';
 import type { LlmAttemptResult, LlmProposalProviderClient } from '../../src/server/llm/contracts';
+import { createProgramAdaptationPostHandler } from '../../src/app/api/program/adaptation/route';
 
 function buildService(input: {
   primary: LlmProposalProviderClient;
@@ -208,4 +209,52 @@ test('primary and fallback full failure chain lands on deterministic SAFE-03 con
   assert.equal(result.recommendation.progressionDeltaLoadPct, 0);
   assert.equal(result.recommendation.progressionDeltaReps, 0);
   assert.deepEqual(result.meta.traceSteps, ['parse', 'integrity', 'safe_01_02', 'safe_03', 'status_assignment']);
+});
+
+test('adaptation route response contract remains stable with provider-enabled service', async () => {
+  const service = buildService({
+    primaryMaxRetries: 0,
+    primary: {
+      async generate() {
+        return invalidPrimaryResult();
+      },
+    },
+    fallback: {
+      async generate() {
+        return {
+          ok: true,
+          parseStatus: 'valid',
+          proposal: {
+            actionType: 'hold',
+            plannedSessionId: 'session_chain',
+            reasons: ['Provider-backed service returns stable contract', 'Server keeps ownership of status'],
+            evidenceTags: ['G-100'],
+            forecastProjection: {
+              projectedReadiness: 3,
+              projectedRpe: 7.1,
+            },
+          },
+          metadata: {
+            provider: 'anthropic',
+            model: 'claude-sonnet-4-5',
+            latencyMs: 14,
+            requestId: 'req_route',
+          },
+        };
+      },
+    },
+  });
+
+  const post = createProgramAdaptationPostHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    generateRecommendation: (userId: string) => service.generate(userId),
+  });
+
+  const response = await post();
+  assert.equal(response.status, 200);
+
+  const body = await response.json();
+  assert.equal(typeof body.recommendation.id, 'string');
+  assert.equal(Array.isArray(body.recommendation.reasons), true);
+  assert.equal(Array.isArray(body.meta.traceSteps), true);
 });
