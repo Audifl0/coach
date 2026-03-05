@@ -95,6 +95,12 @@ Plans:
 **Goal:** Finalize decision-support trends and production recovery readiness.
 
 **Requirements:** DASH-02, PLAT-02
+**Plans:** 3 plans
+
+Plans:
+- [ ] 06-01-PLAN.md - Trends contracts + DAL aggregation + authenticated trends APIs
+- [ ] 06-02-PLAN.md - Dashboard trends block + 7/30/90 toggles + exercise drilldown
+- [x] 06-03-PLAN.md - Restore drill automation + systemd cadence + incident runbook
 
 **Success Criteria (observable):**
 - Dashboard displays recent volume/intensity/adherence trends from session data.
@@ -113,7 +119,7 @@ Plans:
 | 05 - Adaptive Coaching and Safety Guardrails | 5/5 | 5 | Complete | 2026-03-05 |
 | 05.1 - LLM provider réel + structured output + SAFE-03 tests | 4/4 | Complete    | 2026-03-05 | 2026-03-05 |
 | 05.2 - Pipeline web autonome corpus scientifique | 3/3 | Complete    | 2026-03-05 | 2026-03-05 |
-| 06 - Trends and Operational Reliability | 0/0 | 0 | Not Started | - |
+| 06 - Trends and Operational Reliability | 1/3 | 3 | In Progress | 2026-03-05 |
 
 - Total v1 requirements: 26
 - Mapped to phases: 26

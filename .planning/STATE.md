@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 05.2
-current_phase_name: pipeline web autonome corpus scientifique veille synth se validation continue
-current_plan: Not started
-status: completed
-stopped_at: Completed 05.2-03-PLAN.md
-last_updated: "2026-03-05T11:45:28.363Z"
+current_phase: 06
+current_phase_name: trends and operational reliability
+current_plan: 1 of 3
+status: in_progress
+stopped_at: Completed 06-03-PLAN.md
+last_updated: "2026-03-05T14:58:10.000Z"
 last_activity: 2026-03-05
 progress:
   total_phases: 4
   completed_phases: 7
-  total_plans: 32
-  completed_plans: 32
-  percent: 100
+  total_plans: 35
+  completed_plans: 33
+  percent: 94
 ---
 
 # Project State
@@ -24,19 +24,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Fournir un coaching musculation personnalisé, sûr et adaptatif au quotidien, sans perdre la simplicité d'usage.
-**Current focus:** Phase 05.1 - LLM provider reel + structured output + SAFE-03 tests
+**Current focus:** Phase 06 - Trends and operational reliability
 
 ## Current Position
 
-**Current Phase:** 05.2
-**Current Phase Name:** pipeline web autonome corpus scientifique veille synth se validation continue
+**Current Phase:** 06
+**Current Phase Name:** trends and operational reliability
 **Total Phases:** 4
-**Current Plan:** Not started
+**Current Plan:** 1 of 3
 **Total Plans in Phase:** 3
-**Status:** Milestone complete
+**Status:** In progress
 **Last Activity:** 2026-03-05
-**Last Activity Description:** Phase 05.2 complete
-**Progress:** [██████████] 100%
+**Last Activity Description:** Phase 06 plan 06-03 complete
+**Progress:** [█████████░] 94%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 05.2 P05.2-01 | 3 min | 3 tasks | 5 files |
 | Phase 05.2 P05.2-02 | 19 min | 3 tasks | 10 files |
 | Phase 05.2 P05.2-03 | 7 min | 3 tasks | 8 files |
+| Phase 06-trends-and-operational-reliability P06-03 | 18 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -135,6 +136,9 @@ Recent decisions affecting current work:
 - [Phase 05.2]: Publish stage is executed only when quality gate passes; blocked reasons are deterministic codes.
 - [Phase 05.2]: Promotion converts candidate directory to validated directory before active pointer swap.
 - [Phase 05.2]: Runtime retrieval reads active validated snapshot first, then rollback pointer, then legacy corpus.
+- [Phase 06-trends-and-operational-reliability]: Require RESTORE_TARGET_DB and block restores targeting production database name.
+- [Phase 06-trends-and-operational-reliability]: Use psql -X with ON_ERROR_STOP and single-transaction restore semantics for fail-fast drills.
+- [Phase 06-trends-and-operational-reliability]: Drive monthly drills via systemd timer with Persistent=true and timestamped evidence logs.
 
 ### Roadmap Evolution
 
@@ -151,6 +155,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-05T11:43:13.684Z
-**Stopped At:** Completed 05.2-03-PLAN.md
+**Last Date:** 2026-03-05T14:41:25.536Z
+**Stopped At:** Completed 06-03-PLAN.md
 **Resume File:** None
