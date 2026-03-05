@@ -86,7 +86,7 @@
 | 02 - Athlete Profile and Constraints Onboarding | 4/4 | 4 | Complete | 2026-03-04 |
 | 03 - Program Planning and Daily Workout Surface | 4/4 | 4 | Complete | 2026-03-04 |
 | 04 - Session Logging and History | 5/5 | 5 | Complete | 2026-03-04 |
-| 05 - Adaptive Coaching and Safety Guardrails | 3/5 | In Progress|  | 2026-03-05 |
+| 05 - Adaptive Coaching and Safety Guardrails | 4/5 | In Progress|  | 2026-03-05 |
 | 06 - Trends and Operational Reliability | 0/0 | 0 | Not Started | - |
 
 - Total v1 requirements: 26
