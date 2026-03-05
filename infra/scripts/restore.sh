@@ -40,7 +40,19 @@ source "$ENV_FILE"
 set +a
 
 POSTGRES_USER="${POSTGRES_USER:-coach}"
-POSTGRES_DB="${POSTGRES_DB:-coach}"
+PRODUCTION_DB_NAME="${POSTGRES_DB:-coach}"
+RESTORE_TARGET_DB="${RESTORE_TARGET_DB:-}"
+
+if [[ -z "$RESTORE_TARGET_DB" ]]; then
+  echo "RESTORE_TARGET_DB is required (dedicated restore drill database)." >&2
+  exit 1
+fi
+
+if [[ "$RESTORE_TARGET_DB" == "$PRODUCTION_DB_NAME" ]]; then
+  echo "RESTORE_TARGET_DB must not match production database '$PRODUCTION_DB_NAME'." >&2
+  exit 1
+fi
+
 DECRYPTED_SQL="$(mktemp "${TMPDIR:-/tmp}/coach-restore.XXXXXX.sql")"
 
 cleanup() {
@@ -54,8 +66,8 @@ openssl enc -d -aes-256-cbc -pbkdf2 \
   -in "$BACKUP_FILE" \
   -out "$DECRYPTED_SQL"
 
-echo "Restoring PostgreSQL database '$POSTGRES_DB'..."
+echo "Restoring PostgreSQL database '$RESTORE_TARGET_DB'..."
 "${COMPOSE_CMD[@]}" --env-file "$ENV_FILE" exec -T db \
-  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" <"$DECRYPTED_SQL"
+  psql -X -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$RESTORE_TARGET_DB" <"$DECRYPTED_SQL"
 
 echo "Restore complete."
