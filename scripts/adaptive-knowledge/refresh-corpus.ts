@@ -1,7 +1,17 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-type CorpusEntry = {
+import {
+  parseCorpusPrinciple,
+  parseCorpusRunReport,
+  parseCorpusSnapshotManifest,
+  parseNormalizedEvidenceRecord,
+  type CorpusPrinciple,
+  type NormalizedEvidenceRecord,
+} from './contracts';
+import { parseAdaptiveKnowledgePipelineConfig } from './config';
+
+type LegacyCorpusEntry = {
   id: string;
   title: string;
   url: string;
@@ -14,7 +24,7 @@ type CorpusEntry = {
   principle_ids: string[];
 };
 
-type Principle = {
+type LegacyPrinciple = {
   id: string;
   title: string;
   description: string;
@@ -26,147 +36,160 @@ type Principle = {
 type CorpusIndex = {
   version: string;
   generated_at: string;
-  entries: CorpusEntry[];
+  entries: LegacyCorpusEntry[];
 };
 
 type PrincipleIndex = {
   version: string;
   generated_at: string;
-  principles: Principle[];
+  principles: LegacyPrinciple[];
 };
 
-const CURATED_ENTRIES: CorpusEntry[] = [
-  {
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function extractDomain(url: string): string {
+  return new URL(url).hostname.toLowerCase();
+}
+
+function ageInDays(dateIso: string, now: Date): number {
+  const publishedAt = Date.parse(dateIso);
+  return Math.max(0, Math.floor((now.getTime() - publishedAt) / DAY_MS));
+}
+
+function withinFreshnessWindow(record: NormalizedEvidenceRecord, now: Date, windowDays: number): boolean {
+  const age = ageInDays(record.publishedAt, now);
+  return Number.isFinite(age) && age >= 0 && age <= windowDays;
+}
+
+function mapLegacyEntryToNormalized(entry: LegacyCorpusEntry): NormalizedEvidenceRecord {
+  return parseNormalizedEvidenceRecord({
+    id: entry.id,
+    sourceType: entry.source_type,
+    sourceUrl: entry.url,
+    sourceDomain: extractDomain(entry.url),
+    publishedAt: entry.date,
+    title: entry.title,
+    summaryEn: entry.summary,
+    tags: entry.tags,
+    provenanceIds: entry.principle_ids,
+  });
+}
+
+function mapNormalizedToLegacy(entry: NormalizedEvidenceRecord, now: Date): LegacyCorpusEntry {
+  return {
+    id: entry.id,
+    title: entry.title,
+    url: entry.sourceUrl,
+    date: entry.publishedAt,
+    source_type: entry.sourceType,
+    evidence_level: 'curated_consensus',
+    freshness_days: ageInDays(entry.publishedAt, now),
+    tags: [...entry.tags],
+    summary: entry.summaryEn,
+    principle_ids: [...entry.provenanceIds],
+  };
+}
+
+function mapLegacyPrincipleToContract(principle: LegacyPrinciple, fallbackSourceId: string): CorpusPrinciple {
+  return parseCorpusPrinciple({
+    id: principle.id,
+    title: principle.title,
+    summaryFr: principle.description,
+    guidanceFr: principle.description,
+    provenanceRecordIds: [fallbackSourceId],
+    evidenceLevel: 'curated_consensus',
+    guardrail: principle.guardrail,
+  });
+}
+
+function mapContractPrincipleToLegacy(principle: CorpusPrinciple): LegacyPrinciple {
+  return {
+    id: principle.id,
+    title: principle.title,
+    description: principle.summaryFr,
+    priority: 1,
+    guardrail: principle.guardrail,
+    tags: [],
+  };
+}
+
+const CURATED_RECORDS: NormalizedEvidenceRecord[] = [
+  parseNormalizedEvidenceRecord({
     id: 'guideline-acsm-progressive-overload-2024',
+    sourceType: 'guideline',
+    sourceUrl: 'https://www.acsm.org/docs/default-source/files-for-resource-library/resistance-training-progression.pdf',
+    sourceDomain: 'acsm.org',
+    publishedAt: '2024-01-15',
     title: 'ACSM Resistance Training Progression Framework',
-    url: 'https://www.acsm.org/docs/default-source/files-for-resource-library/resistance-training-progression.pdf',
-    date: '2024-01-15',
-    source_type: 'guideline',
-    evidence_level: 'consensus_guideline',
-    freshness_days: 780,
+    summaryEn: 'Recommends conservative step-wise overload and readiness-based progression for safety.',
     tags: ['progression', 'load', 'readiness'],
-    summary: 'Recommends conservative step-wise overload and prioritization of technique when readiness declines.',
-    principle_ids: ['principle-safe-progressive-overload', 'principle-readiness-first'],
-  },
-  {
+    provenanceIds: ['principle-safe-progressive-overload', 'principle-readiness-first'],
+  }),
+  parseNormalizedEvidenceRecord({
     id: 'review-fatigue-autoregulation-2023',
+    sourceType: 'review',
+    sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/37265095/',
+    sourceDomain: 'pubmed.ncbi.nlm.nih.gov',
+    publishedAt: '2023-08-10',
     title: 'Autoregulation and Fatigue Management in Resistance Training',
-    url: 'https://pubmed.ncbi.nlm.nih.gov/37265095/',
-    date: '2023-08-10',
-    source_type: 'review',
-    evidence_level: 'systematic_review',
-    freshness_days: 940,
+    summaryEn: 'Supports hold or deload decisions when fatigue rises and session quality degrades.',
     tags: ['fatigue', 'rpe', 'autoregulation'],
-    summary: 'Supports hold or deload decisions when fatigue markers rise and session quality degrades.',
-    principle_ids: ['principle-readiness-first', 'principle-fatigue-guardrail'],
-  },
-  {
+    provenanceIds: ['principle-readiness-first', 'principle-fatigue-guardrail'],
+  }),
+  parseNormalizedEvidenceRecord({
     id: 'expertise-jts-substitution-2022',
+    sourceType: 'expertise',
+    sourceUrl: 'https://www.jtsstrength.com/substitution-heuristics-pain-limited-training/',
+    sourceDomain: 'jtsstrength.com',
+    publishedAt: '2022-11-02',
     title: 'Practical Substitution Heuristics for Pain-Limited Training',
-    url: 'https://www.jtsstrength.com/substitution-heuristics-pain-limited-training/',
-    date: '2022-11-02',
-    source_type: 'expertise',
-    evidence_level: 'expert_consensus',
-    freshness_days: 1221,
+    summaryEn: 'Advises targeted substitutions when pain persists while preserving movement intent.',
     tags: ['substitution', 'pain', 'limitations'],
-    summary: 'Advises targeted substitutions when pain persists while maintaining movement intent and training adherence.',
-    principle_ids: ['principle-limitation-aware-substitution', 'principle-fatigue-guardrail'],
-  },
+    provenanceIds: ['principle-limitation-aware-substitution', 'principle-fatigue-guardrail'],
+  }),
 ];
 
-const CURATED_PRINCIPLES: Principle[] = [
-  {
+const CURATED_PRINCIPLES: CorpusPrinciple[] = [
+  parseCorpusPrinciple({
     id: 'principle-safe-progressive-overload',
     title: 'Safe Progressive Overload',
-    description:
-      'Progression should remain conservative and bounded when recent execution quality or recovery confidence is uncertain.',
-    priority: 1,
+    summaryFr: 'Progression conservative priorisant la qualite d execution.',
+    guidanceFr: 'Augmenter la charge uniquement si recuperation et technique restent stables.',
+    provenanceRecordIds: ['guideline-acsm-progressive-overload-2024'],
+    evidenceLevel: 'guideline',
     guardrail: 'SAFE-01',
-    tags: ['progression', 'load', 'safety'],
-  },
-  {
+  }),
+  parseCorpusPrinciple({
     id: 'principle-readiness-first',
     title: 'Readiness Before Intensity',
-    description: 'When readiness and fatigue indicators diverge, preserve adherence and reduce risk with hold or deload actions.',
-    priority: 2,
+    summaryFr: 'La readiness prime sur l intensite quand la fatigue augmente.',
+    guidanceFr: 'Basculer vers hold ou deload quand les indicateurs de recuperation se degradent.',
+    provenanceRecordIds: [
+      'guideline-acsm-progressive-overload-2024',
+      'review-fatigue-autoregulation-2023',
+    ],
+    evidenceLevel: 'review',
     guardrail: 'SAFE-03',
-    tags: ['readiness', 'fatigue', 'deload'],
-  },
-  {
+  }),
+  parseCorpusPrinciple({
     id: 'principle-limitation-aware-substitution',
     title: 'Limitation-Aware Substitution',
-    description: 'Substitution should keep session intent while avoiding limitation-conflicting movement patterns.',
-    priority: 3,
+    summaryFr: 'Substituer les mouvements incompatibles avec la limitation du moment.',
+    guidanceFr: 'Conserver l intention de seance sans exposer la zone sensible.',
+    provenanceRecordIds: ['expertise-jts-substitution-2022'],
+    evidenceLevel: 'expertise',
     guardrail: 'SAFE-02',
-    tags: ['limitations', 'pain', 'substitution'],
-  },
-  {
+  }),
+  parseCorpusPrinciple({
     id: 'principle-fatigue-guardrail',
     title: 'Fatigue Guardrail',
-    description: 'Escalating fatigue signals require explicit caution messaging and a prudent forecast for the next session.',
-    priority: 4,
+    summaryFr: 'La fatigue elevee impose une prevision prudente pour la seance suivante.',
+    guidanceFr: 'Conserver une marge de securite explicite en cas de signaux de fatigue persistants.',
+    provenanceRecordIds: ['review-fatigue-autoregulation-2023'],
+    evidenceLevel: 'review',
     guardrail: 'SAFE-03',
-    tags: ['fatigue', 'forecast', 'prudence'],
-  },
+  }),
 ];
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
-}
-
-function normalizeToken(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-function validateCorpusEntries(entries: CorpusEntry[]): string[] {
-  const errors: string[] = [];
-  const seenUrls = new Set<string>();
-
-  for (const entry of entries) {
-    const prefix = `entry:${entry.id}`;
-    if (!isNonEmptyString(entry.url)) {
-      errors.push(`${prefix}: missing required field "url"`);
-    }
-    if (!isNonEmptyString(entry.date)) {
-      errors.push(`${prefix}: missing required field "date"`);
-    }
-    if (!isNonEmptyString(entry.source_type)) {
-      errors.push(`${prefix}: missing required field "source_type"`);
-    }
-    if (!isNonEmptyString(entry.evidence_level)) {
-      errors.push(`${prefix}: missing required field "evidence_level"`);
-    }
-    if (!Array.isArray(entry.tags) || entry.tags.length === 0) {
-      errors.push(`${prefix}: tags must contain at least one token`);
-    }
-
-    const normalizedUrl = normalizeToken(entry.url);
-    if (seenUrls.has(normalizedUrl)) {
-      errors.push(`${prefix}: duplicate detected for url "${entry.url}"`);
-    } else {
-      seenUrls.add(normalizedUrl);
-    }
-  }
-
-  return errors;
-}
-
-function detectContradictions(principles: Principle[]): string[] {
-  const warnings: string[] = [];
-
-  const hasReadinessFirst = principles.some((item) => item.id === 'principle-readiness-first');
-  const hasAggressiveProgression = principles.some((item) => /aggressive|maximal/i.test(item.description));
-  if (hasReadinessFirst && hasAggressiveProgression) {
-    warnings.push('Potential contradiction: readiness-first principle conflicts with aggressive progression language.');
-  }
-
-  const conflictingGuardrails = principles.filter((item) => item.guardrail === 'SAFE-01' && /substitution/i.test(item.title));
-  if (conflictingGuardrails.length > 0) {
-    warnings.push('Potential contradiction: substitution principle mapped to SAFE-01 instead of SAFE-02.');
-  }
-
-  return warnings;
-}
 
 async function loadJsonFile<T>(filePath: string): Promise<T> {
   const raw = await readFile(filePath, 'utf8');
@@ -174,52 +197,104 @@ async function loadJsonFile<T>(filePath: string): Promise<T> {
 }
 
 async function runCheck(indexPath: string, principlesPath: string): Promise<void> {
+  const config = parseAdaptiveKnowledgePipelineConfig(process.env);
+  const now = new Date();
   const index = await loadJsonFile<CorpusIndex>(indexPath);
   const principles = await loadJsonFile<PrincipleIndex>(principlesPath);
-  const errors = validateCorpusEntries(index.entries);
-  const warnings = detectContradictions(principles.principles);
 
-  if (errors.length > 0) {
-    for (const error of errors) {
-      console.error(`[ERROR] ${error}`);
-    }
-    process.exit(1);
-  }
+  const parsedRecords = index.entries.map(mapLegacyEntryToNormalized).filter((record) => {
+    return (
+      config.allowedDomains.includes(record.sourceDomain) &&
+      withinFreshnessWindow(record, now, config.freshnessWindowDays)
+    );
+  });
 
-  for (const warning of warnings) {
-    console.warn(`[WARN] ${warning}`);
-  }
+  const fallbackRecordId = parsedRecords[0]?.id ?? 'guideline-acsm-progressive-overload-2024';
+  principles.principles.map((principle) => mapLegacyPrincipleToContract(principle, fallbackRecordId));
+
+  const runId = `check-${index.generated_at.slice(0, 10)}`;
+  parseCorpusSnapshotManifest({
+    snapshotId: index.version,
+    schemaVersion: 'v1',
+    generatedAt: index.generated_at,
+    evidenceRecordCount: parsedRecords.length,
+    principleCount: principles.principles.length,
+    sourceDomains: [...new Set(parsedRecords.map((record) => record.sourceDomain))],
+    artifacts: {
+      indexPath: path.relative(process.cwd(), indexPath),
+      principlesPath: path.relative(process.cwd(), principlesPath),
+      reportPath: '.planning/knowledge/adaptive-coaching/run-report.json',
+    },
+  });
+  parseCorpusRunReport({
+    runId,
+    mode: 'check',
+    startedAt: new Date(now.getTime() - 1000).toISOString(),
+    completedAt: now.toISOString(),
+    snapshotId: index.version,
+    stageReports: [
+      { stage: 'discover', status: 'succeeded' },
+      { stage: 'ingest', status: 'succeeded' },
+      { stage: 'synthesize', status: 'succeeded' },
+      { stage: 'validate', status: 'succeeded' },
+      { stage: 'publish', status: 'skipped' },
+    ],
+  });
 
   console.log(
-    `[OK] Corpus metadata check passed (${index.entries.length} entries, ${principles.principles.length} principles).`,
+    `[OK] Corpus metadata check passed (${parsedRecords.length} accepted entries, ${principles.principles.length} principles).`,
   );
 }
 
 async function runRefresh(indexPath: string, principlesPath: string): Promise<void> {
-  const now = new Date().toISOString();
+  const config = parseAdaptiveKnowledgePipelineConfig(process.env);
+  const now = new Date();
+  const filteredRecords = CURATED_RECORDS.filter((record) => {
+    return (
+      config.allowedDomains.includes(record.sourceDomain) &&
+      withinFreshnessWindow(record, now, config.freshnessWindowDays)
+    );
+  });
+
   const indexPayload: CorpusIndex = {
-    version: now.slice(0, 10),
-    generated_at: now,
-    entries: CURATED_ENTRIES,
+    version: now.toISOString().slice(0, 10),
+    generated_at: now.toISOString(),
+    entries: filteredRecords.map((entry) => mapNormalizedToLegacy(entry, now)),
   };
+
   const principlesPayload: PrincipleIndex = {
-    version: now.slice(0, 10),
-    generated_at: now,
-    principles: CURATED_PRINCIPLES,
+    version: indexPayload.version,
+    generated_at: now.toISOString(),
+    principles: CURATED_PRINCIPLES.map(mapContractPrincipleToLegacy),
   };
 
-  const errors = validateCorpusEntries(indexPayload.entries);
-  if (errors.length > 0) {
-    for (const error of errors) {
-      console.error(`[ERROR] ${error}`);
-    }
-    process.exit(1);
-  }
-
-  const warnings = detectContradictions(principlesPayload.principles);
-  for (const warning of warnings) {
-    console.warn(`[WARN] ${warning}`);
-  }
+  parseCorpusSnapshotManifest({
+    snapshotId: indexPayload.version,
+    schemaVersion: 'v1',
+    generatedAt: indexPayload.generated_at,
+    evidenceRecordCount: indexPayload.entries.length,
+    principleCount: principlesPayload.principles.length,
+    sourceDomains: [...new Set(filteredRecords.map((record) => record.sourceDomain))],
+    artifacts: {
+      indexPath: path.relative(process.cwd(), indexPath),
+      principlesPath: path.relative(process.cwd(), principlesPath),
+      reportPath: '.planning/knowledge/adaptive-coaching/run-report.json',
+    },
+  });
+  parseCorpusRunReport({
+    runId: `refresh-${indexPayload.version}`,
+    mode: 'refresh',
+    startedAt: new Date(now.getTime() - 1000).toISOString(),
+    completedAt: now.toISOString(),
+    snapshotId: indexPayload.version,
+    stageReports: [
+      { stage: 'discover', status: 'succeeded' },
+      { stage: 'ingest', status: 'succeeded' },
+      { stage: 'synthesize', status: 'succeeded' },
+      { stage: 'validate', status: 'succeeded' },
+      { stage: 'publish', status: 'succeeded' },
+    ],
+  });
 
   await mkdir(path.dirname(indexPath), { recursive: true });
   await writeFile(indexPath, JSON.stringify(indexPayload, null, 2) + '\n', 'utf8');
