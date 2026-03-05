@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { createLlmProposalClient } from '../../src/server/llm/client';
 import { createOpenAiProposalClient } from '../../src/server/llm/providers/openai-client';
 
 test('openai adapter parses strict structured payload and exposes metadata', async () => {
@@ -121,4 +122,65 @@ test('openai adapter normalizes timeout failures', async () => {
     assert.equal(result.retryable, true);
     assert.equal(result.fallbackReason, 'openai_timeout');
   }
+});
+
+test('primary timeout triggers exactly one bounded primary retry before fallback path', async () => {
+  let primaryAttempts = 0;
+
+  const client = createLlmProposalClient({
+    primary: {
+      async generate() {
+        primaryAttempts += 1;
+        return {
+          ok: false,
+          reason: 'timeout',
+          retryable: true,
+          fallbackReason: 'openai_timeout',
+          parseStatus: 'not_attempted',
+          metadata: {
+            provider: 'openai',
+            model: 'gpt-5-mini',
+            latencyMs: 50,
+            requestId: null,
+          },
+        };
+      },
+    },
+    fallback: {
+      async generate() {
+        return {
+          ok: true,
+          parseStatus: 'valid',
+          proposal: {
+            actionType: 'hold',
+            plannedSessionId: 'session_1',
+            reasons: ['Fallback provider succeeded', 'Conservative continuation'],
+            evidenceTags: ['G-001'],
+            forecastProjection: {
+              projectedReadiness: 3,
+              projectedRpe: 7,
+            },
+          },
+          metadata: {
+            provider: 'anthropic',
+            model: 'claude-sonnet-4-5',
+            latencyMs: 30,
+            requestId: 'req_fallback',
+          },
+        };
+      },
+    },
+    primaryMaxRetries: 1,
+  });
+
+  const result = await client.generate({
+    systemPrompt: 'system',
+    userPrompt: 'user',
+    plannedSessionId: 'session_1',
+  });
+
+  assert.equal(primaryAttempts, 2);
+  assert.notEqual(result.candidate, null);
+  assert.equal(result.meta.provider, 'anthropic');
+  assert.equal(result.meta.fallbackReason, 'openai_timeout');
 });
