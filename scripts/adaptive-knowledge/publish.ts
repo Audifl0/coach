@@ -3,7 +3,7 @@ import path from 'node:path';
 
 type SnapshotPointer = {
   snapshotId: string;
-  candidateDir: string;
+  snapshotDir: string;
   promotedAt: string;
 };
 
@@ -56,6 +56,13 @@ async function ensureCandidateArtifactsExist(candidateDir: string): Promise<void
   await access(path.join(candidateDir, 'run-report.json'));
 }
 
+function toValidatedSnapshotDir(candidateDir: string): string {
+  if (path.basename(candidateDir) === 'candidate') {
+    return path.join(path.dirname(candidateDir), 'validated');
+  }
+  return candidateDir;
+}
+
 export async function promoteCandidateSnapshot(
   input: PromoteCandidateSnapshotInput,
 ): Promise<PromoteCandidateSnapshotResult> {
@@ -69,9 +76,14 @@ export async function promoteCandidateSnapshot(
     await writeJsonAtomically(rollbackPointerPath, currentActive);
   }
 
+  const validatedSnapshotDir = toValidatedSnapshotDir(input.candidateDir);
+  if (validatedSnapshotDir !== input.candidateDir) {
+    await rename(input.candidateDir, validatedSnapshotDir);
+  }
+
   const pointer: SnapshotPointer = {
     snapshotId: input.snapshotId,
-    candidateDir: input.candidateDir,
+    snapshotDir: validatedSnapshotDir,
     promotedAt: input.now.toISOString(),
   };
 

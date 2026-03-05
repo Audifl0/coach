@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -14,9 +14,7 @@ async function writeJson(filePath: string, payload: unknown): Promise<void> {
 test('evidence retrieval uses entries from active snapshot pointer when available', async () => {
   const rootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-evidence-loader-'));
   const snapshotDir = path.join(rootDir, 'snapshots', 'run-active', 'validated');
-  await writeFile(path.join(snapshotDir, '.keep'), '', 'utf8').catch(async () => {
-    await import('node:fs/promises').then(({ mkdir }) => mkdir(snapshotDir, { recursive: true }));
-  });
+  await mkdir(snapshotDir, { recursive: true });
 
   await writeJson(path.join(snapshotDir, 'sources.json'), {
     records: [
@@ -70,8 +68,8 @@ test('invalid active pointer fails closed to last valid snapshot and never reads
   const rootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-evidence-loader-'));
   const candidateDir = path.join(rootDir, 'snapshots', 'run-candidate', 'candidate');
   const validDir = path.join(rootDir, 'snapshots', 'run-valid', 'validated');
-  await import('node:fs/promises').then(({ mkdir }) => mkdir(candidateDir, { recursive: true }));
-  await import('node:fs/promises').then(({ mkdir }) => mkdir(validDir, { recursive: true }));
+  await mkdir(candidateDir, { recursive: true });
+  await mkdir(validDir, { recursive: true });
 
   await writeJson(path.join(candidateDir, 'sources.json'), {
     records: [

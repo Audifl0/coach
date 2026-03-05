@@ -1,3 +1,5 @@
+import { loadActiveAdaptiveEvidenceCorpus } from './evidence-corpus';
+
 export type AdaptiveEvidenceSourceClass = 'guideline' | 'review' | 'expertise';
 
 export type AdaptiveEvidenceCorpusEntry = {
@@ -19,6 +21,7 @@ export type RetrieveAdaptiveEvidenceInput = {
   queryTags: string[];
   topK?: number;
   corpus?: AdaptiveEvidenceCorpusEntry[];
+  knowledgeRootDir?: string;
 };
 
 const SOURCE_PRIORITY: Record<AdaptiveEvidenceSourceClass, number> = {
@@ -84,7 +87,12 @@ function toShortEvidenceRef(entry: AdaptiveEvidenceCorpusEntry): string {
 
 export function retrieveAdaptiveEvidence(input: RetrieveAdaptiveEvidenceInput): AdaptiveEvidenceReference[] {
   const topK = Math.max(1, Math.min(input.topK ?? 3, 5));
-  const corpus = input.corpus ?? DEFAULT_ADAPTIVE_CORPUS;
+  const runtimeCorpus =
+    input.corpus ??
+    loadActiveAdaptiveEvidenceCorpus({
+      knowledgeRootDir: input.knowledgeRootDir,
+    }).entries;
+  const corpus = runtimeCorpus.length > 0 ? runtimeCorpus : DEFAULT_ADAPTIVE_CORPUS;
   const query = new Set(input.queryTags.map(normalizeToken).filter(Boolean));
 
   const scored = corpus

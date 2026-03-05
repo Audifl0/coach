@@ -93,7 +93,8 @@ export async function runAdaptiveKnowledgePipeline(
   const runId = input.runId ?? deterministicRunId(now);
   const mode = input.mode ?? 'refresh';
   const config = parseAdaptiveKnowledgePipelineConfig(input.configOverrides);
-  const outputRootDir = input.outputRootDir ?? process.cwd();
+  const outputRootDir =
+    input.outputRootDir ?? path.join(process.cwd(), '.planning', 'knowledge', 'adaptive-coaching');
   const candidateDir = path.join(outputRootDir, 'snapshots', runId, 'candidate');
   const connectors: PipelineConnectors = {
     ...DEFAULT_CONNECTORS,
@@ -253,7 +254,7 @@ export async function runAdaptiveKnowledgePipeline(
           ? `promoted:${runId};rollback=${publish.previousSnapshotId}`
           : `promoted:${runId};rollback=none`;
       }
-      await writeFile(path.join(candidateDir, 'run-report.json'), JSON.stringify(runReport, null, 2) + '\n', 'utf8');
+      await writeFile(path.join(publish.pointer.snapshotDir, 'run-report.json'), JSON.stringify(runReport, null, 2) + '\n', 'utf8');
     } catch (error) {
       publishErrorMessage = error instanceof Error ? error.message : String(error);
       const publishStage = runReport.stageReports.find((stage) => stage.stage === 'publish');
