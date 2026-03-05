@@ -18,6 +18,8 @@ import {
   buildAdaptiveForecastViewModel,
   type AdaptiveForecastViewModel,
 } from '@/lib/adaptive-coaching/forecast';
+import { parseProgramTrendsSummaryResponse, type ProgramTrendsSummaryResponse } from '@/lib/program/contracts';
+import { TrendsSummaryCard } from './_components/trends-summary-card';
 
 export async function resolveDashboardSession(
   sessionToken: string | null | undefined,
@@ -154,6 +156,55 @@ async function loadProgramTodayData(): Promise<ProgramTodayResponse | null> {
   return parseProgramTodayResponse(await response.json());
 }
 
+export function buildDashboardTrendsRequest(input: {
+  origin: string;
+  cookieHeader: string;
+}): {
+  url: string;
+  init: RequestInit & { headers: { cookie: string } };
+} {
+  return {
+    url: `${input.origin}/api/program/trends?period=30d`,
+    init: {
+      method: 'GET',
+      cache: 'no-store',
+      headers: {
+        cookie: input.cookieHeader,
+      },
+    },
+  };
+}
+
+export async function loadProgramTrendsData(input: {
+  origin: string;
+  cookieHeader: string;
+  fetchImpl?: typeof fetch;
+}): Promise<ProgramTrendsSummaryResponse | null> {
+  const request = buildDashboardTrendsRequest({ origin: input.origin, cookieHeader: input.cookieHeader });
+  const executeFetch = input.fetchImpl ?? fetch;
+  const response = await executeFetch(request.url, request.init);
+  if (!response.ok) {
+    return null;
+  }
+
+  return parseProgramTrendsSummaryResponse(await response.json());
+}
+
+export function resolveDashboardSectionOrder(input: {
+  hasAdaptiveForecast: boolean;
+  hasTrends: boolean;
+}): string[] {
+  const sections = ['today-workout'];
+  if (input.hasAdaptiveForecast) {
+    sections.push('adaptive-forecast');
+  }
+  if (input.hasTrends) {
+    sections.push('trends-summary');
+  }
+  sections.push('session-history');
+  return sections;
+}
+
 export default async function DashboardPage() {
   const { prisma } = await import('@/lib/db/prisma');
   const repository = await buildDefaultSessionGateRepository();
@@ -195,6 +246,15 @@ export default async function DashboardPage() {
   const pendingConfirmationRecommendation = latestRecommendation
     ? toPendingConfirmationBannerData(latestRecommendation)
     : null;
+  const headersStore = await headers();
+  const origin = buildRequestOrigin(headersStore);
+  const cookieStore = await cookies();
+  const trends = origin ? await loadProgramTrendsData({ origin, cookieHeader: cookieStore.toString() }) : null;
+  const sectionOrder = resolveDashboardSectionOrder({
+    hasAdaptiveForecast: Boolean(adaptiveForecast),
+    hasTrends: Boolean(trends),
+  });
+  const drilldownExerciseKey = sessionSurface.topSession?.exercises?.[0]?.exerciseKey ?? null;
 
   return (
     <main>
@@ -209,8 +269,11 @@ export default async function DashboardPage() {
           primaryAction: sessionSurface.primaryAction,
         }}
       />
-      {adaptiveForecast ? <AdaptiveForecastCard forecast={adaptiveForecast} /> : null}
-      <SessionHistoryCard />
+      {sectionOrder.includes('adaptive-forecast') && adaptiveForecast ? <AdaptiveForecastCard forecast={adaptiveForecast} /> : null}
+      {sectionOrder.includes('trends-summary') && trends ? (
+        <TrendsSummaryCard initialData={trends} drilldownExerciseKey={drilldownExerciseKey} />
+      ) : null}
+      {sectionOrder.includes('session-history') ? <SessionHistoryCard /> : null}
       <p>You are authenticated on this device.</p>
       <form action="/api/auth/logout" method="post">
         <button type="submit">Logout current device</button>
