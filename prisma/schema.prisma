@@ -16,6 +16,8 @@ model User {
   plannedSessions PlannedSession[]
   plannedExercises PlannedExercise[]
   loggedSets     LoggedSet[]
+  adaptiveRecommendations AdaptiveRecommendation[]
+  adaptiveRecommendationDecisions AdaptiveRecommendationDecision[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 }
@@ -80,6 +82,7 @@ model PlannedSession {
   postSessionComment String?
   exercises     PlannedExercise[]
   loggedSets    LoggedSet[]
+  adaptiveRecommendations AdaptiveRecommendation[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
@@ -133,4 +136,81 @@ model LoggedSet {
 
   @@unique([plannedExerciseId, setIndex])
   @@index([userId, plannedSessionId])
+}
+
+enum AdaptiveRecommendationActionType {
+  progress
+  hold
+  deload
+  substitution
+}
+
+enum AdaptiveRecommendationStatus {
+  proposed
+  validated
+  pending_confirmation
+  applied
+  rejected
+  fallback_applied
+}
+
+enum AdaptiveRecommendationDecisionType {
+  policy
+  user
+  execution
+  fallback
+}
+
+model AdaptiveRecommendation {
+  id                     String                           @id @default(cuid())
+  userId                 String
+  user                   User                             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plannedSessionId       String
+  plannedSession         PlannedSession                   @relation(fields: [plannedSessionId], references: [id], onDelete: Cascade)
+  actionType             AdaptiveRecommendationActionType
+  status                 AdaptiveRecommendationStatus     @default(proposed)
+  confidence             Decimal                          @db.Decimal(4, 3)
+  confidenceLabel        String
+  confidenceReason       String
+  warningFlag            Boolean                          @default(false)
+  warningText            String?
+  fallbackApplied        Boolean                          @default(false)
+  fallbackReason         String?
+  progressionDeltaLoadPct Decimal?                        @db.Decimal(5, 2)
+  progressionDeltaReps   Int?
+  progressionDeltaSets   Int?
+  substitutionExerciseKey String?
+  substitutionDisplayName String?
+  substitutionReason      String?
+  reasons               Json
+  evidenceTags          Json
+  forecastPayload       Json
+  expiresAt             DateTime?
+  appliedAt             DateTime?
+  rejectedAt            DateTime?
+  createdAt             DateTime                         @default(now())
+  updatedAt             DateTime                         @updatedAt
+  decisions             AdaptiveRecommendationDecision[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([plannedSessionId, status])
+  @@index([userId, status, createdAt(sort: Desc)])
+}
+
+model AdaptiveRecommendationDecision {
+  id                  String                           @id @default(cuid())
+  recommendationId    String
+  recommendation      AdaptiveRecommendation           @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  userId              String
+  user                User                             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  decisionType        AdaptiveRecommendationDecisionType
+  previousStatus      AdaptiveRecommendationStatus?
+  nextStatus          AdaptiveRecommendationStatus
+  decisionReason      String
+  evidenceTags        Json
+  metadata            Json?
+  createdAt           DateTime                         @default(now())
+
+  @@index([recommendationId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
 }
