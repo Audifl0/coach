@@ -14,6 +14,11 @@ import {
   buildExerciseTrendRequestPath,
   mapExerciseSeries,
 } from '../../src/app/(private)/dashboard/_components/trends-drilldown';
+import {
+  buildDashboardTrendsRequest,
+  loadProgramTrendsData,
+  resolveDashboardSectionOrder,
+} from '../../src/app/(private)/dashboard/page';
 
 function createSummaryFixture(): ProgramTrendsSummaryResponse {
   return {
@@ -129,4 +134,32 @@ test('drilldown request path is scoped to selected period and selected exercise 
     buildExerciseTrendRequestPath({ period: '90d', exerciseKey: 'goblet_squat' }),
     '/api/program/trends/goblet_squat?period=90d',
   );
+});
+
+test('dashboard section order places trends below adaptive forecast and above history', () => {
+  assert.deepEqual(resolveDashboardSectionOrder({ hasAdaptiveForecast: true, hasTrends: true }), [
+    'today-workout',
+    'adaptive-forecast',
+    'trends-summary',
+    'session-history',
+  ]);
+});
+
+test('initial trends request is period=30d and uses no-store cache policy', () => {
+  const request = buildDashboardTrendsRequest({ origin: 'http://localhost', cookieHeader: 'sid=abc' });
+
+  assert.equal(request.url, 'http://localhost/api/program/trends?period=30d');
+  assert.equal(request.init.cache, 'no-store');
+  assert.equal(request.init.method, 'GET');
+  assert.equal(request.init.headers.cookie, 'sid=abc');
+});
+
+test('trends loader degrades gracefully to null when trends API fails', async () => {
+  const result = await loadProgramTrendsData({
+    origin: 'http://localhost',
+    cookieHeader: 'sid=abc',
+    fetchImpl: async () => new Response(JSON.stringify({ error: 'boom' }), { status: 500 }),
+  });
+
+  assert.equal(result, null);
 });
