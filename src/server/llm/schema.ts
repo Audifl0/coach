@@ -52,14 +52,8 @@ export const ADAPTIVE_PROPOSAL_JSON_SCHEMA = {
       additionalProperties: false,
       required: ['exerciseKey', 'displayName'],
       properties: {
-        exerciseKey: {
-          type: 'string',
-          minLength: 1,
-        },
-        displayName: {
-          type: 'string',
-          minLength: 1,
-        },
+        exerciseKey: { type: 'string', minLength: 1 },
+        displayName: { type: 'string', minLength: 1 },
       },
     },
   },

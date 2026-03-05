@@ -1,135 +1,64 @@
 import { z } from 'zod';
 
-import { llmProviderValues, type LlmProvider } from './contracts';
+import { llmProviderValues, type LlmProvider } from '@/server/llm/contracts';
 
-type EnvInput = Record<string, string | undefined>;
+const boolSchema = z
+  .string()
+  .optional()
+  .transform((value) => value === 'true');
 
-const DEFAULT_GLOBAL_MAX_LATENCY_MS = 8000;
-
-const integerFromEnv = (field: string, min: number, max: number) =>
-  z
-    .string({
-      error: () => `${field} is required`,
-    })
-    .transform((value, ctx) => {
-      const parsed = Number.parseInt(value, 10);
-      if (!Number.isFinite(parsed) || Number.isNaN(parsed)) {
-        ctx.issues.push({
-          code: 'custom',
-          message: `${field} must be an integer`,
-          input: value,
-        });
-        return z.NEVER;
-      }
-
-      return parsed;
-    })
-    .refine((value) => value >= min && value <= max, {
-      message: `${field} must be between ${min} and ${max}`,
-    });
-
-const realProviderEnabledSchema = z
-  .object({
-    LLM_REAL_PROVIDER_ENABLED: z.enum(['true', 'false']).default('false'),
-  })
-  .transform((value) => value.LLM_REAL_PROVIDER_ENABLED === 'true');
-
-const enabledRuntimeSchema = z
-  .object({
-    LLM_REAL_PROVIDER_ENABLED: z.literal('true'),
-    LLM_PROVIDER_PRIMARY: z.enum(llmProviderValues, {
-      error: () => 'LLM_PROVIDER_PRIMARY is required',
-    }),
-    LLM_PROVIDER_FALLBACK: z.enum(llmProviderValues, {
-      error: () => 'LLM_PROVIDER_FALLBACK is required',
-    }),
-    LLM_PROVIDER_OPENAI_MODEL: z.string().trim().min(1, 'LLM_PROVIDER_OPENAI_MODEL is required'),
-    LLM_PROVIDER_ANTHROPIC_MODEL: z.string().trim().min(1, 'LLM_PROVIDER_ANTHROPIC_MODEL is required'),
-    LLM_PROVIDER_OPENAI_API_KEY: z.string().trim().min(1, 'LLM_PROVIDER_OPENAI_API_KEY is required'),
-    LLM_PROVIDER_ANTHROPIC_API_KEY: z.string().trim().min(1, 'LLM_PROVIDER_ANTHROPIC_API_KEY is required'),
-    LLM_PRIMARY_TIMEOUT_MS: integerFromEnv('LLM_PRIMARY_TIMEOUT_MS', 1, 30_000),
-    LLM_PRIMARY_MAX_RETRIES: integerFromEnv('LLM_PRIMARY_MAX_RETRIES', 0, 1),
-    LLM_FALLBACK_TIMEOUT_MS: integerFromEnv('LLM_FALLBACK_TIMEOUT_MS', 1, 30_000),
-    LLM_FALLBACK_MAX_ATTEMPTS: integerFromEnv('LLM_FALLBACK_MAX_ATTEMPTS', 1, 1),
-    LLM_GLOBAL_MAX_LATENCY_MS: integerFromEnv('LLM_GLOBAL_MAX_LATENCY_MS', 1, 60_000),
-  })
-  .superRefine((value, ctx) => {
-    if (value.LLM_PROVIDER_PRIMARY !== 'openai') {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['LLM_PROVIDER_PRIMARY'],
-        message: 'LLM_PROVIDER_PRIMARY must be openai',
-      });
-    }
-
-    if (value.LLM_PROVIDER_FALLBACK !== 'anthropic') {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['LLM_PROVIDER_FALLBACK'],
-        message: 'LLM_PROVIDER_FALLBACK must be anthropic',
-      });
-    }
-
-    if (value.LLM_PROVIDER_PRIMARY === value.LLM_PROVIDER_FALLBACK) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['LLM_PROVIDER_FALLBACK'],
-        message: 'LLM_PROVIDER_FALLBACK must be different from LLM_PROVIDER_PRIMARY',
-      });
-    }
-  });
-
-type ProviderRuntimeConfig = {
-  provider: LlmProvider;
-  model: string;
-  apiKey: string;
-  timeoutMs: number;
-};
+const enabledRuntimeSchema = z.object({
+  LLM_PROVIDER_PRIMARY: z.enum(llmProviderValues),
+  LLM_PROVIDER_FALLBACK: z.enum(llmProviderValues),
+  LLM_OPENAI_MODEL: z.string().trim().min(1),
+  LLM_ANTHROPIC_MODEL: z.string().trim().min(1),
+  LLM_OPENAI_API_KEY: z.string().trim().min(1),
+  LLM_ANTHROPIC_API_KEY: z.string().trim().min(1),
+  LLM_PRIMARY_TIMEOUT_MS: z.coerce.number().int().min(1000).max(15000).default(5000),
+  LLM_FALLBACK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(15000).default(5000),
+  LLM_GLOBAL_MAX_LATENCY_MS: z.coerce.number().int().min(1000).max(20000),
+  LLM_PRIMARY_MAX_RETRIES: z.coerce.number().int().min(0).max(1).default(1),
+  LLM_FALLBACK_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(1).default(1),
+});
 
 export type LlmRuntimeConfig = {
-  enabled: boolean;
+  enabled: true;
+  primaryProvider: LlmProvider;
+  fallbackProvider: LlmProvider;
+  openAi: { model: string; apiKey: string; timeoutMs: number };
+  anthropic: { model: string; apiKey: string; timeoutMs: number };
+  primaryMaxRetries: number;
+  fallbackMaxAttempts: number;
   globalMaxLatencyMs: number;
-  providers: {
-    primary: ProviderRuntimeConfig & { maxRetries: number };
-    fallback: ProviderRuntimeConfig & { maxAttempts: number };
-  } | null;
 };
 
-export function isRealProviderEnabled(env: EnvInput): boolean {
-  return realProviderEnabledSchema.parse({
-    LLM_REAL_PROVIDER_ENABLED: env.LLM_REAL_PROVIDER_ENABLED ?? 'false',
-  });
+export function isRealProviderEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return boolSchema.parse(env.LLM_REAL_PROVIDER_ENABLED);
 }
 
-export function parseLlmRuntimeConfig(env: EnvInput): LlmRuntimeConfig {
-  if (!isRealProviderEnabled(env)) {
-    return {
-      enabled: false,
-      globalMaxLatencyMs: DEFAULT_GLOBAL_MAX_LATENCY_MS,
-      providers: null,
-    };
+export function parseLlmRuntimeConfig(env: NodeJS.ProcessEnv = process.env): LlmRuntimeConfig | null {
+  const enabled = isRealProviderEnabled(env);
+  if (!enabled) {
+    return null;
   }
 
   const parsed = enabledRuntimeSchema.parse(env);
-
   return {
     enabled: true,
-    globalMaxLatencyMs: parsed.LLM_GLOBAL_MAX_LATENCY_MS,
-    providers: {
-      primary: {
-        provider: parsed.LLM_PROVIDER_PRIMARY,
-        model: parsed.LLM_PROVIDER_OPENAI_MODEL,
-        apiKey: parsed.LLM_PROVIDER_OPENAI_API_KEY,
-        timeoutMs: parsed.LLM_PRIMARY_TIMEOUT_MS,
-        maxRetries: parsed.LLM_PRIMARY_MAX_RETRIES,
-      },
-      fallback: {
-        provider: parsed.LLM_PROVIDER_FALLBACK,
-        model: parsed.LLM_PROVIDER_ANTHROPIC_MODEL,
-        apiKey: parsed.LLM_PROVIDER_ANTHROPIC_API_KEY,
-        timeoutMs: parsed.LLM_FALLBACK_TIMEOUT_MS,
-        maxAttempts: parsed.LLM_FALLBACK_MAX_ATTEMPTS,
-      },
+    primaryProvider: parsed.LLM_PROVIDER_PRIMARY,
+    fallbackProvider: parsed.LLM_PROVIDER_FALLBACK,
+    openAi: {
+      model: parsed.LLM_OPENAI_MODEL,
+      apiKey: parsed.LLM_OPENAI_API_KEY,
+      timeoutMs: parsed.LLM_PRIMARY_TIMEOUT_MS,
     },
+    anthropic: {
+      model: parsed.LLM_ANTHROPIC_MODEL,
+      apiKey: parsed.LLM_ANTHROPIC_API_KEY,
+      timeoutMs: parsed.LLM_FALLBACK_TIMEOUT_MS,
+    },
+    primaryMaxRetries: parsed.LLM_PRIMARY_MAX_RETRIES,
+    fallbackMaxAttempts: parsed.LLM_FALLBACK_MAX_ATTEMPTS,
+    globalMaxLatencyMs: parsed.LLM_GLOBAL_MAX_LATENCY_MS,
   };
 }
