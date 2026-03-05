@@ -66,6 +66,28 @@
 - Recommendations never exceed configured conservative progression bounds.
 - Low-confidence or limitation-conflicting cases trigger warning/fallback conservative plan and dashboard forecast reflects applied outcome.
 
+### Phase 05.1: LLM provider réel: OpenAI/Anthropic + env model/key + structured output strict + tests SAFE-03 (INSERTED)
+
+**Goal:** Brancher un provider LLM reel (OpenAI principal + Anthropic fallback) avec sortie structuree stricte et fallback SAFE-03 deterministic.
+**Requirements**: ADAP-01, ADAP-02, ADAP-03, SAFE-03
+**Depends on:** Phase 5
+**Plans:** 2/3 plans executed
+
+Plans:
+- [x] 05.1-01 - Provider contracts/schema/env gate
+- [ ] 05.1-02 - OpenAI primary + Anthropic fallback runtime
+- [ ] 05.1-03 - Service wiring + integration tests SAFE-03
+
+### Phase 05.2: Pipeline web autonome corpus scientifique: veille, synthèse, validation continue (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 5
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 05.2 to break down)
+
 ## Phase 6: Trends and Operational Reliability
 
 **Goal:** Finalize decision-support trends and production recovery readiness.
@@ -86,10 +108,12 @@
 | 02 - Athlete Profile and Constraints Onboarding | 4/4 | 4 | Complete | 2026-03-04 |
 | 03 - Program Planning and Daily Workout Surface | 4/4 | 4 | Complete | 2026-03-04 |
 | 04 - Session Logging and History | 5/5 | 5 | Complete | 2026-03-04 |
-| 05 - Adaptive Coaching and Safety Guardrails | 5/5 | Complete    | 2026-03-05 | 2026-03-05 |
+| 05 - Adaptive Coaching and Safety Guardrails | 5/5 | 5 | Complete | 2026-03-05 |
+| 05.1 - LLM provider réel + structured output + SAFE-03 tests | 2/3 | In Progress|  | 2026-03-05 |
+| 05.2 - Pipeline web autonome corpus scientifique | 0/0 | 0 | Not Started | 2026-03-05 |
 | 06 - Trends and Operational Reliability | 0/0 | 0 | Not Started | - |
 
 - Total v1 requirements: 26
 - Mapped to phases: 26
 - Unmapped: 0
-- Multi-phase assignments: 0
+- Multi-phase assignments: 4

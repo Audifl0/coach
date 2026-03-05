@@ -6,14 +6,14 @@ current_phase: 05
 current_phase_name: Adaptive Coaching and Safety Guardrails
 current_plan: Not started
 status: completed
-stopped_at: Completed 05-05-PLAN.md
-last_updated: "2026-03-05T09:17:59.447Z"
+stopped_at: Completed 05.1-02-PLAN.md
+last_updated: "2026-03-05T10:05:01.819Z"
 last_activity: 2026-03-05
 progress:
-  total_phases: 6
+  total_phases: 4
   completed_phases: 5
-  total_plans: 25
-  completed_plans: 25
+  total_plans: 28
+  completed_plans: 27
   percent: 96
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Current Phase:** 05
 **Current Phase Name:** Adaptive Coaching and Safety Guardrails
-**Total Phases:** 6
+**Total Phases:** 4
 **Current Plan:** Not started
 **Total Plans in Phase:** 5
 **Status:** Milestone complete
@@ -46,6 +46,8 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 05 P02 | 4 min | 3 tasks | 5 files |
 | Phase 05 P03 | 5min | 3 tasks | 5 files |
 | Phase 05 P04 | 5min | 3 tasks | 6 files |
+| Phase 05.1 P01 | 5min | 2 tasks | 9 files |
+| Phase 05.1 P02 | 10 min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -109,6 +111,17 @@ Recent decisions affecting current work:
 - [Phase 05-adaptive-coaching-and-safety-guardrails]: Dashboard banner waits for server success before showing resolved state.
 - [Phase 05]: Forecast prudence is explicit prevision_prudente state derived from warning/fallback flags, not implicit UI inference.
 - [Phase 05]: Dashboard consumes a single server-resolved forecast contract via resolveAdaptiveForecastCard to avoid view-model drift.
+- [Phase 05.1-llm-provider-r-el-openai-anthropic-env-model-key-structured-output-strict-tests-safe-03]: Provider proposal payload excludes status; lifecycle status remains server-owned.
+- [Phase 05.1-llm-provider-r-el-openai-anthropic-env-model-key-structured-output-strict-tests-safe-03]: Real-provider mode fails fast unless full OpenAI primary and Anthropic fallback env contract is present.
+- [Phase 05.1-llm-provider-r-el-openai-anthropic-env-model-key-structured-output-strict-tests-safe-03]: Runtime policy caps primary retries at one and fallback attempts at one.
+- [Phase 05.1-llm-provider-r-el-openai-anthropic-env-model-key-structured-output-strict-tests-safe-03]: Treat schema/JSON parse failures as retryable invalid_payload on the primary provider boundary.
+- [Phase 05.1-llm-provider-r-el-openai-anthropic-env-model-key-structured-output-strict-tests-safe-03]: Keep provider chain deterministic and bounded: OpenAI attempt, one retry, then one Anthropic fallback attempt.
+- [Phase 05.1-llm-provider-r-el-openai-anthropic-env-model-key-structured-output-strict-tests-safe-03]: Emit only allowlisted attempt metadata (provider/model/latency/parse/fallback/request-id) to preserve non-PII observability.
+
+### Roadmap Evolution
+
+- Phase 05.1 inserted after Phase 05: LLM provider réel: OpenAI/Anthropic + env model/key + structured output strict + tests SAFE-03 (URGENT)
+- Phase 05.2 inserted after Phase 05: Pipeline web autonome corpus scientifique: veille, synthèse, validation continue (URGENT)
 
 ### Pending Todos
 
@@ -120,6 +133,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-05T09:14:46.574Z
-**Stopped At:** Completed 05-05-PLAN.md
+**Last Date:** 2026-03-05T10:05:01.817Z
+**Stopped At:** Completed 05.1-02-PLAN.md
 **Resume File:** None

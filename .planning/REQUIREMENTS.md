@@ -103,12 +103,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LOG-02 | 4 | Complete |
 | LOG-03 | 4 | Complete |
 | LOG-04 | 4 | Complete |
-| ADAP-01 | 5 | Complete |
-| ADAP-02 | 5 | Complete |
-| ADAP-03 | 5 | Complete |
+| ADAP-01 | 5, 05.1 | Complete |
+| ADAP-02 | 5, 05.1 | Complete |
+| ADAP-03 | 5, 05.1 | Complete |
 | SAFE-01 | 5 | Complete |
 | SAFE-02 | 5 | Complete |
-| SAFE-03 | 5 | Complete |
+| SAFE-03 | 5, 05.1 | Complete |
 | DASH-01 | 3 | Complete |
 | DASH-02 | 6 | Pending |
 | DASH-03 | 5 | Complete |
@@ -123,4 +123,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-04*
-*Last updated: 2026-03-04 after roadmap mapping*
+*Last updated: 2026-03-05 after 05.1 traceability updates*
