@@ -4,10 +4,10 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 05.2
 current_phase_name: pipeline web autonome corpus scientifique veille synth se validation continue
-current_plan: Not started
-status: planning
-stopped_at: Phase 05.2 context gathered
-last_updated: "2026-03-05T10:56:13.362Z"
+current_plan: 05.2-02
+status: executing
+stopped_at: Completed 05.2-01-PLAN.md
+last_updated: "2026-03-05T11:24:28Z"
 last_activity: 2026-03-05
 progress:
   total_phases: 4
@@ -31,11 +31,11 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 05.2
 **Current Phase Name:** pipeline web autonome corpus scientifique veille synth se validation continue
 **Total Phases:** 4
-**Current Plan:** Not started
+**Current Plan:** 05.2-02
 **Total Plans in Phase:** 3
-**Status:** Ready to plan
+**Status:** In progress
 **Last Activity:** 2026-03-05
-**Last Activity Description:** Phase 05.1 complete, transitioned to Phase 05.2
+**Last Activity Description:** Completed Phase 05.2 plan 05.2-01 contract/config boundary
 **Progress:** [██████████] 100%
 
 ## Performance Metrics
@@ -50,6 +50,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 05.1 P02 | 10 min | 3 tasks | 12 files |
 | Phase 05.1 P03 | 5 min | 3 tasks | 4 files |
 | Phase 05.1 P05.1-04 | 2 min | 2 tasks | 1 files |
+| Phase 05.2 P05.2-01 | 3 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -123,6 +124,9 @@ Recent decisions affecting current work:
 - [Phase 05.1]: Provider payload status is stripped before orchestration parse so lifecycle status remains server-owned.
 - [Phase 05.1]: Disabled provider mode contract is null runtime config; tests assert parseLlmRuntimeConfig(...) === null.
 - [Phase 05.1]: Enabled-mode provider config tests now enforce LLM_OPENAI_* and LLM_ANTHROPIC_* model/API-key env names and current parser shape.
+- [Phase 05.2]: Corpus contracts are strict and shared across normalized evidence, FR synthesis principles, manifests, and run reports.
+- [Phase 05.2]: Pipeline config is parsed from a single PIPELINE_* contract with approved-domain perimeter and bounded retries.
+- [Phase 05.2]: refresh-corpus entrypoint now validates through shared contracts/config while keeping --check compatibility.
 
 ### Roadmap Evolution
 
@@ -139,6 +143,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-05T10:56:13.351Z
-**Stopped At:** Phase 05.2 context gathered
-**Resume File:** .planning/phases/05.2-pipeline-web-autonome-corpus-scientifique-veille-synth-se-validation-continue/05.2-CONTEXT.md
+**Last Date:** 2026-03-05T11:24:28Z
+**Stopped At:** Completed 05.2-01-PLAN.md
+**Resume File:** .planning/phases/05.2-pipeline-web-autonome-corpus-scientifique-veille-synth-se-validation-continue/05.2-02-PLAN.md
