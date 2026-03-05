@@ -6,15 +6,15 @@ current_phase: 05.2
 current_phase_name: pipeline web autonome corpus scientifique veille synth se validation continue
 current_plan: 05.2-02
 status: verifying
-stopped_at: Completed 05.2-02-PLAN.md
-last_updated: "2026-03-05T11:34:43.167Z"
+stopped_at: Completed 05.2-03-PLAN.md
+last_updated: "2026-03-05T11:43:13.686Z"
 last_activity: 2026-03-05
 progress:
   total_phases: 4
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 32
-  completed_plans: 31
-  percent: 97
+  completed_plans: 32
+  percent: 100
 ---
 
 # Project State
@@ -36,7 +36,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Status:** Phase complete — ready for verification
 **Last Activity:** 2026-03-05
 **Last Activity Description:** Completed Phase 05.2 plan 05.2-01 contract/config boundary
-**Progress:** [██████████] 97%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 05.1 P05.1-04 | 2 min | 2 tasks | 1 files |
 | Phase 05.2 P05.2-01 | 3 min | 3 tasks | 5 files |
 | Phase 05.2 P05.2-02 | 19 min | 3 tasks | 10 files |
+| Phase 05.2 P05.2-03 | 7 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -131,6 +132,9 @@ Recent decisions affecting current work:
 - [Phase 05.2]: Connector retries terminate as source-level skips with telemetry, never run-fatal throw.
 - [Phase 05.2]: Pipeline writes only candidate artifacts under snapshots/<run-id>/candidate and leaves active corpus untouched.
 - [Phase 05.2]: Synthesis stage failures persist run-report with synthesize=failed and validate=skipped before deterministic error.
+- [Phase 05.2]: Publish stage is executed only when quality gate passes; blocked reasons are deterministic codes.
+- [Phase 05.2]: Promotion converts candidate directory to validated directory before active pointer swap.
+- [Phase 05.2]: Runtime retrieval reads active validated snapshot first, then rollback pointer, then legacy corpus.
 
 ### Roadmap Evolution
 
@@ -147,6 +151,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-05T11:34:43.165Z
-**Stopped At:** Completed 05.2-02-PLAN.md
+**Last Date:** 2026-03-05T11:43:13.684Z
+**Stopped At:** Completed 05.2-03-PLAN.md
 **Resume File:** None

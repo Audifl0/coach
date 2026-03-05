@@ -83,7 +83,7 @@ Plans:
 **Goal:** Mettre en place un pipeline web autonome hebdomadaire qui collecte, synthétise et valide le corpus scientifique, puis publie atomiquement un snapshot actif consommable par le moteur adaptatif.
 **Requirements**: ADAP-01, ADAP-02, SAFE-02, SAFE-03
 **Depends on:** Phase 5
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 05.2-01 - Contracts/config boundary (whitelist + freshness + synthesis contract)
@@ -112,7 +112,7 @@ Plans:
 | 04 - Session Logging and History | 5/5 | 5 | Complete | 2026-03-04 |
 | 05 - Adaptive Coaching and Safety Guardrails | 5/5 | 5 | Complete | 2026-03-05 |
 | 05.1 - LLM provider réel + structured output + SAFE-03 tests | 4/4 | Complete    | 2026-03-05 | 2026-03-05 |
-| 05.2 - Pipeline web autonome corpus scientifique | 2/3 | In Progress|  | 2026-03-05 |
+| 05.2 - Pipeline web autonome corpus scientifique | 3/3 | Complete   | 2026-03-05 | 2026-03-05 |
 | 06 - Trends and Operational Reliability | 0/0 | 0 | Not Started | - |
 
 - Total v1 requirements: 26
