@@ -8,11 +8,13 @@ import {
   type ProgramTrendQueryInput,
   type ProgramTrendsSummaryResponse,
 } from '@/lib/program/contracts';
+import { TrendsDrilldown } from './trends-drilldown';
 
 type TrendPeriod = ProgramTrendQueryInput['period'];
 
 type TrendsSummaryCardProps = {
   initialData: ProgramTrendsSummaryResponse;
+  drilldownExerciseKey?: string | null;
 };
 
 type TrendsSummaryState = {
@@ -81,8 +83,9 @@ export function createDefaultTrendsSummaryState(initialData: ProgramTrendsSummar
   };
 }
 
-export function TrendsSummaryCard({ initialData }: TrendsSummaryCardProps) {
+export function TrendsSummaryCard({ initialData, drilldownExerciseKey = null }: TrendsSummaryCardProps) {
   const [state, setState] = useState<TrendsSummaryState>(() => createDefaultTrendsSummaryState(initialData));
+  const [isDrilldownOpen, setIsDrilldownOpen] = useState(false);
   const metricCards = useMemo(() => mapMetricCards(state.data), [state.data]);
   const toggleOptions = useMemo(() => createSummaryToggleOptions(), []);
 
@@ -171,6 +174,16 @@ export function TrendsSummaryCard({ initialData }: TrendsSummaryCardProps) {
           </article>
         ))}
       </div>
+      {drilldownExerciseKey ? (
+        <div>
+          <button type="button" onClick={() => setIsDrilldownOpen((value) => !value)}>
+            {isDrilldownOpen ? 'Hide drilldown' : 'Open drilldown'}
+          </button>
+        </div>
+      ) : null}
+      {isDrilldownOpen && drilldownExerciseKey ? (
+        <TrendsDrilldown period={state.period} exerciseKey={drilldownExerciseKey} />
+      ) : null}
     </section>
   );
 }
