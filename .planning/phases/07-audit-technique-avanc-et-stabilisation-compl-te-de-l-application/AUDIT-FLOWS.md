@@ -30,6 +30,22 @@ Covered flows:
 | `FLOW-07` | Moderate | P2 | Adaptive post-decision UX consistency | `src/app/(private)/dashboard/components/adaptive-confirmation-banner.tsx` resolves locally after confirm/reject but does not refresh dashboard server state, so adjacent forecast data can remain stale until reload. |
 | `FLOW-08` | Moderate | P2 | Restore verification depth | `infra/scripts/run-restore-drill.sh` verifies restore + anonymous smoke reachability, but does not authenticate or assert restored business data correctness. |
 
+## Route-to-Consumer Trace Map
+
+| Flow | User or operator entrypoint | Route or script boundary | Service / domain layer | DAL / persistence surface | Response or consumer |
+| --- | --- | --- | --- | --- | --- |
+| Signup | `src/app/(public)/signup/page.tsx` | `src/app/api/auth/signup/route.ts` | `src/lib/auth/auth.ts::signup` | Prisma `User` create | `201 { id, username }` |
+| Login / logout / session persistence | `src/app/(public)/login/page.tsx`, dashboard logout form | `src/app/api/auth/login/route.ts`, `src/app/api/auth/logout/route.ts` | `src/lib/auth/auth.ts::login`, `src/lib/auth/session-gate.ts` | Prisma `Session` rows | auth cookie, server redirects, protected route checks |
+| Onboarding / profile edit | `src/app/(private)/onboarding/page.tsx`, `src/app/(private)/profile/page.tsx` | `src/app/api/profile/route.ts` | `src/lib/profile/contracts.ts`, completeness gate | `src/server/dal/profile.ts`, `AthleteProfile` | `{ profile, complete }`, `ProfileForm` |
+| Program generation | dashboard action after complete profile | `src/app/api/program/generate/route.ts` | `src/server/services/program-generation.ts`, `src/lib/program/planner.ts` | `src/server/dal/program.ts::replaceActivePlan`, `ProgramPlan` / `PlannedSession` / `PlannedExercise` | `{ plan, sessions }` |
+| Dashboard today / next workout | `src/app/(private)/dashboard/page.tsx` SSR | `src/app/api/program/today/route.ts` | `src/lib/program/select-today-session.ts` | `src/server/dal/program.ts::getTodayOrNextSessionCandidates` | `TodayWorkoutCard` |
+| Substitutions | workout exercise action | `src/app/api/program/exercises/[plannedExerciseId]/substitutions/route.ts`, `src/app/api/program/exercises/[plannedExerciseId]/substitute/route.ts` | `src/lib/program/substitution.ts` | profile + program DAL, `PlannedExercise` mutation | `{ candidates }`, `{ plannedExercise }` |
+| Session logging | `SessionLogger` client | set / skip / note / complete / duration routes | `src/server/services/session-logging.ts` | `src/server/dal/program.ts`, `LoggedSet`, `PlannedSession`, `PlannedExercise` | logger local state + route JSON payloads |
+| History list / drilldown | `SessionHistoryCard` client | `src/app/api/program/history/route.ts`, `src/app/api/program/sessions/[sessionId]/route.ts` | `src/lib/program/select-today-session.ts` projections | `src/server/dal/program.ts::getHistoryList`, `getSessionById`, `getHistorySessionDetail` | history list rows + drilldown view |
+| Adaptive recommendation | dashboard SSR + banner actions | adaptation generate / confirm / reject routes | `src/server/services/adaptive-coaching.ts`, orchestration and contracts | `src/server/dal/adaptive-coaching.ts`, `AdaptiveRecommendation` lifecycle | forecast card, confirmation banner, route JSON |
+| Trends summary / drilldown | dashboard SSR + trends client actions | `src/app/api/program/trends/route.ts`, `src/app/api/program/trends/[exerciseKey]/route.ts` | trend contracts | `src/server/dal/program.ts::getTrendSummary`, `getExerciseTrendSeries` | `TrendsSummaryCard`, drilldown |
+| Admin reset / restore drill | shell operator | `scripts/admin-reset-password.ts`, `infra/scripts/restore.sh`, `infra/scripts/run-restore-drill.sh` | `src/lib/auth/admin-reset.ts` | Prisma `User` / `Session`, PostgreSQL restore target DB | generic reset message, restore evidence log |
+
 ## Flow Matrix
 
 ### 1. Signup
