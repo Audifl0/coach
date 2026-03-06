@@ -95,12 +95,13 @@ Plans:
 **Goal:** Finalize decision-support trends and production recovery readiness.
 
 **Requirements:** DASH-02, PLAT-02
-**Plans:** 3 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] 06-01-PLAN.md - Trends contracts + DAL aggregation + authenticated trends APIs
-- [ ] 06-02-PLAN.md - Dashboard trends block + 7/30/90 toggles + exercise drilldown
+- [x] 06-01-PLAN.md - Trends contracts + DAL aggregation + authenticated trends APIs
+- [x] 06-02-PLAN.md - Dashboard trends block + 7/30/90 toggles + exercise drilldown
 - [x] 06-03-PLAN.md - Restore drill automation + systemd cadence + incident runbook
+- [x] 06-04-PLAN.md - Trend toggle parity fix + regression coverage for return-to-30d behavior
 
 **Success Criteria (observable):**
 - Dashboard displays recent volume/intensity/adherence trends from session data.
