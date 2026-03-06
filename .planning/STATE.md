@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 06
 current_phase_name: trends and operational reliability
 current_plan: 3
-status: executing
-stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-03-05T14:54:55.600Z"
-last_activity: 2026-03-05
+status: verifying
+stopped_at: Completed 06-04-PLAN.md
+last_updated: "2026-03-06T17:14:35.105Z"
+last_activity: 2026-03-06
 progress:
   total_phases: 4
   completed_phases: 8
-  total_plans: 35
-  completed_plans: 35
+  total_plans: 36
+  completed_plans: 36
   percent: 100
 ---
 
@@ -33,8 +33,8 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Total Phases:** 4
 **Current Plan:** 3
 **Total Plans in Phase:** 3
-**Status:** Ready to execute
-**Last Activity:** 2026-03-05
+**Status:** Phase complete — ready for verification
+**Last Activity:** 2026-03-06
 **Last Activity Description:** Phase 06 plan 06-03 complete
 **Progress:** [██████████] 100%
 
@@ -56,6 +56,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 06-trends-and-operational-reliability P06-03 | 5 min | 3 tasks | 7 files |
 | Phase 06-trends-and-operational-reliability P06-01 | 5 min | 3 tasks | 8 files |
 | Phase 06-trends-and-operational-reliability P06-02 | 8min | 3 tasks | 6 files |
+| Phase 06-trends-and-operational-reliability P06-04 | 2 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -147,6 +148,8 @@ Recent decisions affecting current work:
 - [Phase 06-trends-and-operational-reliability]: Kept dashboard trend interpretation visual-only (KPI + line) without delta arrows/badges.
 - [Phase 06-trends-and-operational-reliability]: Split trends into compact summary plus per-exercise drilldown to avoid bloating dashboard main surface.
 - [Phase 06-trends-and-operational-reliability]: Server preloads 30d trends with no-store and tolerates API failure by omitting trends section only.
+- [Phase 06-trends-and-operational-reliability]: Returning to 30d restores preloaded initialData immediately to guarantee period/data parity.
+- [Phase 06-trends-and-operational-reliability]: Trend responses are applied only when response period matches the active selected period.
 
 ### Roadmap Evolution
 
@@ -163,6 +166,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-05T14:54:55.598Z
-**Stopped At:** Completed 06-02-PLAN.md
+**Last Date:** 2026-03-06T17:14:35.102Z
+**Stopped At:** Completed 06-04-PLAN.md
 **Resume File:** None
