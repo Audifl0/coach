@@ -5,9 +5,9 @@ milestone_name: milestone
 current_phase: 07
 current_phase_name: audit technique avancé et stabilisation complète de l'application
 current_plan: 6
-status: executing
-stopped_at: Completed 07-05-PLAN.md
-last_updated: "2026-03-06T18:12:03.796Z"
+status: awaiting_human_verify
+stopped_at: Checkpoint at 07-06-PLAN.md awaiting audit package validation
+last_updated: "2026-03-06T18:20:41Z"
 last_activity: 2026-03-06
 progress:
   total_phases: 4
@@ -33,9 +33,9 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Total Phases:** 4
 **Current Plan:** 6
 **Total Plans in Phase:** 6
-**Status:** Phase 07 in progress — 07-01, 07-02, 07-03, 07-04, and 07-05 complete; next pending plan is 07-06
+**Status:** Phase 07 in progress — 07-01 through 07-05 complete; 07-06 audit package is ready and waiting at the human-verification checkpoint
 **Last Activity:** 2026-03-06
-**Last Activity Description:** Phase 07 plan 07-05 complete
+**Last Activity Description:** Phase 07 plan 07-06 audit package prepared; awaiting user validation checkpoint
 **Progress:** [██████████] 98%
 
 ## Performance Metrics
@@ -129,6 +129,8 @@ Recent decisions affecting current work:
 - [Phase 05.1-llm-provider-r-el-openai-anthropic-env-model-key-structured-output-strict-tests-safe-03]: Real-provider mode fails fast unless full OpenAI primary and Anthropic fallback env contract is present.
 - [Phase 05.1-llm-provider-r-el-openai-anthropic-env-model-key-structured-output-strict-tests-safe-03]: Runtime policy caps primary retries at one and fallback attempts at one.
 - [Phase 05.1-llm-provider-r-el-openai-anthropic-env-model-key-structured-output-strict-tests-safe-03]: Treat schema/JSON parse failures as retryable invalid_payload on the primary provider boundary.
+- [Phase 07-audit-technique-avanc-et-stabilisation-compl-te-de-l-application]: Phase 07 must stop at a human-verification checkpoint after delivering the final audit package; no remediation is authorized before approval.
+- [Phase 07-audit-technique-avanc-et-stabilisation-compl-te-de-l-application]: Production readiness is judged by compile, test, build, secrets, and auth-abuse posture together, not by unit coverage alone.
 - [Phase 05.1-llm-provider-r-el-openai-anthropic-env-model-key-structured-output-strict-tests-safe-03]: Keep provider chain deterministic and bounded: OpenAI attempt, one retry, then one Anthropic fallback attempt.
 - [Phase 05.1-llm-provider-r-el-openai-anthropic-env-model-key-structured-output-strict-tests-safe-03]: Emit only allowlisted attempt metadata (provider/model/latency/parse/fallback/request-id) to preserve non-PII observability.
 - [Phase 05.1]: Real-provider mode never falls back to local deterministic proposal; null candidate is delegated to SAFE-03.
