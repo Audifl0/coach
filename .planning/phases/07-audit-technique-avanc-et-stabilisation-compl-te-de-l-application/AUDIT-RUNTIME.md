@@ -9,6 +9,7 @@ Current runtime posture is functional at small scale, but several repository-lev
 - The dashboard server component performs same-service authenticated HTTP fetches in addition to direct DAL reads, adding avoidable SSR latency and duplicated session/origin work on every page render.
 - Trend, history, and dashboard read paths aggregate full result sets in application memory with no pagination, limit, or pre-aggregation, so latency and memory grow linearly with retained workout data.
 - Adaptive generation is latency-sensitive because it chains multiple reads with optional provider calls and does not guard against duplicate generation attempts.
+- Several write paths rely on read-then-write checks without a transaction or uniqueness guard, which leaves concurrency windows around plan generation, session logging, and adaptive recommendation decisions.
 
 The repository already has some healthy runtime foundations:
 
@@ -139,3 +140,117 @@ Expand future drill validation to cover authenticated smoke behavior and at leas
 
 - Confirm a restored environment can authenticate and load real account-scoped dashboard data.
 - Verify at least one restored session-history or program record is queryable after drill completion.
+
+## Concurrency and Consistency Assessment
+
+The repository already contains some atomic building blocks, but the highest-risk mutation paths still rely on request ordering assumptions:
+
+- `src/server/dal/program.ts::replaceActivePlan()` is transactional, but there is no database constraint enforcing a single active plan per user.
+- `src/server/dal/program.ts::upsertLoggedSet()` and related session mutations check current state first, then write in a separate call, creating race windows.
+- `src/server/dal/adaptive-coaching.ts::updateAdaptiveRecommendationStatus()` is transactional for a single recommendation transition, but `rejectAdaptiveRecommendation()` performs the rejection transition and conservative fallback creation as separate operations.
+
+### RUN-05
+
+- Severity: important
+- Priority: P1
+- Domain: runtime
+- Surface: `src/server/dal/program.ts::replaceActivePlan`, `prisma/schema.prisma`
+- Production blocker: no
+
+**Evidence**
+
+- `replaceActivePlan()` archives current active plans with `updateMany(...)`, then creates a new active plan in the same transaction.
+- `ProgramPlan` has an index on `(userId, status)` but no uniqueness rule that prevents more than one `active` row for the same user.
+- The generation route exposes plan creation as a normal request with no idempotency key or concurrency lock.
+
+**Risk**
+
+Concurrent generate requests from duplicate submits, retries, or multiple tabs can race and leave two active plans for one account. Downstream reads such as `getTodayOrNextSessionCandidates()` then depend on whichever active plan Prisma returns first, making the user-visible workout surface nondeterministic.
+
+**Recommendation**
+
+Future remediation should enforce single-active-plan semantics at the persistence layer or serialize replacements per user.
+
+**Validation needed**
+
+- Fire overlapping program-generation requests for the same account and inspect resulting `ProgramPlan` rows.
+- Confirm active-plan reads remain deterministic after concurrent generation attempts.
+
+### RUN-06
+
+- Severity: important
+- Priority: P1
+- Domain: runtime
+- Surface: `src/server/dal/program.ts::upsertLoggedSet`, `src/server/dal/program.ts::markExerciseSkipped`, `src/server/dal/program.ts::updateSessionNote`, `src/server/dal/program.ts::completeSession`
+- Production blocker: no
+
+**Evidence**
+
+- `upsertLoggedSet()` loads the exercise and parent session, rejects if `completedAt` is already set, then performs `loggedSet.upsert(...)` in a separate call.
+- `markExerciseSkipped()`, `revertExerciseSkipped()`, and `updateSessionNote()` follow the same read-then-write pattern.
+- `completeSession()` likewise reads the session first and updates it afterward without a compare-and-set condition on the write itself.
+
+**Risk**
+
+These are time-of-check/time-of-use race windows. One tab can complete a session while another tab, holding a stale pre-check result, still writes sets, notes, or skip-state mutations afterward. The intended invariant of “no edits after completion” is therefore not fully atomic under concurrent requests.
+
+**Recommendation**
+
+Later remediation should move completion-sensitive guards into transactional or conditional writes so stale requests fail at write time, not only at pre-check time.
+
+**Validation needed**
+
+- Simulate concurrent `completeSession` and `upsertLoggedSet` requests against the same session.
+- Verify post-completion writes are rejected even when the stale request passed its initial read.
+
+### RUN-07
+
+- Severity: important
+- Priority: P1
+- Domain: runtime
+- Surface: `src/server/services/adaptive-coaching.ts::confirmAdaptiveRecommendation`, `src/server/services/adaptive-coaching.ts::rejectAdaptiveRecommendation`, `src/server/dal/adaptive-coaching.ts::updateAdaptiveRecommendationStatus`
+- Production blocker: no
+
+**Evidence**
+
+- Confirm and reject operations depend on `expectedCurrentStatus: 'pending_confirmation'` and the current next-session target.
+- `updateAdaptiveRecommendationStatus()` throws a generic error on status mismatch instead of returning a typed stale-state outcome.
+- Route handlers catch `AdaptiveCoachingError` cleanly, but a raw mismatch error falls through to generic `500 Unable to confirm recommendation` or `500 Unable to reject recommendation`.
+- `rejectAdaptiveRecommendation()` first marks the original recommendation as rejected, then creates a new conservative hold recommendation and decision trace in separate operations.
+
+**Risk**
+
+Concurrent confirmation or rejection requests can surface as server errors instead of deterministic stale-state responses. The rejection flow also is not atomic end to end: if fallback creation fails after the rejection update succeeds, the system can land in an inconsistent state where the high-impact recommendation is rejected but no conservative fallback was applied.
+
+**Recommendation**
+
+Remediation should turn stale confirmation/rejection attempts into explicit conflict responses and make rejection-plus-fallback creation atomic as one consistency unit.
+
+**Validation needed**
+
+- Race confirm and reject requests for the same recommendation and inspect route responses.
+- Inject a failure between rejection status update and fallback creation to confirm whether partial state persists.
+
+## Production Risk Register
+
+| ID | Severity | Blocker | Summary |
+| --- | --- | --- | --- |
+| `RUN-01` | important | no | Dashboard SSR pays extra internal HTTP hops and repeated session/origin work on each render. |
+| `RUN-02` | important | no | Trends and history aggregation cost grows linearly because reads are unbounded and reduced in memory. |
+| `RUN-03` | important | no | Adaptive generation is a serial, provider-sensitive request path with no duplicate-submit suppression. |
+| `RUN-04` | moderate | no | Restore drill proves startup and route reachability but not authenticated data integrity after restore. |
+| `RUN-05` | important | no | Program generation has no single-active-plan constraint, so concurrent replacements can create inconsistent active state. |
+| `RUN-06` | important | no | Session logging and completion rely on non-atomic read-then-write guards, leaving post-completion race windows. |
+| `RUN-07` | important | no | Adaptive confirm/reject retries can degrade to 500s, and rejection fallback creation is not fully atomic. |
+
+## Release-Sensitive Runtime Items
+
+- `RUN-05`: concurrent plan generation can make the active training plan nondeterministic for one user.
+- `RUN-06`: completion-sensitive workout writes are not fully atomic under stale multi-tab or retry conditions.
+- `RUN-07`: adaptive recommendation decision flows can partially apply or surface incorrect server errors under concurrent user actions.
+
+## Optimization Candidates
+
+- `RUN-01`: remove same-service SSR fetches from dashboard composition.
+- `RUN-02`: bound history/trend windows and move expensive aggregation closer to the database or cached summaries.
+- `RUN-04`: deepen restore drill verification beyond anonymous HTTP smoke checks.
