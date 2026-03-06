@@ -141,6 +141,60 @@ Switch the password prompt to a non-echoing terminal input method and document t
 - The password entry is not echoed to the terminal.
 - Reset still produces the same generic operator-facing outcome.
 
+### SEC-OPS-01
+
+- Severity: critical
+- Priority: P0
+- Domain: ops
+- Surface: `docs/operations/vps-deploy.md`, `.gitignore`, `.dockerignore`, `Dockerfile`
+- Production blocker: yes
+
+**Evidence**
+
+- The deployment runbook instructs operators to create `.env.production` at the repository root.
+- `.gitignore` ignores `.env` but not `.env.production`.
+- `.dockerignore` ignores `.env` but not `.env.production`.
+- `Dockerfile` build stage uses `COPY . .`, so any root-level production env file is sent into Docker build context and copied into the build stage.
+
+**Risk**
+
+Production secrets can be accidentally committed, included in Docker build context, captured in build cache/layers, or exposed to anyone with access to the local build environment. This is a direct secret-handling flaw in the documented production workflow.
+
+**Recommendation**
+
+Treat this as a release blocker. Exclude `.env.production*` from git and Docker context, keep runtime secrets outside the repository tree when possible, and ensure deploy/build flows never `COPY` secret env files into image build stages.
+
+**Validation needed**
+
+- `git check-ignore .env.production` confirms the file is ignored.
+- Docker build context excludes `.env.production`.
+- Production deploy still works using runtime-only env injection.
+
+### SEC-OPS-02
+
+- Severity: minor
+- Priority: P2
+- Domain: ops
+- Surface: `infra/scripts/backup.sh`
+- Production blocker: no
+
+**Evidence**
+
+- The backup script creates a plaintext SQL dump inside the backup directory via `mktemp`, then encrypts it with OpenSSL, then deletes the plaintext file.
+
+**Risk**
+
+The plaintext dump exists on disk for a short window. On a misconfigured host, synced backup directory, or compromised filesystem, this weakens the otherwise sound encrypted-backup story.
+
+**Recommendation**
+
+Pipe `pg_dump` directly into encryption or place the temporary plaintext file in a tightly permissioned transient directory with restrictive `umask`.
+
+**Validation needed**
+
+- Backup execution leaves no plaintext SQL artifact in the backup directory.
+- Backup still produces a valid encrypted dump.
+
 ## Application Boundary Assessment
 
 ### Authentication and session handling
@@ -167,8 +221,43 @@ Switch the password prompt to a non-echoing terminal input method and document t
 - Current posture is acceptable for the present implementation because authenticated mutations are JSON POST routes and session cookies are `SameSite=Lax`.
 - No dedicated CSRF token or Origin/Referer enforcement exists, so this guarantee depends on keeping mutations off GET and avoiding future form-compatible mutators.
 
+## Provider and Operational Boundary Assessment
+
+### LLM and provider boundary
+
+- Good: real-provider mode is explicitly gated by env parsing in `src/server/llm/config.ts`.
+- Good: OpenAI and Anthropic outputs are reparsed against strict schemas before acceptance.
+- Good: attempt metadata is allowlisted in `src/server/llm/observability.ts`; prompts, profile payloads, and raw provider responses are not surfaced there.
+- Good: adaptive prompt construction does not send obvious personal identifiers such as username or raw session data.
+
+### Corpus and external-source perimeter
+
+- Good: `scripts/adaptive-knowledge/config.ts` constrains allowed domains to a fixed approved set.
+- Good: connector normalization rejects records outside the allowlist or freshness window.
+- Good: publish flow keeps candidate artifacts separate and uses active/rollback pointers instead of mutating the live corpus in place.
+
+### Deployment, secrets, and recovery controls
+
+- Good: `docker-compose.yml` exposes only Caddy publicly; the app and database stay on the internal backend network.
+- Good: `infra/scripts/restore.sh` forces `RESTORE_TARGET_DB` and explicitly blocks restores targeting the production database name.
+- Good: restore uses `psql -X`, `ON_ERROR_STOP`, and a single transaction.
+- Gap: documented `.env.production` handling is unsafe because repo/build-context exclusions are incomplete.
+- Gap: backup encryption is solid, but the current script still materializes a temporary plaintext SQL dump before encryption.
+
+## Production Risk Register
+
+| ID | Severity | Blocker | Summary |
+| --- | --- | --- | --- |
+| `SEC-OPS-01` | critical | yes | Production env file can enter git history and Docker build context under the documented deploy flow. |
+| `SEC-APP-01` | important | yes | Public auth endpoints have no brute-force or credential-stuffing control. |
+| `SEC-APP-02` | important | no | Dashboard SSR trusts request-derived host/origin when forwarding authenticated cookies internally. |
+| `SEC-APP-03` | minor | no | No CSP or baseline browser hardening headers found. |
+| `SEC-APP-04` | minor | no | Admin reset CLI echoes the new password in the terminal. |
+| `SEC-OPS-02` | minor | no | Backup flow briefly writes a plaintext SQL dump before encryption. |
+
 ## Release Blockers
 
+- `SEC-OPS-01`: production env file handling is unsafe in both git and Docker build context.
 - `SEC-APP-01`: public auth surface has no brute-force or credential-stuffing control.
 
 ## Advisory Hardening Items
@@ -176,3 +265,4 @@ Switch the password prompt to a non-echoing terminal input method and document t
 - `SEC-APP-02`: remove request-header-derived origin trust from dashboard SSR fetches.
 - `SEC-APP-03`: add CSP and baseline browser security headers.
 - `SEC-APP-04`: hide password input for the admin reset CLI.
+- `SEC-OPS-02`: eliminate temporary plaintext backup artifacts.
