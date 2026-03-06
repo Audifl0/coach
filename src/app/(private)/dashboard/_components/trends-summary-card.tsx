@@ -31,6 +31,17 @@ type MetricCardView = {
   points: Array<{ date: string; value: number }>;
 };
 
+type SummarySelectionParams = {
+  currentState: TrendsSummaryState;
+  nextPeriod: TrendPeriod;
+  initialData: ProgramTrendsSummaryResponse;
+};
+
+type SummaryResponseMatchParams = {
+  selectedPeriod: TrendPeriod;
+  responseData: ProgramTrendsSummaryResponse;
+};
+
 function formatNumber(value: number, maximumFractionDigits = 1): string {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits }).format(value);
 }
@@ -83,6 +94,35 @@ export function createDefaultTrendsSummaryState(initialData: ProgramTrendsSummar
   };
 }
 
+export function deriveSummaryStateForPeriodSelection({
+  currentState,
+  nextPeriod,
+  initialData,
+}: SummarySelectionParams): TrendsSummaryState {
+  if (nextPeriod === initialData.period) {
+    return {
+      ...currentState,
+      period: nextPeriod,
+      data: initialData,
+      isLoading: false,
+      errorMessage: null,
+    };
+  }
+
+  return {
+    ...currentState,
+    period: nextPeriod,
+    errorMessage: null,
+  };
+}
+
+export function shouldApplyFetchedSummaryResponse({
+  selectedPeriod,
+  responseData,
+}: SummaryResponseMatchParams): boolean {
+  return responseData.period === selectedPeriod;
+}
+
 export function TrendsSummaryCard({ initialData, drilldownExerciseKey = null }: TrendsSummaryCardProps) {
   const [state, setState] = useState<TrendsSummaryState>(() => createDefaultTrendsSummaryState(initialData));
   const [isDrilldownOpen, setIsDrilldownOpen] = useState(false);
@@ -94,6 +134,15 @@ export function TrendsSummaryCard({ initialData, drilldownExerciseKey = null }: 
 
     async function loadPeriodData() {
       if (state.period === initialData.period) {
+        if (state.data.period !== state.period) {
+          setState((current) => ({
+            ...current,
+            data: initialData,
+            isLoading: false,
+            errorMessage: null,
+          }));
+        }
+
         return;
       }
 
@@ -118,11 +167,15 @@ export function TrendsSummaryCard({ initialData, drilldownExerciseKey = null }: 
           return;
         }
 
+        if (!shouldApplyFetchedSummaryResponse({ selectedPeriod: state.period, responseData: parsed })) {
+          return;
+        }
+
         setState((current) => ({
           ...current,
-          data: parsed,
-          isLoading: false,
-          errorMessage: null,
+          data: current.period === state.period ? parsed : current.data,
+          isLoading: current.period === state.period ? false : current.isLoading,
+          errorMessage: current.period === state.period ? null : current.errorMessage,
         }));
       } catch {
         if (cancelled) {
@@ -131,8 +184,8 @@ export function TrendsSummaryCard({ initialData, drilldownExerciseKey = null }: 
 
         setState((current) => ({
           ...current,
-          isLoading: false,
-          errorMessage: 'Unable to load trends',
+          isLoading: current.period === state.period ? false : current.isLoading,
+          errorMessage: current.period === state.period ? 'Unable to load trends' : current.errorMessage,
         }));
       }
     }
@@ -151,7 +204,15 @@ export function TrendsSummaryCard({ initialData, drilldownExerciseKey = null }: 
           <button
             key={toggle.period}
             type="button"
-            onClick={() => setState((current) => ({ ...current, period: toggle.period }))}
+            onClick={() =>
+              setState((current) =>
+                deriveSummaryStateForPeriodSelection({
+                  currentState: current,
+                  nextPeriod: toggle.period,
+                  initialData,
+                }),
+              )
+            }
             aria-pressed={state.period === toggle.period}
           >
             {toggle.label}
