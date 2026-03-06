@@ -7,7 +7,9 @@ import type { ProgramTrendsSummaryResponse } from '../../src/lib/program/contrac
 import {
   TrendsSummaryCard,
   createDefaultTrendsSummaryState,
+  deriveSummaryStateForPeriodSelection,
   createSummaryToggleOptions,
+  shouldApplyFetchedSummaryResponse,
 } from '../../src/app/(private)/dashboard/_components/trends-summary-card';
 import {
   TrendsDrilldown,
@@ -51,6 +53,24 @@ function createSummaryFixture(): ProgramTrendsSummaryResponse {
           { date: '2026-03-04', value: 0.75 },
           { date: '2026-03-05', value: 0.8 },
         ],
+      },
+    },
+  };
+}
+
+function createSummaryFixtureForPeriod(
+  period: ProgramTrendsSummaryResponse['period'],
+  volumeKpi: number,
+): ProgramTrendsSummaryResponse {
+  const summary = createSummaryFixture();
+  return {
+    ...summary,
+    period,
+    metrics: {
+      ...summary.metrics,
+      volume: {
+        ...summary.metrics.volume,
+        kpi: volumeKpi,
       },
     },
   };
@@ -100,6 +120,64 @@ test('summary helpers remain visual-only and never output delta arrows or interp
   assert.equal(html.includes('▼'), false);
   assert.equal(html.includes('badge'), false);
   assert.equal(html.includes('delta'), false);
+});
+
+test('summary state restores the 30d dataset when toggling 30d -> 7d -> 30d', () => {
+  const initial = createSummaryFixtureForPeriod('30d', 12450);
+  const stateWith7dData = {
+    ...createDefaultTrendsSummaryState(initial),
+    period: '7d' as const,
+    data: createSummaryFixtureForPeriod('7d', 3450),
+  };
+
+  const nextState = deriveSummaryStateForPeriodSelection({
+    currentState: stateWith7dData,
+    nextPeriod: '30d',
+    initialData: initial,
+  });
+
+  assert.equal(nextState.period, '30d');
+  assert.equal(nextState.data.period, '30d');
+  assert.equal(nextState.data.metrics.volume.kpi, 12450);
+});
+
+test('summary state restores the 30d dataset when toggling 30d -> 90d -> 30d', () => {
+  const initial = createSummaryFixtureForPeriod('30d', 12450);
+  const stateWith90dData = {
+    ...createDefaultTrendsSummaryState(initial),
+    period: '90d' as const,
+    data: createSummaryFixtureForPeriod('90d', 22800),
+  };
+
+  const nextState = deriveSummaryStateForPeriodSelection({
+    currentState: stateWith90dData,
+    nextPeriod: '30d',
+    initialData: initial,
+  });
+
+  assert.equal(nextState.period, '30d');
+  assert.equal(nextState.data.period, '30d');
+  assert.equal(nextState.data.metrics.volume.kpi, 12450);
+});
+
+test('in-flight summary responses are ignored when response period mismatches selected period', () => {
+  const staleResponse = createSummaryFixtureForPeriod('7d', 3450);
+  const matchingResponse = createSummaryFixtureForPeriod('30d', 12450);
+
+  assert.equal(
+    shouldApplyFetchedSummaryResponse({
+      selectedPeriod: '30d',
+      responseData: staleResponse,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldApplyFetchedSummaryResponse({
+      selectedPeriod: '30d',
+      responseData: matchingResponse,
+    }),
+    true,
+  );
 });
 
 test('drilldown renders separate reps and load series for selected exercise', () => {
