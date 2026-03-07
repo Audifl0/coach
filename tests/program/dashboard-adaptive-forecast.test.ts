@@ -7,9 +7,10 @@ import { buildAdaptiveForecastViewModel } from '../../src/lib/adaptive-coaching/
 import { AdaptiveForecastCard } from '../../src/app/(private)/dashboard/components/adaptive-forecast-card';
 import { resolveAdaptiveForecastCard } from '../../src/app/(private)/dashboard/page';
 
-function createRecommendation(overrides: Record<string, unknown> = {}) {
+type DashboardRecommendation = NonNullable<Parameters<typeof resolveAdaptiveForecastCard>[0]>;
+
+function createRecommendation(overrides: Partial<DashboardRecommendation> = {}): DashboardRecommendation {
   return {
-    id: 'rec_1',
     actionType: 'progress',
     status: 'applied',
     warningFlag: false,
@@ -24,6 +25,8 @@ function createRecommendation(overrides: Record<string, unknown> = {}) {
       progressionDeltaLoadPct: 2.5,
       progressionDeltaReps: 1,
     },
+    progressionDeltaLoadPct: 2.5,
+    progressionDeltaReps: 1,
     ...overrides,
   };
 }

@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { createProgramSessionDetailGetHandler } from '../../src/app/api/program/sessions/[sessionId]/route';
 import { createProgramTodayGetHandler } from '../../src/app/api/program/today/route';
+import type { ProgramSessionSummary } from '../../src/lib/program/contracts';
 import { selectTodayWorkoutProjection } from '../../src/lib/program/select-today-session';
 import { pickDashboardSession } from '../../src/app/(private)/dashboard/page';
 import { getPrimaryActionLabel, resolveDisplayedSession } from '../../src/app/(private)/dashboard/_components/today-workout-card';
@@ -13,10 +14,14 @@ import {
   formatElapsedSeconds,
   reduceLoggerStateAfterCompletion,
   reduceLoggerStateAfterSetSaved,
-  upsertLoggedSet,
+	upsertLoggedSet,
 } from '../../src/app/(private)/dashboard/_components/session-logger';
 
-function createSessionSummary(overrides: Record<string, unknown> = {}) {
+type SessionSummaryOverrides = Partial<Omit<ProgramSessionSummary, 'exercises'>> & {
+  exercises?: ProgramSessionSummary['exercises'];
+};
+
+function createSessionSummary(overrides: SessionSummaryOverrides = {}): ProgramSessionSummary {
   return {
     id: 'session_1',
     scheduledDate: '2026-03-04',
@@ -76,6 +81,22 @@ test('GET /api/program/today falls back to nextSession when no workout exists to
   assert.equal(body.todaySession, null);
   assert.equal(body.nextSession?.id, 'session_2');
   assert.equal(body.primaryAction, 'start_workout');
+});
+
+test('GET /api/program/today accepts started session state from the shared session contract', async () => {
+  const get = createProgramTodayGetHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    getTodayOrNextSessionCandidates: async () => ({
+      todaySession: createSessionSummary({ state: 'started' }),
+      nextSession: null,
+    }),
+  });
+
+  const response = await get();
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.todaySession?.state, 'started');
 });
 
 test('program today and session-detail routes return 401 without valid session', async () => {
@@ -206,6 +227,13 @@ test('today workout card helper resolves displayed session deterministically', (
   });
   assert.equal(next.mode, 'next');
   assert.equal(next.session?.id, 'session_2');
+
+  const none = resolveDisplayedSession({
+    todaySession: null,
+    nextSession: null,
+  });
+  assert.equal(none.mode, 'none');
+  assert.equal(none.session, null);
 });
 
 test('session logger set autosave helpers preserve immediate payload and edit continuity', () => {
