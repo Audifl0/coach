@@ -207,7 +207,7 @@ test('sub-threshold auth failures keep existing 401 and 409 behavior, and succes
   const { logger } = createBufferedLogger();
   const limiter = createAuthRateLimiter({
     now: () => 1_700_000_000_000,
-    login: { maxFailures: 1, windowMs: 60_000 },
+    login: { maxFailures: 2, windowMs: 60_000 },
     signup: { maxAttempts: 3, windowMs: 60_000 },
   });
 

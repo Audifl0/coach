@@ -155,3 +155,5 @@ export function createAuthRateLimiter(config: AuthRateLimiterConfig = {}) {
 }
 
 export type AuthRateLimiter = ReturnType<typeof createAuthRateLimiter>;
+
+export const defaultAuthRateLimiter = createAuthRateLimiter();
