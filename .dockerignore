@@ -1,0 +1,11 @@
+.git
+.next
+.planning
+.claude
+.agents
+node_modules
+coverage
+dist
+backups
+*.log
+.env*

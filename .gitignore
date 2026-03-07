@@ -1,6 +1,8 @@
 node_modules
 .next
 .env
+.env.production
+.env.production.*
 dist
 coverage
 *.log
