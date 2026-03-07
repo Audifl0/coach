@@ -140,6 +140,10 @@ export function selectTodayWorkoutProjection(input: ProgramTodaySessionCandidate
   });
 }
 
+export function isProgramTodayResponseEmpty(input: ProgramTodayResponse): boolean {
+  return input.todaySession === null && input.nextSession === null;
+}
+
 export function buildSessionDetailProjection(session: SessionDetailRecordLike): ProgramSessionDetailResponse {
   return parseProgramSessionDetailResponse({
     session: {
