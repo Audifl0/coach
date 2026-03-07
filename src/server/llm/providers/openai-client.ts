@@ -12,8 +12,8 @@ type OpenAiResponsesApi = {
     },
   ) => Promise<{
     output_text?: string;
-    _request_id?: string;
-    error?: { type?: string } | null;
+    _request_id?: string | null;
+    error?: unknown;
     status?: string | null;
     output?: Array<{
       content?: Array<{
@@ -39,12 +39,20 @@ export type OpenAiProviderDeps = {
   now?: () => number;
 };
 
-function extractPayloadText(response: Awaited<ReturnType<OpenAiResponsesApi['create']>>): string {
-  if (typeof response.output_text === 'string' && response.output_text.trim().length > 0) {
-    return response.output_text;
+function extractPayloadText(response: unknown): string {
+  const record =
+    response && typeof response === 'object'
+      ? response as {
+        output_text?: unknown;
+        output?: Array<{ content?: Array<{ type?: unknown; text?: unknown }> }>;
+      }
+      : {};
+
+  if (typeof record.output_text === 'string' && record.output_text.trim().length > 0) {
+    return record.output_text;
   }
 
-  for (const block of response.output ?? []) {
+  for (const block of record.output ?? []) {
     for (const content of block.content ?? []) {
       if (content.type === 'output_text' && typeof content.text === 'string' && content.text.trim().length > 0) {
         return content.text;

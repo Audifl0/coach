@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import { llmProviderValues, type LlmProvider } from '@/server/llm/contracts';
 
+type LlmEnvInput = Readonly<Record<string, string | undefined>>;
+
 const boolSchema = z
   .string()
   .optional()
@@ -32,11 +34,11 @@ export type LlmRuntimeConfig = {
   globalMaxLatencyMs: number;
 };
 
-export function isRealProviderEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+export function isRealProviderEnabled(env: LlmEnvInput = process.env): boolean {
   return boolSchema.parse(env.LLM_REAL_PROVIDER_ENABLED);
 }
 
-export function parseLlmRuntimeConfig(env: NodeJS.ProcessEnv = process.env): LlmRuntimeConfig | null {
+export function parseLlmRuntimeConfig(env: LlmEnvInput = process.env): LlmRuntimeConfig | null {
   const enabled = isRealProviderEnabled(env);
   if (!enabled) {
     return null;

@@ -68,6 +68,26 @@ function extractToolPayload(message: Awaited<ReturnType<AnthropicMessagesApi['cr
   return null;
 }
 
+function buildAnthropicInputSchema() {
+  return {
+    ...ADAPTIVE_PROPOSAL_JSON_SCHEMA,
+    required: [...ADAPTIVE_PROPOSAL_JSON_SCHEMA.required],
+    properties: {
+      ...ADAPTIVE_PROPOSAL_JSON_SCHEMA.properties,
+      forecastProjection: {
+        ...ADAPTIVE_PROPOSAL_JSON_SCHEMA.properties.forecastProjection,
+        required: [...ADAPTIVE_PROPOSAL_JSON_SCHEMA.properties.forecastProjection.required],
+      },
+      substitutionTarget: ADAPTIVE_PROPOSAL_JSON_SCHEMA.properties.substitutionTarget
+        ? {
+          ...ADAPTIVE_PROPOSAL_JSON_SCHEMA.properties.substitutionTarget,
+          required: [...ADAPTIVE_PROPOSAL_JSON_SCHEMA.properties.substitutionTarget.required],
+        }
+        : undefined,
+    },
+  };
+}
+
 export function createAnthropicProposalClient(
   config: AnthropicProviderConfig,
   deps: AnthropicProviderDeps = {},
@@ -85,6 +105,7 @@ export function createAnthropicProposalClient(
     async generate(input) {
       const startedAt = now();
       try {
+        const inputSchema = buildAnthropicInputSchema();
         const message = await sdk.messages.create({
           model: config.model,
           max_tokens: 700,
@@ -94,7 +115,7 @@ export function createAnthropicProposalClient(
             {
               name: 'emit_adaptive_recommendation',
               description: 'Return the adaptive recommendation proposal in strict JSON schema format.',
-              input_schema: ADAPTIVE_PROPOSAL_JSON_SCHEMA,
+              input_schema: inputSchema,
             },
           ],
           tool_choice: {

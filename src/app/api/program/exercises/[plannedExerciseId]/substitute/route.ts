@@ -13,7 +13,11 @@ type PlannedExerciseOwnership = {
 
 type ProfileForSubstitution = {
   equipmentCategories: Array<'bodyweight' | 'dumbbells' | 'barbell' | 'bench' | 'machines' | 'bands'>;
-  limitations: Array<{ zone: string; severity: 'none' | 'mild' | 'moderate' | 'severe' }>;
+  limitations: Array<{
+    zone: string;
+    severity: 'none' | 'mild' | 'moderate' | 'severe';
+    temporality: 'temporary' | 'chronic';
+  }>;
 };
 
 type SubstituteRouteDeps = {

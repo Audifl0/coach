@@ -5,6 +5,28 @@ import { createAdaptiveCoachingService } from '../../src/server/services/adaptiv
 import { createLlmProposalClient } from '../../src/server/llm/client';
 import type { LlmAttemptResult, LlmProposalProviderClient } from '../../src/server/llm/contracts';
 import { createProgramAdaptationPostHandler } from '../../src/app/api/program/adaptation/route';
+import type { AdaptiveCoachingServiceDeps } from '../../src/server/services/adaptive-coaching';
+
+function toPersistedRecommendationRecord(
+  userId: string,
+  payload: Parameters<AdaptiveCoachingServiceDeps['createAdaptiveRecommendation']>[1],
+) {
+  return {
+    ...payload,
+    userId,
+    warningText: payload.warningText ?? null,
+    fallbackReason: payload.fallbackReason ?? null,
+    progressionDeltaLoadPct: payload.progressionDeltaLoadPct ?? null,
+    progressionDeltaReps: payload.progressionDeltaReps ?? null,
+    progressionDeltaSets: payload.progressionDeltaSets ?? null,
+    substitutionExerciseKey: payload.substitutionExerciseKey ?? null,
+    substitutionDisplayName: payload.substitutionDisplayName ?? null,
+    substitutionReason: payload.substitutionReason ?? null,
+    expiresAt: payload.expiresAt ?? null,
+    appliedAt: null,
+    rejectedAt: null,
+  };
+}
 
 function buildService(input: {
   primary: LlmProposalProviderClient;
@@ -35,13 +57,11 @@ function buildService(input: {
     }),
     getHistoryList: async () => [{ id: 'h1' }, { id: 'h2' }, { id: 'h3' }],
     listLatestAdaptiveRecommendation: async () => null,
-    createAdaptiveRecommendation: async (payload) => ({
-      ...payload,
+    createAdaptiveRecommendation: async (_userId, payload) => ({
+      ...toPersistedRecommendationRecord(_userId, payload),
       id: 'rec_chain',
       createdAt: new Date('2026-03-05T08:30:00.000Z'),
       updatedAt: new Date('2026-03-05T08:30:00.000Z'),
-      appliedAt: null,
-      rejectedAt: null,
     }),
     appendDecisionTrace: async () => ({ id: 'decision_chain' }),
     proposeRecommendation: async () => ({

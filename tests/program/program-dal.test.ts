@@ -6,22 +6,11 @@ import { createProgramDal, type PlannedExerciseRecord, type PlannedSessionRecord
 async function loadSessionLoggingServiceFactory(): Promise<
   (deps: { programDal: Record<string, unknown>; now?: () => Date }) => Record<string, unknown>
 > {
-  try {
-    const loaded = await import('../../src/server/services/session-logging');
-
-    if (typeof loaded.createSessionLoggingService === 'function') {
-      return loaded.createSessionLoggingService as (deps: {
-        programDal: Record<string, unknown>;
-        now?: () => Date;
-      }) => Record<string, unknown>;
-    }
-  } catch {
-    // Red phase fallback when module does not exist yet.
-  }
-
-  return () => {
-    throw new Error('createSessionLoggingService is not implemented');
-  };
+  const loaded = await import('../../src/server/services/session-logging');
+  return loaded.createSessionLoggingService as unknown as (deps: {
+    programDal: Record<string, unknown>;
+    now?: () => Date;
+  }) => Record<string, unknown>;
 }
 
 function createExercise(overrides: Partial<PlannedExerciseRecord> = {}): PlannedExerciseRecord {
@@ -721,7 +710,7 @@ test('history list/detail are account-scoped and include aggregated load with gr
 
 test('service starts timer on first logged set and preserves original startedAt for later edits', async () => {
   const createSessionLoggingService = await loadSessionLoggingServiceFactory();
-  let startedAt: Date | null = null;
+  let startedAtIso: string | null = null;
   let markStartedCalls = 0;
   const nowValues = [new Date('2026-03-04T08:00:00.000Z'), new Date('2026-03-04T08:06:00.000Z')];
 
@@ -737,14 +726,14 @@ test('service starts timer on first logged set and preserves original startedAt 
       async getSessionLifecycle() {
         return {
           plannedSessionId: 'session_1',
-          startedAt,
+          startedAt: startedAtIso ? new Date(startedAtIso) : null,
           completedAt: null,
         };
       },
       async markSessionStarted(_: string, at: Date) {
         markStartedCalls += 1;
-        startedAt = startedAt ?? at;
-        return { startedAt };
+        startedAtIso = startedAtIso ?? at.toISOString();
+        return { startedAt: startedAtIso };
       },
       async upsertLoggedSet() {
         return { id: 'set_1' };
@@ -769,7 +758,7 @@ test('service starts timer on first logged set and preserves original startedAt 
     rpe: 8,
   });
 
-  assert.equal(startedAt?.toISOString(), '2026-03-04T08:00:00.000Z');
+  assert.equal(startedAtIso, '2026-03-04T08:00:00.000Z');
   assert.equal(markStartedCalls, 1);
 });
 

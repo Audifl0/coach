@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { getSubstitutionCandidates } from '../../src/lib/program/substitution';
+import type { MovementPattern } from '../../src/lib/program/types';
 import {
   createSubstitutionCandidatesGetHandler,
 } from '../../src/app/api/program/exercises/[plannedExerciseId]/substitutions/route';
@@ -57,7 +58,10 @@ test('substitution candidate route rejects unauthorized requests', async () => {
     getPlannedExerciseOwnership: async () => null,
   });
 
-  const response = await get(new Request('http://localhost/api/program/exercises/ex_1/substitutions'));
+  const response = await get(
+    new Request('http://localhost/api/program/exercises/ex_1/substitutions'),
+    { params: { plannedExerciseId: 'ex_1' } },
+  );
   assert.equal(response.status, 401);
 });
 
@@ -157,7 +161,16 @@ test('substitute route rejects non-today plannedExerciseId with 400', async () =
 });
 
 test('substitute route updates only targeted planned exercise row for today', async () => {
-  const rows = new Map([
+  type PlannedExerciseRow = {
+    id: string;
+    exerciseKey: string;
+    displayName: string;
+    movementPattern: MovementPattern;
+    isSubstituted: boolean;
+    originalExerciseKey: string | null;
+  };
+
+  const rows = new Map<string, PlannedExerciseRow>([
     [
       'target_row',
       {
@@ -212,7 +225,7 @@ test('substitute route updates only targeted planned exercise row for today', as
         movementPattern: replacementMovementPattern,
         isSubstituted: true,
         originalExerciseKey: current.originalExerciseKey ?? current.exerciseKey,
-      };
+      } satisfies PlannedExerciseRow;
       rows.set(plannedExerciseId, updated);
 
       return {

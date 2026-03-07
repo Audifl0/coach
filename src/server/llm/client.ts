@@ -1,5 +1,10 @@
 import { parseAdaptiveRecommendationProposal, type AdaptiveRecommendationProposal } from '@/lib/adaptive-coaching/contracts';
-import type { LlmAttemptResult, LlmProposalProviderClient, LlmRequestInput } from '@/server/llm/contracts';
+import type {
+  LlmAttemptFailure,
+  LlmAttemptResult,
+  LlmProposalProviderClient,
+  LlmRequestInput,
+} from '@/server/llm/contracts';
 import { createProviderAttemptAuditEnvelope } from '@/server/llm/observability';
 
 type ProviderAttemptSummary = {
@@ -31,6 +36,14 @@ export type LlmClientDeps = {
   onAttemptAudit?: (event: Record<string, unknown>) => void;
 };
 
+function getFallbackReason(result: LlmAttemptResult | null): string | null {
+  if (!result || result.ok) {
+    return null;
+  }
+
+  return result.fallbackReason;
+}
+
 function toSummary(result: LlmAttemptResult): ProviderAttemptSummary {
   return {
     provider: result.metadata.provider,
@@ -38,7 +51,7 @@ function toSummary(result: LlmAttemptResult): ProviderAttemptSummary {
     latencyMs: result.metadata.latencyMs,
     requestId: result.metadata.requestId,
     parseStatus: result.parseStatus,
-    fallbackReason: result.ok ? null : result.fallbackReason,
+    fallbackReason: getFallbackReason(result),
   };
 }
 
@@ -54,7 +67,7 @@ function validateCandidate(proposal: AdaptiveRecommendationProposal): AdaptiveRe
   }
 }
 
-function toInvalidPayloadFailure(result: LlmAttemptResult): LlmAttemptResult {
+function toInvalidPayloadFailure(result: LlmAttemptResult): LlmAttemptFailure {
   return {
     ok: false,
     reason: 'invalid_payload',
@@ -109,7 +122,7 @@ export function createLlmProposalClient(deps: LlmClientDeps): LlmProposalClient 
 
         recordAttempt(primaryResult, attempts);
         lastPrimaryFailure = primaryResult;
-        fallbackReason = primaryResult.fallbackReason;
+        fallbackReason = getFallbackReason(primaryResult);
         if (!primaryResult.retryable || attempt >= primaryRetries) {
           break;
         }
@@ -144,8 +157,8 @@ export function createLlmProposalClient(deps: LlmClientDeps): LlmProposalClient 
 
       recordAttempt(fallbackResult, attempts);
       const terminalFallbackReason =
-        fallbackResult.fallbackReason ??
-        (lastPrimaryFailure && !lastPrimaryFailure.ok ? lastPrimaryFailure.fallbackReason : null);
+        getFallbackReason(fallbackResult) ??
+        getFallbackReason(lastPrimaryFailure);
       return {
         candidate: null,
         meta: {

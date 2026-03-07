@@ -4,7 +4,7 @@ import type { PlannedExerciseRecord } from '@/server/dal/program';
 
 import { getExerciseCatalogEntry } from './catalog';
 
-type LimitationInput = Pick<ProfileInput['limitations'][number], 'zone' | 'severity'>;
+type LimitationInput = ProfileInput['limitations'][number];
 type EquipmentInput = ProfileInput['equipmentCategories'];
 
 export type SubstitutionCandidate = {

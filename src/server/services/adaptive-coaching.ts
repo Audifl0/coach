@@ -1,6 +1,7 @@
 import { validateProfileInput } from '@/lib/profile/contracts';
 import { generateAdaptiveRecommendation } from '@/lib/adaptive-coaching/orchestrator';
 import { parseAdaptiveRecommendation } from '@/lib/adaptive-coaching/contracts';
+import type { AdaptiveRecommendation as PolicyRecommendation } from '@/lib/adaptive-coaching/policy';
 import { createAdaptiveCoachingDal, type AdaptiveRecommendationRecord } from '@/server/dal/adaptive-coaching';
 import { createProfileDal } from '@/server/dal/profile';
 import { createProgramDal } from '@/server/dal/program';
@@ -101,7 +102,7 @@ function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
-function toPolicyRecommendationFromRecord(record: AdaptiveRecommendationRecord | null) {
+function toPolicyRecommendationFromRecord(record: AdaptiveRecommendationRecord | null): PolicyRecommendation | null {
   if (!record) {
     return null;
   }
@@ -113,7 +114,7 @@ function toPolicyRecommendationFromRecord(record: AdaptiveRecommendationRecord |
     substitutionExerciseKey: record.substitutionExerciseKey,
     movementTags: [],
     equipmentTags: [],
-  } as const;
+  };
 }
 
 function buildDefaultProposal(input: {

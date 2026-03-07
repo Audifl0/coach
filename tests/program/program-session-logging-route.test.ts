@@ -52,10 +52,16 @@ test('unauthenticated requests return 401 for all session logging mutation route
     skipExercise: async () => {
       throw new Error('not expected');
     },
+    revertSkippedExercise: async () => {
+      throw new Error('not expected');
+    },
   });
   const deleteSkip = createProgramSessionExerciseSkipDeleteHandler({
     resolveSession: async () => null,
     getExerciseOwnership: async () => null,
+    skipExercise: async () => {
+      throw new Error('not expected');
+    },
     revertSkippedExercise: async () => {
       throw new Error('not expected');
     },
@@ -162,6 +168,9 @@ test('malformed payloads return 400 for all session logging mutation routes', as
     skipExercise: async () => {
       throw new Error('not expected');
     },
+    revertSkippedExercise: async () => {
+      throw new Error('not expected');
+    },
   });
   const patchNote = createProgramSessionNotePatchHandler({
     resolveSession: async () => ({ userId: 'user_1' }),
@@ -263,6 +272,9 @@ test('account mismatch is masked as not-found behavior for logging mutation rout
     skipExercise: async () => {
       throw new Error('not expected');
     },
+    revertSkippedExercise: async () => {
+      throw new Error('not expected');
+    },
   });
 
   const skipResponse = await skipPost(
@@ -300,7 +312,7 @@ test('happy path mutation routes persist set autosave, skip/revert, note, comple
     getExerciseOwnership: async () => ({ plannedSessionId: 'session_1' }),
     logSet: async (payload) => {
       calls.push({ kind: 'set-post', payload });
-      return { plannedExerciseId: payload.plannedExerciseId, ...payload, rpe: payload.rpe ?? null };
+      return { ...payload, rpe: payload.rpe ?? null };
     },
   });
 
@@ -309,7 +321,7 @@ test('happy path mutation routes persist set autosave, skip/revert, note, comple
     getExerciseOwnership: async () => ({ plannedSessionId: 'session_1' }),
     logSet: async (payload) => {
       calls.push({ kind: 'set-patch', payload });
-      return { plannedExerciseId: payload.plannedExerciseId, ...payload, rpe: payload.rpe ?? null };
+      return { ...payload, rpe: payload.rpe ?? null };
     },
   });
 
@@ -319,11 +331,17 @@ test('happy path mutation routes persist set autosave, skip/revert, note, comple
     skipExercise: async (payload) => {
       calls.push({ kind: 'skip-post', payload });
     },
+    revertSkippedExercise: async () => {
+      throw new Error('not expected');
+    },
   });
 
   const deleteSkip = createProgramSessionExerciseSkipDeleteHandler({
     resolveSession: async () => ({ userId: 'user_1' }),
     getExerciseOwnership: async () => ({ plannedSessionId: 'session_1' }),
+    skipExercise: async () => {
+      throw new Error('not expected');
+    },
     revertSkippedExercise: async (payload) => {
       calls.push({ kind: 'skip-delete', payload });
     },

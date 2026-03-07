@@ -124,8 +124,9 @@ test('invalid active pointer fails closed to last valid snapshot and never reads
     topK: 1,
     knowledgeRootDir: rootDir,
   });
-  assert.equal(evidence[0]?.title, 'VALIDATED RECORD');
-  assert.equal(evidence[0]?.title === 'CANDIDATE RECORD', false);
+  const topTitle = evidence[0]?.title ?? null;
+  assert.equal(topTitle, 'VALIDATED RECORD');
+  assert.notEqual(topTitle, 'CANDIDATE RECORD');
 });
 
 test('cron install helper configures one weekly refresh job', async () => {

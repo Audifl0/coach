@@ -111,7 +111,7 @@ function loadSnapshotCorpus(pointer: SnapshotPointer): RuntimeEvidenceCorpus | n
 }
 
 function loadLegacyCorpus(knowledgeRootDir: string): RuntimeEvidenceCorpus | null {
-  const index = readJsonFile<{ entries?: unknown[] }>(path.join(knowledgeRootDir, 'index.json'));
+  const index = readJsonFile<{ entries?: unknown[]; version?: unknown }>(path.join(knowledgeRootDir, 'index.json'));
   const principles = readJsonFile<{ principles?: unknown[] }>(path.join(knowledgeRootDir, 'principles.json'));
   if (!index || !principles || !Array.isArray(index.entries) || !Array.isArray(principles.principles)) {
     return null;
