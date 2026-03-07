@@ -191,6 +191,88 @@ test('getTodayOrNextSessionCandidates returns today first and falls back to next
   assert.equal(noToday.nextSession?.id, 'session_2');
 });
 
+test('getTodayOrNextSessionCandidates uses UTC day boundaries for today lookup', async () => {
+  const scheduledRanges: Array<{ gte?: Date; lt?: Date; gt?: Date }> = [];
+
+  const db = {
+    async $transaction<T>(callback: (tx: never) => Promise<T>): Promise<T> {
+      return callback(this as never);
+    },
+    programPlan: {
+      async updateMany() {
+        return { count: 0 };
+      },
+      async create() {
+        return createPlan();
+      },
+    },
+    plannedSession: {
+      async findFirst(args: { where: { scheduledDate: { gte?: Date; lt?: Date; gt?: Date } } }) {
+        scheduledRanges.push(args.where.scheduledDate);
+        return null;
+      },
+    },
+    plannedExercise: {
+      async findUnique() {
+        return null;
+      },
+      async update() {
+        throw new Error('not used in this test');
+      },
+    },
+  };
+
+  const dal = createProgramDal(db as never, { userId: 'user_1' });
+
+  await dal.getTodayOrNextSessionCandidates(new Date('2026-03-04T23:30:00.000-05:00'));
+
+  assert.equal(scheduledRanges.length, 2);
+  assert.equal(scheduledRanges[0]?.gte?.toISOString(), '2026-03-05T00:00:00.000Z');
+  assert.equal(scheduledRanges[0]?.lt?.toISOString(), '2026-03-06T00:00:00.000Z');
+});
+
+test('getTodayOrNextSessionCandidates includes the first instant of the next UTC day in fallback lookup', async () => {
+  const nextSession = createSession({ id: 'session_2', scheduledDate: new Date('2026-03-06T00:00:00.000Z') });
+  const scheduledRanges: Array<{ gte?: Date; lt?: Date; gt?: Date }> = [];
+
+  const db = {
+    async $transaction<T>(callback: (tx: never) => Promise<T>): Promise<T> {
+      return callback(this as never);
+    },
+    programPlan: {
+      async updateMany() {
+        return { count: 0 };
+      },
+      async create() {
+        return createPlan();
+      },
+    },
+    plannedSession: {
+      async findFirst(args: { where: { scheduledDate: { gte?: Date; lt?: Date; gt?: Date } } }) {
+        scheduledRanges.push(args.where.scheduledDate);
+        const isTodayQuery = Boolean(args.where.scheduledDate.gte);
+        return isTodayQuery ? null : nextSession;
+      },
+    },
+    plannedExercise: {
+      async findUnique() {
+        return null;
+      },
+      async update() {
+        throw new Error('not used in this test');
+      },
+    },
+  };
+
+  const dal = createProgramDal(db as never, { userId: 'user_1' });
+
+  const result = await dal.getTodayOrNextSessionCandidates(new Date('2026-03-05T12:00:00.000Z'));
+
+  assert.equal(result.todaySession, null);
+  assert.equal(result.nextSession?.id, 'session_2');
+  assert.equal(scheduledRanges[1]?.gt?.toISOString(), '2026-03-06T00:00:00.000Z');
+});
+
 test('ownership checks enforce account boundary and substitution updates single row', async () => {
   const originalExercise = createExercise();
   let persisted = originalExercise;

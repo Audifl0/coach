@@ -196,6 +196,18 @@ test('selection helper prioritizes today and carries start_workout primary actio
   assert.equal(projection.primaryAction, 'start_workout');
 });
 
+test('selection helper keeps next-session fallback contract stable at UTC boundary dates', () => {
+  const projection = selectTodayWorkoutProjection({
+    todaySession: null,
+    nextSession: createSessionSummary({ id: 'session_2', scheduledDate: '2026-03-06' }),
+  });
+
+  assert.equal(projection.todaySession, null);
+  assert.equal(projection.nextSession?.id, 'session_2');
+  assert.equal(projection.nextSession?.scheduledDate, '2026-03-06');
+  assert.equal(projection.primaryAction, 'start_workout');
+});
+
 test('dashboard session picker prefers today when both today and next are available', () => {
   const picked = pickDashboardSession({
     todaySession: createSessionSummary(),
