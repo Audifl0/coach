@@ -5,7 +5,7 @@ import { createProgramSessionDetailGetHandler } from '../../src/app/api/program/
 import { createProgramTodayGetHandler } from '../../src/app/api/program/today/route';
 import type { ProgramSessionSummary } from '../../src/lib/program/contracts';
 import { selectTodayWorkoutProjection } from '../../src/lib/program/select-today-session';
-import { pickDashboardSession } from '../../src/app/(private)/dashboard/page';
+import { loadProgramTodayData, pickDashboardSession } from '../../src/app/(private)/dashboard/page';
 import { getPrimaryActionLabel, resolveDisplayedSession } from '../../src/app/(private)/dashboard/_components/today-workout-card';
 import {
   buildCompleteSessionPayload,
@@ -199,6 +199,53 @@ test('dashboard session picker prefers today when both today and next are availa
 
   assert.equal(picked.mode, 'today');
   assert.equal(picked.topSession?.id, 'session_1');
+});
+
+test('dashboard today loader preserves today-session projection without route self-fetching', async () => {
+  const result = await loadProgramTodayData({
+    getTodayOrNextSessionCandidates: async () => ({
+      todaySession: createSessionSummary(),
+      nextSession: createSessionSummary({ id: 'session_2', scheduledDate: '2026-03-06' }),
+    }),
+  });
+
+  assert.deepEqual(
+    result,
+    selectTodayWorkoutProjection({
+      todaySession: createSessionSummary(),
+      nextSession: createSessionSummary({ id: 'session_2', scheduledDate: '2026-03-06' }),
+    }),
+  );
+});
+
+test('dashboard today loader preserves next-session fallback and empty states without route self-fetching', async () => {
+  const nextFallback = await loadProgramTodayData({
+    getTodayOrNextSessionCandidates: async () => ({
+      todaySession: null,
+      nextSession: createSessionSummary({ id: 'session_2', scheduledDate: '2026-03-06' }),
+    }),
+  });
+  const empty = await loadProgramTodayData({
+    getTodayOrNextSessionCandidates: async () => ({
+      todaySession: null,
+      nextSession: null,
+    }),
+  });
+
+  assert.deepEqual(
+    nextFallback,
+    selectTodayWorkoutProjection({
+      todaySession: null,
+      nextSession: createSessionSummary({ id: 'session_2', scheduledDate: '2026-03-06' }),
+    }),
+  );
+  assert.deepEqual(
+    empty,
+    selectTodayWorkoutProjection({
+      todaySession: null,
+      nextSession: null,
+    }),
+  );
 });
 
 test('dashboard session picker falls back to next session when today is missing', () => {

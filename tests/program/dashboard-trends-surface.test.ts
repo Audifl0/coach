@@ -241,3 +241,25 @@ test('trends loader degrades gracefully to null when trends API fails', async ()
 
   assert.equal(result, null);
 });
+
+test('trends loader returns parsed data when direct dashboard summary loading succeeds', async () => {
+  const fixture = createSummaryFixture();
+  const result = await loadProgramTrendsData({
+    getTrendSummary: async (input) => {
+      assert.deepEqual(input, { period: '30d' });
+      return fixture;
+    },
+  });
+
+  assert.deepEqual(result, fixture);
+});
+
+test('trends loader degrades gracefully to null when direct dashboard summary loading throws', async () => {
+  const result = await loadProgramTrendsData({
+    getTrendSummary: async () => {
+      throw new Error('boom');
+    },
+  });
+
+  assert.equal(result, null);
+});
