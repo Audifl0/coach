@@ -3,7 +3,9 @@ import test from 'node:test';
 
 import { isRealProviderEnabled, parseLlmRuntimeConfig } from '../../src/server/llm/config';
 
-function buildEnabledEnv(overrides: Partial<Record<string, string | undefined>> = {}) {
+type TestEnv = Partial<Record<string, string | undefined>>;
+
+function buildEnabledEnv(overrides: TestEnv = {}): TestEnv {
   return {
     LLM_REAL_PROVIDER_ENABLED: 'true',
     LLM_PROVIDER_PRIMARY: 'openai',
@@ -21,6 +23,13 @@ function buildEnabledEnv(overrides: Partial<Record<string, string | undefined>> 
   };
 }
 
+test('real-provider helpers accept minimal partial env fixtures in tests', () => {
+  const env = { LLM_REAL_PROVIDER_ENABLED: 'false' } satisfies TestEnv;
+
+  assert.equal(isRealProviderEnabled(env), false);
+  assert.equal(parseLlmRuntimeConfig(env), null);
+});
+
 test('LLM_REAL_PROVIDER_ENABLED=false keeps real-provider config optional', () => {
   const env = {
     LLM_REAL_PROVIDER_ENABLED: 'false',
@@ -33,6 +42,7 @@ test('LLM_REAL_PROVIDER_ENABLED=false keeps real-provider config optional', () =
 
 test('LLM_REAL_PROVIDER_ENABLED=true requires full primary+fallback contract', () => {
   const parsed = parseLlmRuntimeConfig(buildEnabledEnv());
+  assert.ok(parsed);
 
   assert.equal(parsed.enabled, true);
   assert.equal(parsed.primaryProvider, 'openai');
