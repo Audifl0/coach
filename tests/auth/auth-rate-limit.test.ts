@@ -47,13 +47,14 @@ test('signup throttling keys repeated attempts by client IP', () => {
   });
 
   assert.equal(limiter.consumeSignupAttempt({ clientIp: '203.0.113.10' }).limited, false);
-  assert.equal(limiter.consumeSignupAttempt({ clientIp: '198.51.100.5' }).limited, false);
+  assert.equal(limiter.consumeSignupAttempt({ clientIp: '203.0.113.10' }).limited, false);
 
   const limitedAttempt = limiter.consumeSignupAttempt({ clientIp: '203.0.113.10' });
 
   assert.equal(limitedAttempt.limited, true);
   assert.equal(limitedAttempt.retryAfterSeconds, 60);
   assert.equal(limitedAttempt.count, 3);
+  assert.equal(limiter.consumeSignupAttempt({ clientIp: '198.51.100.5' }).limited, false);
 });
 
 test('limit enforcement returns a retry window handlers can expose through Retry-After', () => {
