@@ -15,12 +15,13 @@ import {
 } from '../../src/app/(private)/dashboard/_components/today-workout-card';
 import {
   buildCompleteSessionPayload,
+  buildSessionLoggerHydration,
   buildSkipPayload,
   createInitialLoggerState,
   formatElapsedSeconds,
   reduceLoggerStateAfterCompletion,
   reduceLoggerStateAfterSetSaved,
-	upsertLoggedSet,
+  upsertLoggedSet,
 } from '../../src/app/(private)/dashboard/_components/session-logger';
 
 type SessionSummaryOverrides = Partial<Omit<ProgramSessionSummary, 'exercises'>> & {
@@ -47,6 +48,59 @@ function createSessionSummary(overrides: SessionSummaryOverrides = {}): ProgramS
         restMaxSec: 120,
         isSubstituted: false,
         originalExerciseKey: null,
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function createSessionDetail(
+  overrides: Partial<{
+    id: string;
+    scheduledDate: string;
+    dayIndex: number;
+    focusLabel: string;
+    state: ProgramSessionSummary['state'];
+    startedAt: string | null;
+    completedAt: string | null;
+    effectiveDurationSec: number | null;
+    durationCorrectedAt: string | null;
+    note: string | null;
+    postSessionFatigue: number | null;
+    postSessionReadiness: number | null;
+    postSessionComment: string | null;
+    exercises: Array<ProgramSessionSummary['exercises'][number] & {
+      isSkipped?: boolean;
+      skipReasonCode?: string | null;
+      skipReasonText?: string | null;
+      loggedSets?: Array<{ setIndex: number; weight: number; reps: number; rpe: number | null }>;
+    }>;
+  }> = {},
+) {
+  return {
+    id: 'session_1',
+    scheduledDate: '2026-03-04',
+    dayIndex: 0,
+    focusLabel: 'Lower Body',
+    state: 'started' as const,
+    startedAt: '2026-03-04T08:00:00.000Z',
+    completedAt: null,
+    effectiveDurationSec: null,
+    durationCorrectedAt: null,
+    note: 'Tempo controle',
+    postSessionFatigue: null,
+    postSessionReadiness: null,
+    postSessionComment: null,
+    exercises: [
+      {
+        ...createSessionSummary().exercises[0],
+        isSkipped: false,
+        skipReasonCode: null,
+        skipReasonText: null,
+        loggedSets: [
+          { setIndex: 2, weight: 22.5, reps: 8, rpe: 8 },
+          { setIndex: 1, weight: 20, reps: 10, rpe: null },
+        ],
       },
     ],
     ...overrides,
@@ -361,4 +415,35 @@ test('session logger completion payload requires fatigue/readiness and allows op
     readiness: 5,
     comment: 'solid',
   });
+});
+
+test('session logger hydration restores started session timer and saved state after refresh', () => {
+  const hydration = buildSessionLoggerHydration(createSessionDetail());
+
+  assert.equal(hydration.loggerState.timerStartedAtMs, Date.parse('2026-03-04T08:00:00.000Z'));
+  assert.equal(hydration.loggerState.timerCompletedAtMs, null);
+  assert.equal(hydration.loggedSets.exercise_1?.length, 2);
+  assert.equal(hydration.loggedSets.exercise_1?.[0]?.setIndex, 1);
+  assert.equal(hydration.note, 'Tempo controle');
+  assert.equal(hydration.isCompleted, false);
+});
+
+test('session logger hydration keeps completed sessions non-resumable', () => {
+  const hydration = buildSessionLoggerHydration(
+    createSessionDetail({
+      state: 'completed',
+      completedAt: '2026-03-04T09:05:00.000Z',
+      effectiveDurationSec: 3900,
+      postSessionFatigue: 3,
+      postSessionReadiness: 4,
+      postSessionComment: 'Solid progression',
+    }),
+  );
+
+  assert.equal(hydration.loggerState.timerStartedAtMs, Date.parse('2026-03-04T08:00:00.000Z'));
+  assert.equal(hydration.loggerState.timerCompletedAtMs, Date.parse('2026-03-04T09:05:00.000Z'));
+  assert.equal(hydration.isCompleted, true);
+  assert.equal(hydration.fatigue, 3);
+  assert.equal(hydration.readiness, 4);
+  assert.equal(hydration.comment, 'Solid progression');
 });

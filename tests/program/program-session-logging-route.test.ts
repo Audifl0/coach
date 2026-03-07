@@ -556,6 +556,63 @@ test('GET /api/program/sessions/:sessionId includes grouped logged sets, skip me
   assert.equal(body.session.exercises[0]?.loggedSets[1]?.setIndex, 2);
 });
 
+test('GET /api/program/sessions/:sessionId exposes started session detail for logger rehydration', async () => {
+  const getDetail = createProgramSessionDetailGetHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    getSessionDetail: async () => ({
+      id: 'session_started',
+      scheduledDate: '2026-03-04',
+      dayIndex: 0,
+      focusLabel: 'Lower Body',
+      state: 'started',
+      startedAt: '2026-03-04T08:00:00.000Z',
+      completedAt: null,
+      effectiveDurationSec: null,
+      durationCorrectedAt: null,
+      note: 'Tempo controle',
+      postSessionFatigue: null,
+      postSessionReadiness: null,
+      postSessionComment: null,
+      exercises: [
+        {
+          id: 'exercise_1',
+          userId: 'user_1',
+          exerciseKey: 'goblet_squat',
+          displayName: 'Goblet Squat',
+          movementPattern: 'squat',
+          sets: 4,
+          targetReps: 8,
+          targetLoad: '24kg',
+          restMinSec: 90,
+          restMaxSec: 120,
+          isSubstituted: false,
+          originalExerciseKey: null,
+          isSkipped: false,
+          skipReasonCode: null,
+          skipReasonText: null,
+          loggedSets: [
+            { setIndex: 2, weight: 22.5, reps: 8, rpe: 8 },
+            { setIndex: 1, weight: 20, reps: 10, rpe: null },
+          ],
+        },
+      ],
+    }),
+  });
+
+  const response = await getDetail(new Request('http://localhost/api/program/sessions/session_started'), {
+    params: Promise.resolve({ sessionId: 'session_started' }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.session.state, 'started');
+  assert.equal(body.session.startedAt, '2026-03-04T08:00:00.000Z');
+  assert.equal(body.session.completedAt, null);
+  assert.equal(body.session.note, 'Tempo controle');
+  assert.equal(body.session.exercises[0]?.loggedSets[0]?.setIndex, 1);
+  assert.equal(body.session.exercises[0]?.loggedSets[1]?.setIndex, 2);
+});
+
 test('GET /api/program/sessions/:sessionId keeps archived completed session detail payload stable', async () => {
   const getDetail = createProgramSessionDetailGetHandler({
     resolveSession: async () => ({ userId: 'user_1' }),
