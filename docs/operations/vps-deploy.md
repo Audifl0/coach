@@ -29,11 +29,24 @@ POSTGRES_PASSWORD=replace-with-strong-password
 DATABASE_URL=postgresql://coach:replace-with-strong-password@db:5432/coach
 BETTER_AUTH_SECRET=replace-with-long-random-secret
 BETTER_AUTH_URL=https://coach.example.com
+
+RESTORE_TARGET_DB=coach_restore_drill
+RESTORE_DRILL_BASE_URL=http://127.0.0.1:3000
+OPS_SMOKE_USERNAME=release-smoke
+OPS_SMOKE_PASSWORD=replace-with-smoke-password
+OPS_SMOKE_EXPECTED_FOCUS_LABEL=Upper Body
 ```
 
 Use strong secrets, keep the file owned by the deploy user with
 restrictive permissions, and do not place production secrets in the
 repository checkout.
+
+The phase-09 operator contract stays intentionally narrow:
+
+- `APP_DOMAIN` drives the public HTTPS deploy smoke target.
+- `POSTGRES_DB` and `RESTORE_TARGET_DB` keep restore drills pointed away from production.
+- `RESTORE_DRILL_BASE_URL` lets restore verification hit the local app listener without depending on public DNS.
+- `OPS_SMOKE_USERNAME`, `OPS_SMOKE_PASSWORD`, and `OPS_SMOKE_EXPECTED_FOCUS_LABEL` define the dedicated authenticated smoke account used by deploy and restore evidence.
 
 ## First Deployment
 
@@ -48,6 +61,7 @@ The script:
 - Pulls/builds containers.
 - Starts `db`, `app`, and `caddy` services.
 - Runs HTTPS smoke test automatically when `APP_DOMAIN` is set.
+- Uses the same ops env contract later for authenticated dashboard smoke once the release-smoke account is provisioned.
 
 ## HTTPS Behavior
 
@@ -68,6 +82,11 @@ After deploy, verify health:
 ```bash
 infra/scripts/smoke-test-https.sh https://coach.example.com
 ```
+
+For phase-09 release proof, keep a non-production smoke user populated with
+dashboard data matching `OPS_SMOKE_EXPECTED_FOCUS_LABEL`. That gives deploy
+and restore flows one deterministic authenticated sanity check instead of
+anonymous reachability only.
 
 Inspect services:
 

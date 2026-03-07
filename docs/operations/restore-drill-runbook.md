@@ -10,14 +10,21 @@ dedicated drill database, with auditable evidence and smoke checks.
 - VPS has Docker + Docker Compose available.
 - `BACKUP_PASSPHRASE` is exported in the shell used for the drill.
 - `/opt/coach/.env.production` contains:
+  - `APP_DOMAIN`
   - `POSTGRES_USER`
   - `POSTGRES_DB` (production source DB name, used only as guardrail)
   - `RESTORE_TARGET_DB` (dedicated drill DB, example: `coach_restore_drill`)
+  - `OPS_SMOKE_USERNAME`
+  - `OPS_SMOKE_PASSWORD`
+  - `OPS_SMOKE_EXPECTED_FOCUS_LABEL`
 - At least one encrypted backup exists under `backups/` OR backup creation is possible.
 - Optional:
   - `RESTORE_DRILL_BASE_URL` (default: `http://127.0.0.1:3000`)
   - `RESTORE_DRILL_EVIDENCE_DIR` (default: `backups/restore-drills`)
   - `RESTORE_DRILL_BACKUP_FILE` to force a specific backup.
+
+These variables are the same narrow phase-09 ops contract documented in
+`.env.example` and the deploy runbook.
 
 ## Monthly Drill Procedure
 
@@ -50,7 +57,10 @@ infra/scripts/run-restore-drill.sh /opt/coach/.env.production backups
 - `smoke_login=ok` with HTTP `2xx` or `3xx` from `/login`
 - `smoke_dashboard=ok` with HTTP `2xx` or `3xx` from `/dashboard`
 
-`3xx` for dashboard is acceptable when authentication redirects anonymous traffic.
+The authenticated smoke account should confirm business data is present after
+login, not only that `/dashboard` returns a status code. Keep the account
+scoped to non-production verification and make sure it owns a session with a
+focus label matching `OPS_SMOKE_EXPECTED_FOCUS_LABEL`.
 
 ## Failure Handling
 
