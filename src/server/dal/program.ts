@@ -515,7 +515,15 @@ export function createProgramDal(db: ProgramDalClient, session: SessionContext |
     },
 
     async getSessionById(sessionId: string): Promise<PlannedSessionRecord | null> {
-      return db.plannedSession.findFirst({
+      const include = {
+        exercises: {
+          orderBy: {
+            orderIndex: 'asc' as const,
+          },
+        },
+      };
+
+      const activeSession = await db.plannedSession.findFirst({
         where: {
           ...buildAccountScopedWhere(scope, { id: sessionId }),
           scheduledDate: {},
@@ -523,13 +531,25 @@ export function createProgramDal(db: ProgramDalClient, session: SessionContext |
             status: 'active',
           },
         },
-        include: {
-          exercises: {
-            orderBy: {
-              orderIndex: 'asc',
-            },
+        include,
+      });
+
+      if (activeSession) {
+        return activeSession;
+      }
+
+      return db.plannedSession.findFirst({
+        where: {
+          ...buildAccountScopedWhere(scope, { id: sessionId }),
+          scheduledDate: {},
+          completedAt: {
+            gte: new Date(0),
+          },
+          programPlan: {
+            status: 'archived',
           },
         },
+        include,
       });
     },
 
