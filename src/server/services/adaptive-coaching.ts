@@ -2,7 +2,11 @@ import { validateProfileInput } from '@/lib/profile/contracts';
 import { generateAdaptiveRecommendation } from '@/lib/adaptive-coaching/orchestrator';
 import { parseAdaptiveRecommendation } from '@/lib/adaptive-coaching/contracts';
 import type { AdaptiveRecommendation as PolicyRecommendation } from '@/lib/adaptive-coaching/policy';
-import { createAdaptiveCoachingDal, type AdaptiveRecommendationRecord } from '@/server/dal/adaptive-coaching';
+import {
+  AdaptiveRecommendationStaleStateError,
+  createAdaptiveCoachingDal,
+  type AdaptiveRecommendationRecord,
+} from '@/server/dal/adaptive-coaching';
 import { createProfileDal } from '@/server/dal/profile';
 import { createProgramDal } from '@/server/dal/program';
 import { parseLlmRuntimeConfig, type LlmRuntimeConfig } from '@/server/llm/config';
@@ -63,6 +67,30 @@ export type AdaptiveCoachingServiceDeps = {
       expectedCurrentStatus?: 'proposed' | 'validated' | 'pending_confirmation' | 'applied' | 'rejected' | 'fallback_applied';
     },
   ) => Promise<AdaptiveRecommendationRecord | null>;
+  rejectRecommendationWithFallback?: (input: {
+    userId: string;
+    recommendationId: string;
+    expectedCurrentStatus: 'pending_confirmation';
+    rejectionReason: string;
+    rejectionEvidenceTags: unknown;
+    fallbackReason: string;
+    fallbackMetadata: unknown;
+    fallback: {
+      plannedSessionId: string;
+      confidence: number;
+      confidenceLabel: 'low' | 'medium' | 'high';
+      confidenceReason: string;
+      warningFlag: boolean;
+      warningText: string | null;
+      evidenceTags: unknown;
+      forecastPayload: unknown;
+      progressionDeltaSets: number | null;
+      reasons: string[];
+    };
+  }) => Promise<{
+    rejectedRecommendation: AdaptiveRecommendationRecord;
+    fallbackRecommendation: AdaptiveRecommendationRecord;
+  } | null>;
   appendDecisionTrace: (userId: string, input: {
     recommendationId: string;
     previousStatus: 'proposed' | 'validated' | 'pending_confirmation' | 'applied' | 'rejected' | 'fallback_applied' | null;
@@ -96,6 +124,10 @@ export class AdaptiveCoachingError extends Error {
     this.name = 'AdaptiveCoachingError';
     this.status = status;
   }
+}
+
+function isAdaptiveRecommendationStaleStateError(error: unknown): error is AdaptiveRecommendationStaleStateError {
+  return error instanceof AdaptiveRecommendationStaleStateError;
 }
 
 function toDate(value: Date | string): Date {
@@ -442,6 +474,12 @@ export function createAdaptiveCoachingService(deps: AdaptiveCoachingServiceDeps)
         evidenceTags: recommendation.evidenceTags,
         expectedCurrentStatus: 'pending_confirmation',
         expiresAt: null,
+      }).catch((error: unknown) => {
+        if (isAdaptiveRecommendationStaleStateError(error)) {
+          throw new AdaptiveCoachingError('Recommendation state is stale. Refresh and retry.', 409);
+        }
+
+        throw error;
       });
 
       if (!updated) {
@@ -477,14 +515,65 @@ export function createAdaptiveCoachingService(deps: AdaptiveCoachingServiceDeps)
         now,
       });
 
+      const rejectionReason = input.reason?.trim() || 'user_rejected_high_impact_recommendation';
+      const fallbackMetadata = {
+        sourceRecommendationId: recommendation.id,
+        rejectedReason: input.reason?.trim() || null,
+      };
+
+      if (deps.rejectRecommendationWithFallback) {
+        const transition = await deps.rejectRecommendationWithFallback({
+          userId: input.userId,
+          recommendationId: recommendation.id,
+          expectedCurrentStatus: 'pending_confirmation',
+          rejectionReason,
+          rejectionEvidenceTags: recommendation.evidenceTags,
+          fallbackReason: 'user_rejected_high_impact',
+          fallbackMetadata,
+          fallback: {
+            plannedSessionId: recommendation.plannedSessionId,
+            confidence: Math.min(recommendation.confidence, 0.7),
+            confidenceLabel: recommendation.confidenceLabel,
+            confidenceReason: 'Conservative hold applied after user rejection',
+            warningFlag: recommendation.warningFlag,
+            warningText: recommendation.warningText,
+            evidenceTags: recommendation.evidenceTags,
+            forecastPayload: recommendation.forecastPayload,
+            progressionDeltaSets: recommendation.progressionDeltaSets ?? 0,
+            reasons: [
+              'High-impact recommendation was rejected by user',
+              'Conservative hold applied for next planned session',
+            ],
+          },
+        }).catch((error: unknown) => {
+          if (isAdaptiveRecommendationStaleStateError(error)) {
+            throw new AdaptiveCoachingError('Recommendation state is stale. Refresh and retry.', 409);
+          }
+
+          throw error;
+        });
+
+        if (!transition) {
+          throw new AdaptiveCoachingError('Recommendation not found', 404);
+        }
+
+        return toAdaptiveRecommendationPayload(transition.fallbackRecommendation);
+      }
+
       await deps.updateAdaptiveRecommendationStatus(input.userId, {
         recommendationId: recommendation.id,
         nextStatus: 'rejected',
         decisionType: 'user',
-        decisionReason: input.reason?.trim() || 'user_rejected_high_impact_recommendation',
+        decisionReason: rejectionReason,
         evidenceTags: recommendation.evidenceTags,
         expectedCurrentStatus: 'pending_confirmation',
         expiresAt: null,
+      }).catch((error: unknown) => {
+        if (isAdaptiveRecommendationStaleStateError(error)) {
+          throw new AdaptiveCoachingError('Recommendation state is stale. Refresh and retry.', 409);
+        }
+
+        throw error;
       });
 
       const conservative = await deps.createAdaptiveRecommendation(input.userId, {
@@ -520,10 +609,7 @@ export function createAdaptiveCoachingService(deps: AdaptiveCoachingServiceDeps)
         decisionType: 'fallback',
         decisionReason: 'conservative_hold_after_rejection',
         evidenceTags: conservative.evidenceTags,
-        metadata: {
-          sourceRecommendationId: recommendation.id,
-          rejectedReason: input.reason?.trim() || null,
-        },
+        metadata: fallbackMetadata,
       });
 
       return toAdaptiveRecommendationPayload(conservative);
@@ -596,6 +682,18 @@ export async function buildDefaultAdaptiveCoachingService() {
     updateAdaptiveRecommendationStatus: (userId, input) => {
       const dal = createAdaptiveCoachingDal(prisma as never, { userId });
       return dal.updateAdaptiveRecommendationStatus(input);
+    },
+    rejectRecommendationWithFallback: (input) => {
+      const dal = createAdaptiveCoachingDal(prisma as never, { userId: input.userId });
+      return dal.rejectRecommendationWithFallback({
+        recommendationId: input.recommendationId,
+        expectedCurrentStatus: input.expectedCurrentStatus,
+        rejectionReason: input.rejectionReason,
+        rejectionEvidenceTags: input.rejectionEvidenceTags,
+        fallbackReason: input.fallbackReason,
+        fallbackMetadata: input.fallbackMetadata,
+        fallback: input.fallback,
+      });
     },
     appendDecisionTrace: (userId, input) => {
       const dal = createAdaptiveCoachingDal(prisma as never, { userId });

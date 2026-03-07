@@ -84,8 +84,23 @@ type AdaptiveDalClient = {
       };
       orderBy?: { createdAt: 'asc' | 'desc' };
     }): Promise<AdaptiveRecommendationRecord | null>;
+    updateMany?(args: {
+      where: {
+        id: string;
+        userId: string;
+        status?: AdaptiveRecommendationStatus;
+      };
+      data: {
+        status: AdaptiveRecommendationStatus;
+        expiresAt?: Date | null;
+        appliedAt?: Date | null;
+        rejectedAt?: Date | null;
+        fallbackApplied?: boolean;
+        fallbackReason?: string | null;
+      };
+    }): Promise<{ count: number }>;
     update(args: {
-      where: { id: string; userId: string };
+      where: { id: string };
       data: {
         status: AdaptiveRecommendationStatus;
         expiresAt?: Date | null;
@@ -148,6 +163,57 @@ export type UpdateAdaptiveRecommendationStatusInput = {
   fallbackReason?: string | null;
   expectedCurrentStatus?: AdaptiveRecommendationStatus;
 };
+
+export type RejectRecommendationWithFallbackInput = {
+  recommendationId: string;
+  expectedCurrentStatus: AdaptiveRecommendationStatus;
+  rejectionReason: string;
+  rejectionEvidenceTags: unknown;
+  fallbackReason: string;
+  fallbackMetadata?: unknown;
+  fallback: {
+    plannedSessionId: string;
+    confidence: number;
+    confidenceLabel: 'low' | 'medium' | 'high';
+    confidenceReason: string;
+    warningFlag: boolean;
+    warningText: string | null;
+    evidenceTags: unknown;
+    forecastPayload: unknown;
+    progressionDeltaSets: number | null;
+    reasons: unknown;
+  };
+};
+
+export class AdaptiveRecommendationStaleStateError extends Error {
+  expectedStatus: AdaptiveRecommendationStatus;
+  actualStatus: AdaptiveRecommendationStatus;
+
+  constructor(expectedStatus: AdaptiveRecommendationStatus, actualStatus: AdaptiveRecommendationStatus) {
+    super(`Adaptive recommendation status mismatch: expected ${expectedStatus}, got ${actualStatus}`);
+    this.name = 'AdaptiveRecommendationStaleStateError';
+    this.expectedStatus = expectedStatus;
+    this.actualStatus = actualStatus;
+  }
+}
+
+function buildRecommendationUpdateData(
+  existing: AdaptiveRecommendationRecord,
+  input: UpdateAdaptiveRecommendationStatusInput,
+  now: Date,
+) {
+  return {
+    status: input.nextStatus,
+    expiresAt: input.expiresAt ?? existing.expiresAt,
+    appliedAt: input.nextStatus === 'applied' ? now : existing.appliedAt,
+    rejectedAt: input.nextStatus === 'rejected' ? now : existing.rejectedAt,
+    fallbackApplied: input.nextStatus === 'fallback_applied' ? true : existing.fallbackApplied,
+    fallbackReason:
+      input.nextStatus === 'fallback_applied'
+        ? (input.fallbackReason ?? existing.fallbackReason)
+        : existing.fallbackReason,
+  };
+}
 
 export function createAdaptiveCoachingDal(db: AdaptiveDalClient, session: SessionContext | null | undefined) {
   const scope = requireAccountScope(session);
@@ -238,27 +304,58 @@ export function createAdaptiveCoachingDal(db: AdaptiveDalClient, session: Sessio
         return null;
       }
 
-      if (input.expectedCurrentStatus && existing.status !== input.expectedCurrentStatus) {
-        throw new Error(
-          `Adaptive recommendation status mismatch: expected ${input.expectedCurrentStatus}, got ${existing.status}`,
-        );
+      const now = new Date();
+      const nextData = buildRecommendationUpdateData(existing, input, now);
+
+      let updated: AdaptiveRecommendationRecord | null = null;
+      if (tx.adaptiveRecommendation.updateMany) {
+        const updateResult = await tx.adaptiveRecommendation.updateMany({
+          where: {
+            id: existing.id,
+            userId: scope.userId,
+            status: input.expectedCurrentStatus,
+          },
+          data: nextData,
+        });
+
+        if (updateResult.count === 0) {
+          const current = await tx.adaptiveRecommendation.findFirst({
+            where: buildAccountScopedWhere(scope, {
+              id: input.recommendationId,
+            }),
+          });
+
+          if (!current) {
+            return null;
+          }
+
+          throw new AdaptiveRecommendationStaleStateError(
+            input.expectedCurrentStatus ?? existing.status,
+            current.status,
+          );
+        }
+
+        updated = await tx.adaptiveRecommendation.findFirst({
+          where: buildAccountScopedWhere(scope, {
+            id: existing.id,
+          }),
+        });
+      } else {
+        if (input.expectedCurrentStatus && existing.status !== input.expectedCurrentStatus) {
+          throw new AdaptiveRecommendationStaleStateError(input.expectedCurrentStatus, existing.status);
+        }
+
+        updated = await tx.adaptiveRecommendation.update({
+          where: {
+            id: existing.id,
+          },
+          data: nextData,
+        });
       }
 
-      const now = new Date();
-      const updated = await tx.adaptiveRecommendation.update({
-        where: {
-          id: existing.id,
-          userId: scope.userId,
-        },
-        data: {
-          status: input.nextStatus,
-          expiresAt: input.expiresAt ?? existing.expiresAt,
-          appliedAt: input.nextStatus === 'applied' ? now : existing.appliedAt,
-          rejectedAt: input.nextStatus === 'rejected' ? now : existing.rejectedAt,
-          fallbackApplied: input.nextStatus === 'fallback_applied' ? true : existing.fallbackApplied,
-          fallbackReason: input.nextStatus === 'fallback_applied' ? (input.fallbackReason ?? existing.fallbackReason) : existing.fallbackReason,
-        },
-      });
+      if (!updated) {
+        return null;
+      }
 
       await tx.adaptiveRecommendationDecision.create({
         data: {
@@ -277,12 +374,150 @@ export function createAdaptiveCoachingDal(db: AdaptiveDalClient, session: Sessio
     });
   }
 
+  async function rejectRecommendationWithFallback(
+    input: RejectRecommendationWithFallbackInput,
+  ): Promise<{
+    rejectedRecommendation: AdaptiveRecommendationRecord;
+    fallbackRecommendation: AdaptiveRecommendationRecord;
+  } | null> {
+    return db.$transaction(async (tx) => {
+      const existing = await tx.adaptiveRecommendation.findFirst({
+        where: buildAccountScopedWhere(scope, {
+          id: input.recommendationId,
+        }),
+      });
+
+      if (!existing) {
+        return null;
+      }
+
+      if (existing.status !== input.expectedCurrentStatus) {
+        throw new AdaptiveRecommendationStaleStateError(input.expectedCurrentStatus, existing.status);
+      }
+
+      const now = new Date();
+      const rejectionData = buildRecommendationUpdateData(
+        existing,
+        {
+          recommendationId: input.recommendationId,
+          nextStatus: 'rejected',
+          decisionType: 'user',
+          decisionReason: input.rejectionReason,
+          evidenceTags: input.rejectionEvidenceTags,
+          expectedCurrentStatus: input.expectedCurrentStatus,
+          expiresAt: null,
+        },
+        now,
+      );
+
+      const rejectedRecommendation = tx.adaptiveRecommendation.updateMany
+        ? await (async () => {
+          const result = await tx.adaptiveRecommendation.updateMany({
+            where: {
+              id: existing.id,
+              userId: scope.userId,
+              status: input.expectedCurrentStatus,
+            },
+            data: rejectionData,
+          });
+
+          if (result.count === 0) {
+            const current = await tx.adaptiveRecommendation.findFirst({
+              where: buildAccountScopedWhere(scope, {
+                id: input.recommendationId,
+              }),
+            });
+
+            if (!current) {
+              return null;
+            }
+
+            throw new AdaptiveRecommendationStaleStateError(input.expectedCurrentStatus, current.status);
+          }
+
+          return tx.adaptiveRecommendation.findFirst({
+            where: buildAccountScopedWhere(scope, {
+              id: existing.id,
+            }),
+          });
+        })()
+        : await tx.adaptiveRecommendation.update({
+          where: {
+            id: existing.id,
+          },
+          data: rejectionData,
+        });
+
+      if (!rejectedRecommendation) {
+        return null;
+      }
+
+      await tx.adaptiveRecommendationDecision.create({
+        data: {
+          recommendationId: existing.id,
+          userId: scope.userId,
+          decisionType: 'user',
+          previousStatus: existing.status,
+          nextStatus: 'rejected',
+          decisionReason: input.rejectionReason,
+          evidenceTags: input.rejectionEvidenceTags,
+          metadata: input.fallbackMetadata,
+        },
+      });
+
+      const fallbackRecommendation = await tx.adaptiveRecommendation.create({
+        data: {
+          userId: scope.userId,
+          plannedSessionId: input.fallback.plannedSessionId,
+          actionType: 'hold',
+          status: 'applied',
+          confidence: input.fallback.confidence,
+          confidenceLabel: input.fallback.confidenceLabel,
+          confidenceReason: input.fallback.confidenceReason,
+          warningFlag: input.fallback.warningFlag,
+          warningText: input.fallback.warningText,
+          fallbackApplied: true,
+          fallbackReason: input.fallbackReason,
+          progressionDeltaLoadPct: 0,
+          progressionDeltaReps: 0,
+          progressionDeltaSets: input.fallback.progressionDeltaSets ?? 0,
+          substitutionExerciseKey: null,
+          substitutionDisplayName: null,
+          substitutionReason: null,
+          reasons: input.fallback.reasons,
+          evidenceTags: input.fallback.evidenceTags,
+          forecastPayload: input.fallback.forecastPayload,
+          expiresAt: null,
+        },
+      });
+
+      await tx.adaptiveRecommendationDecision.create({
+        data: {
+          recommendationId: fallbackRecommendation.id,
+          userId: scope.userId,
+          decisionType: 'fallback',
+          previousStatus: null,
+          nextStatus: fallbackRecommendation.status,
+          decisionReason: 'conservative_hold_after_rejection',
+          evidenceTags: fallbackRecommendation.evidenceTags,
+          metadata: input.fallbackMetadata,
+        },
+      });
+
+      return {
+        rejectedRecommendation,
+        fallbackRecommendation,
+      };
+    });
+  }
+
   return {
     createAdaptiveRecommendation,
     getAdaptiveRecommendationById,
     listLatestAdaptiveRecommendation,
     appendDecisionTrace,
     updateAdaptiveRecommendationStatus,
+    rejectRecommendationWithFallback,
     async markRecommendationValidated(
       recommendationId: string,
       decisionReason: string,

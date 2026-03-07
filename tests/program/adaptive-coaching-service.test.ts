@@ -12,6 +12,7 @@ import {
   createAdaptiveCoachingService,
   type AdaptiveCoachingServiceDeps,
 } from '../../src/server/services/adaptive-coaching';
+import { AdaptiveRecommendationStaleStateError } from '../../src/server/dal/adaptive-coaching';
 import { createProgramAdaptationPostHandler } from '../../src/app/api/program/adaptation/route-handlers';
 
 function toPersistedRecommendationRecord(
@@ -453,7 +454,7 @@ test('confirmAdaptiveRecommendation translates stale status mismatches into a 40
       now: new Date('2026-03-05T09:00:00.000Z'),
     }),
     updateAdaptiveRecommendationStatus: async () => {
-      throw new Error('Adaptive recommendation status mismatch: expected pending_confirmation, got applied');
+      throw new AdaptiveRecommendationStaleStateError('pending_confirmation', 'applied');
     },
   });
 

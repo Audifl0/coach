@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { AdaptiveRecommendationStaleStateError } from '../../src/server/dal/adaptive-coaching';
 import {
   createAdaptiveCoachingService,
   type AdaptiveCoachingServiceDeps,
@@ -422,7 +423,7 @@ test('confirm and reject routes return 409 for stale recommendation state mismat
     now: new Date('2026-03-05T09:00:00.000Z'),
   });
   staleDeps.updateAdaptiveRecommendationStatus = async () => {
-    throw new Error('Adaptive recommendation status mismatch: expected pending_confirmation, got applied');
+    throw new AdaptiveRecommendationStaleStateError('pending_confirmation', 'applied');
   };
 
   const service = createAdaptiveCoachingService(staleDeps);
