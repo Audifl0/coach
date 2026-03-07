@@ -5,6 +5,12 @@ import test from 'node:test';
 
 import { parseOpsRuntimeConfig } from '../../src/server/env/ops-config';
 import { runAuthenticatedDashboardSmoke } from '../../infra/scripts/smoke-authenticated-dashboard.mjs';
+import { createProgramTrendsGetHandler } from '../../src/app/api/program/trends/route-handlers';
+import {
+  loadDashboardProgramTodaySection,
+  loadDashboardTrendsSection,
+} from '../../src/server/dashboard/program-dashboard';
+import { createAppLogger, logRouteFailure, type AppLogRecord } from '../../src/server/observability/app-logger';
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 
@@ -34,6 +40,41 @@ function buildEnv(overrides: TestEnv = {}): TestEnv {
 
 async function readProjectFile(relativePath: string): Promise<string> {
   return readFile(path.join(projectRoot, relativePath), 'utf8');
+}
+
+function createTrendSummaryFixture() {
+  return {
+    period: '30d',
+    generatedAt: '2026-03-05T12:00:00.000Z',
+    metrics: {
+      volume: {
+        kpi: 12450,
+        unit: 'kg',
+        points: [{ date: '2026-03-05', value: 4550 }],
+      },
+      intensity: {
+        kpi: 81.4,
+        unit: 'kg',
+        points: [{ date: '2026-03-05', value: 85.5 }],
+      },
+      adherence: {
+        kpi: 0.75,
+        unit: 'ratio',
+        points: [{ date: '2026-03-05', value: 0.8 }],
+      },
+    },
+  };
+}
+
+function createBufferedAppLogger() {
+  const records: Array<{ level: 'error' | 'warn'; record: AppLogRecord }> = [];
+
+  return {
+    records,
+    logger: createAppLogger((level, record) => {
+      records.push({ level, record });
+    }),
+  };
 }
 
 test('ops runtime config parses the narrow release-facing contract without unrelated env requirements', () => {
@@ -166,4 +207,84 @@ test('deploy and restore scripts invoke the authenticated smoke helper with the 
   assert.match(deployScript, /smoke-authenticated-dashboard\.mjs/);
   assert.match(restoreDrillScript, /stage=smoke_dashboard_authenticated/);
   assert.match(restoreDrillScript, /smoke-authenticated-dashboard\.mjs/);
+});
+
+test('route failure logs keep an allowlisted structured envelope only', () => {
+  const { logger, records } = createBufferedAppLogger();
+
+  logRouteFailure(
+    {
+      route: '/api/program/history',
+      method: 'GET',
+      status: 500,
+      source: 'route_handler',
+      error: Object.assign(new Error('private payload should not leak'), {
+        body: { password: 'secret' },
+        userId: 'user_1',
+      }),
+    },
+    logger,
+  );
+
+  assert.equal(records.length, 1);
+  assert.equal(records[0]?.level, 'error');
+  assert.deepEqual(records[0]?.record, {
+    event: 'route_failure',
+    route: '/api/program/history',
+    method: 'GET',
+    status: 500,
+    source: 'route_handler',
+    errorName: 'Error',
+  });
+});
+
+test('trends route logs unexpected failures and returns 500 without exposing request details', async () => {
+  const { logger, records } = createBufferedAppLogger();
+  const handler = createProgramTrendsGetHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    getTrendSummary: async () => {
+      throw new Error('private failure payload');
+    },
+    logger,
+  });
+
+  const response = await handler(new Request('http://localhost/api/program/trends?period=30d'));
+
+  assert.equal(response.status, 500);
+  assert.equal(records.length, 1);
+  assert.deepEqual(records[0]?.record, {
+    event: 'route_failure',
+    route: '/api/program/trends',
+    method: 'GET',
+    status: 500,
+    source: 'route_handler',
+    errorName: 'Error',
+  });
+});
+
+test('dashboard degraded-path logging is explicit on failure and quiet on success', async () => {
+  const { logger, records } = createBufferedAppLogger();
+
+  const readyTrends = await loadDashboardTrendsSection({
+    getTrendSummary: async () => createTrendSummaryFixture(),
+    logger,
+  });
+  assert.equal(readyTrends.status, 'ready');
+  assert.equal(records.length, 0);
+
+  const degradedToday = await loadDashboardProgramTodaySection({
+    getTodayOrNextSessionCandidates: async () => {
+      throw new Error('private loader failure');
+    },
+    logger,
+  });
+
+  assert.equal(degradedToday.status, 'error');
+  assert.equal(records.length, 1);
+  assert.deepEqual(records[0]?.record, {
+    event: 'degraded_path',
+    route: '/dashboard',
+    boundary: 'program_today',
+    reason: 'load_failed',
+  });
 });
