@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 08
 current_phase_name: release blockers and regression restoration
-current_plan: 08-05 (verification)
-status: verifying
-stopped_at: Completed 08-05-PLAN.md
-last_updated: "2026-03-07T10:56:17.820Z"
+current_plan: 08-06
+status: ready_for_verification
+stopped_at: Completed 08-06-PLAN.md
+last_updated: "2026-03-07T12:20:18.820Z"
 last_activity: 2026-03-07
 progress:
   total_phases: 12
   completed_phases: 10
-  total_plans: 55
-  completed_plans: 47
-  percent: 85
+  total_plans: 56
+  completed_plans: 48
+  percent: 86
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 08
 **Current Phase Name:** release blockers and regression restoration
 **Total Phases:** 12
-**Current Plan:** 08-05 (verification)
-**Total Plans in Phase:** 5
+**Current Plan:** 08-06
+**Total Plans in Phase:** 6
 **Status:** Phase complete — ready for verification
 **Last Activity:** 2026-03-07
-**Last Activity Description:** Completed 08-05 by restoring adaptive pending-confirmation behavior, deterministic runtime-corpus evidence retrieval, and the final phase-08 test gate.
-**Progress:** [█████████░] 85%
+**Last Activity Description:** Completed 08-06 by restoring a green Next production build through direct dashboard server loading, Next-compatible route helper extraction, and a dynamic private segment.
+**Progress:** [█████████░] 86%
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 08-release-blockers-and-regression-restoration P08-03 | 26 min | 3 tasks | 10 files |
 | Phase 08-release-blockers-and-regression-restoration P08-04 | 9 min | 3 tasks | 6 files |
 | Phase 08-release-blockers-and-regression-restoration P08-05 | 4 min | 3 tasks | 4 files |
+| Phase 08-release-blockers-and-regression-restoration P08-06 | 31 min | 3 tasks | 52 files |
 
 ## Accumulated Context
 
@@ -187,6 +188,9 @@ Recent decisions affecting current work:
 - [Phase 08-release-blockers-and-regression-restoration]: Bind the shared auth limiter only in runtime POST handlers so production requests share state while direct handler factories stay isolated for deterministic tests.
 - [Phase 08-release-blockers-and-regression-restoration]: Adaptive proposal parsing now strips transport-only metadata and keeps lifecycle status server-owned across local and provider paths.
 - [Phase 08-release-blockers-and-regression-restoration]: Evidence retrieval now fills underflow slots from the same selected corpus in deterministic source-priority order, using the built-in corpus only when the runtime corpus is empty or unusable.
+- [Phase 08-release-blockers-and-regression-restoration]: Force the entire (private) app segment dynamic so authenticated pages never enter the static-generation worker path.
+- [Phase 08-release-blockers-and-regression-restoration]: Keep Next app entry files export-safe by moving testable runtime helpers into companion page-helpers and route-handlers modules.
+- [Phase 08-release-blockers-and-regression-restoration]: Preserve dashboard today and trends contracts by loading DAL/projection data directly on the server instead of same-origin HTTP self-fetches.
 
 ### Roadmap Evolution
 
@@ -207,6 +211,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-07T10:56:17.817Z
-**Stopped At:** Completed 08-05-PLAN.md
+**Last Date:** 2026-03-07T12:20:18.818Z
+**Stopped At:** Completed 08-06-PLAN.md
 **Resume File:** None
