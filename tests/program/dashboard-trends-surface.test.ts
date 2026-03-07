@@ -223,6 +223,14 @@ test('dashboard section order places trends below adaptive forecast and above hi
   ]);
 });
 
+test('trends summary renders an explicit degraded state instead of disappearing', () => {
+  const html = renderToStaticMarkup(React.createElement(TrendsSummaryCard, { loadState: 'error' }));
+
+  assert.match(html, /Trends/);
+  assert.match(html, /Unable to load trends/);
+  assert.equal(html.includes('data-testid="trend-metric-card"'), false);
+});
+
 test('initial trends request is period=30d and uses no-store cache policy', () => {
   const request = buildDashboardTrendsRequest({ origin: 'http://localhost', cookieHeader: 'sid=abc' });
 

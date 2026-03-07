@@ -1,12 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 import { createProgramSessionDetailGetHandler } from '../../src/app/api/program/sessions/[sessionId]/route-handlers';
 import { createProgramTodayGetHandler } from '../../src/app/api/program/today/route-handlers';
 import type { ProgramSessionSummary } from '../../src/lib/program/contracts';
 import { selectTodayWorkoutProjection } from '../../src/lib/program/select-today-session';
 import { loadProgramTodayData, pickDashboardSession } from '../../src/app/(private)/dashboard/page-helpers';
-import { getPrimaryActionLabel, resolveDisplayedSession } from '../../src/app/(private)/dashboard/_components/today-workout-card';
+import {
+  getPrimaryActionLabel,
+  resolveDisplayedSession,
+  TodayWorkoutCard,
+} from '../../src/app/(private)/dashboard/_components/today-workout-card';
 import {
   buildCompleteSessionPayload,
   buildSkipPayload,
@@ -281,6 +287,25 @@ test('today workout card helper resolves displayed session deterministically', (
   });
   assert.equal(none.mode, 'none');
   assert.equal(none.session, null);
+});
+
+test('today workout card keeps business empty state separate from loader error state', () => {
+  const emptyHtml = renderToStaticMarkup(
+    React.createElement(TodayWorkoutCard, {
+      loadState: 'empty',
+      data: {
+        todaySession: null,
+        nextSession: null,
+        primaryAction: 'start_workout',
+      },
+    }),
+  );
+  const errorHtml = renderToStaticMarkup(React.createElement(TodayWorkoutCard, { loadState: 'error' }));
+
+  assert.match(emptyHtml, /Aucune seance planifiee pour le moment\./);
+  assert.doesNotMatch(emptyHtml, /Impossible de charger la seance du jour\./);
+  assert.match(errorHtml, /Impossible de charger la seance du jour\./);
+  assert.doesNotMatch(errorHtml, /Aucune seance planifiee pour le moment\./);
 });
 
 test('session logger set autosave helpers preserve immediate payload and edit continuity', () => {

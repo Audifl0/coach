@@ -12,10 +12,17 @@ import { TrendsDrilldown } from './trends-drilldown';
 
 type TrendPeriod = ProgramTrendQueryInput['period'];
 
-type TrendsSummaryCardProps = {
-  initialData: ProgramTrendsSummaryResponse;
-  drilldownExerciseKey?: string | null;
-};
+type TrendsSummaryCardProps =
+  | {
+      loadState?: 'ready';
+      initialData: ProgramTrendsSummaryResponse;
+      drilldownExerciseKey?: string | null;
+    }
+  | {
+      loadState: 'error';
+      initialData?: never;
+      drilldownExerciseKey?: string | null;
+    };
 
 type TrendsSummaryState = {
   period: TrendPeriod;
@@ -123,7 +130,17 @@ export function shouldApplyFetchedSummaryResponse({
   return responseData.period === selectedPeriod;
 }
 
-export function TrendsSummaryCard({ initialData, drilldownExerciseKey = null }: TrendsSummaryCardProps) {
+export function TrendsSummaryCard(props: TrendsSummaryCardProps) {
+  if (props.loadState === 'error') {
+    return (
+      <section aria-label="trends-summary-card">
+        <h2>Trends</h2>
+        <p>Unable to load trends</p>
+      </section>
+    );
+  }
+
+  const { initialData, drilldownExerciseKey = null } = props;
   const [state, setState] = useState<TrendsSummaryState>(() => createDefaultTrendsSummaryState(initialData));
   const [isDrilldownOpen, setIsDrilldownOpen] = useState(false);
   const metricCards = useMemo(() => mapMetricCards(state.data), [state.data]);

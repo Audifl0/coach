@@ -9,6 +9,16 @@ import {
 } from '@/lib/program/contracts';
 import { SessionLogger } from './session-logger';
 
+type TodayWorkoutCardProps =
+  | {
+      loadState?: 'ready' | 'empty';
+      data: ProgramTodayResponse;
+    }
+  | {
+      loadState: 'error';
+      data?: never;
+    };
+
 export function getPrimaryActionLabel(primaryAction: ProgramTodayResponse['primaryAction']): string {
   if (primaryAction === 'start_workout') {
     return 'Commencer seance';
@@ -40,7 +50,17 @@ function formatRestRange(restMinSec: number, restMaxSec: number): string {
   return `${restMinSec}-${restMaxSec}s`;
 }
 
-export function TodayWorkoutCard({ data }: { data: ProgramTodayResponse }) {
+export function TodayWorkoutCard(props: TodayWorkoutCardProps) {
+  if (props.loadState === 'error') {
+    return (
+      <section aria-label="today-workout-card">
+        <h2>Seance du jour</h2>
+        <p>Impossible de charger la seance du jour.</p>
+      </section>
+    );
+  }
+
+  const data = props.data;
   const [detailOpen, setDetailOpen] = useState(false);
   const [loggerOpen, setLoggerOpen] = useState(false);
   const [loading, setLoading] = useState(false);

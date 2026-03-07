@@ -11,8 +11,10 @@ import { AdaptiveForecastCard } from './components/adaptive-forecast-card';
 import { TrendsSummaryCard } from './_components/trends-summary-card';
 import { createProgramDal } from '@/server/dal/program';
 import {
-  loadProgramTodayData,
-  loadProgramTrendsData,
+  loadDashboardProgramTodaySection,
+  loadDashboardTrendsSection,
+} from '@/server/dashboard/program-dashboard';
+import {
   pickDashboardSession,
   resolveAdaptiveForecastCard,
   resolveDashboardRoute,
@@ -82,10 +84,10 @@ export default async function DashboardPage() {
   }
 
   const programDal = createProgramDal(prisma as never, { userId: session.userId });
-  const programToday = await loadProgramTodayData({
+  const programTodaySection = await loadDashboardProgramTodaySection({
     getTodayOrNextSessionCandidates: async () => programDal.getTodayOrNextSessionCandidates(),
   });
-  const sessionSurface = pickDashboardSession(programToday);
+  const sessionSurface = pickDashboardSession(programTodaySection.status === 'error' ? null : programTodaySection.data);
   const adaptiveDal = createAdaptiveCoachingDal(prisma as never, { userId: session.userId });
   const latestRecommendation = sessionSurface.topSession
     ? await adaptiveDal.listLatestAdaptiveRecommendation(sessionSurface.topSession.id)
@@ -94,12 +96,12 @@ export default async function DashboardPage() {
   const pendingConfirmationRecommendation = latestRecommendation
     ? toPendingConfirmationBannerData(latestRecommendation)
     : null;
-  const trends = await loadProgramTrendsData({
+  const trendsSection = await loadDashboardTrendsSection({
     getTrendSummary: async (input) => programDal.getTrendSummary(input),
   });
   const sectionOrder = resolveDashboardSectionOrder({
     hasAdaptiveForecast: Boolean(adaptiveForecast),
-    hasTrends: Boolean(trends),
+    hasTrends: trendsSection.status !== 'empty',
   });
   const drilldownExerciseKey = sessionSurface.topSession?.exercises?.[0]?.exerciseKey ?? null;
 
@@ -109,17 +111,26 @@ export default async function DashboardPage() {
       {pendingConfirmationRecommendation ? (
         <AdaptiveConfirmationBanner recommendation={pendingConfirmationRecommendation} />
       ) : null}
-      <TodayWorkoutCard
-        data={{
-          todaySession: sessionSurface.mode === 'today' ? sessionSurface.topSession : null,
-          nextSession: sessionSurface.mode === 'next' ? sessionSurface.topSession : null,
-          primaryAction: sessionSurface.primaryAction,
-        }}
-      />
+      {programTodaySection.status === 'error' ? (
+        <TodayWorkoutCard loadState="error" />
+      ) : (
+        <TodayWorkoutCard
+          loadState={programTodaySection.status}
+          data={{
+            todaySession: sessionSurface.mode === 'today' ? sessionSurface.topSession : null,
+            nextSession: sessionSurface.mode === 'next' ? sessionSurface.topSession : null,
+            primaryAction: sessionSurface.primaryAction,
+          }}
+        />
+      )}
       {sectionOrder.includes('adaptive-forecast') && adaptiveForecast ? <AdaptiveForecastCard forecast={adaptiveForecast} /> : null}
-      {sectionOrder.includes('trends-summary') && trends ? (
-        <TrendsSummaryCard initialData={trends} drilldownExerciseKey={drilldownExerciseKey} />
-      ) : null}
+      {sectionOrder.includes('trends-summary')
+        ? (trendsSection.status === 'error'
+          ? <TrendsSummaryCard loadState="error" />
+          : (trendsSection.status === 'ready'
+            ? <TrendsSummaryCard initialData={trendsSection.data} drilldownExerciseKey={drilldownExerciseKey} />
+            : null))
+        : null}
       {sectionOrder.includes('session-history') ? <SessionHistoryCard /> : null}
       <p>You are authenticated on this device.</p>
       <form action="/api/auth/logout" method="post">
