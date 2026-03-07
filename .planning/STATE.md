@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 08
 current_phase_name: release blockers and regression restoration
-current_plan: 08-05 (next)
-status: in_progress
-stopped_at: Completed 08-04-PLAN.md; next 08-05-PLAN.md
-last_updated: "2026-03-07T10:48:02.285Z"
+current_plan: 08-05 (verification)
+status: verifying
+stopped_at: Completed 08-05-PLAN.md
+last_updated: "2026-03-07T10:56:17.820Z"
 last_activity: 2026-03-07
 progress:
   total_phases: 12
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 55
-  completed_plans: 46
-  percent: 84
+  completed_plans: 47
+  percent: 85
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 08
 **Current Phase Name:** release blockers and regression restoration
 **Total Phases:** 12
-**Current Plan:** 08-05 (next)
+**Current Plan:** 08-05 (verification)
 **Total Plans in Phase:** 5
-**Status:** In progress
+**Status:** Phase complete — ready for verification
 **Last Activity:** 2026-03-07
-**Last Activity Description:** Completed 08-04 by hardening public auth throttling, writing its summary, and advancing the next active plan to 08-05.
-**Progress:** [████████░░] 84%
+**Last Activity Description:** Completed 08-05 by restoring adaptive pending-confirmation behavior, deterministic runtime-corpus evidence retrieval, and the final phase-08 test gate.
+**Progress:** [█████████░] 85%
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 08-release-blockers-and-regression-restoration P08-01 | 32 min | 4 tasks | 4 files |
 | Phase 08-release-blockers-and-regression-restoration P08-03 | 26 min | 3 tasks | 10 files |
 | Phase 08-release-blockers-and-regression-restoration P08-04 | 9 min | 3 tasks | 6 files |
+| Phase 08-release-blockers-and-regression-restoration P08-05 | 4 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -184,6 +185,8 @@ Recent decisions affecting current work:
 - [Phase 08-release-blockers-and-regression-restoration]: Keep brute-force protection strictly on /api/auth/login and /api/auth/signup instead of introducing a generic abuse platform.
 - [Phase 08-release-blockers-and-regression-restoration]: Throttle login on normalized username plus client IP and signup on client IP only so sub-threshold auth semantics remain unchanged.
 - [Phase 08-release-blockers-and-regression-restoration]: Bind the shared auth limiter only in runtime POST handlers so production requests share state while direct handler factories stay isolated for deterministic tests.
+- [Phase 08-release-blockers-and-regression-restoration]: Adaptive proposal parsing now strips transport-only metadata and keeps lifecycle status server-owned across local and provider paths.
+- [Phase 08-release-blockers-and-regression-restoration]: Evidence retrieval now fills underflow slots from the same selected corpus in deterministic source-priority order, using the built-in corpus only when the runtime corpus is empty or unusable.
 
 ### Roadmap Evolution
 
@@ -204,6 +207,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-07T10:48:02.283Z
-**Stopped At:** Completed 08-04-PLAN.md; next 08-05-PLAN.md
+**Last Date:** 2026-03-07T10:56:17.817Z
+**Stopped At:** Completed 08-05-PLAN.md
 **Resume File:** None
