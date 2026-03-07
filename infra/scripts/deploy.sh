@@ -10,6 +10,10 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
+set -a
+source "$ENV_FILE"
+set +a
+
 if docker compose version >/dev/null 2>&1; then
   COMPOSE_CMD=(docker compose)
 elif command -v docker-compose >/dev/null 2>&1; then
@@ -26,6 +30,7 @@ echo "Deploying stack with env: $ENV_FILE"
 
 if [[ -n "${APP_DOMAIN:-}" ]]; then
   "$SCRIPT_DIR/smoke-test-https.sh" "https://${APP_DOMAIN}"
+  node "$SCRIPT_DIR/smoke-authenticated-dashboard.mjs" "https://${APP_DOMAIN}"
 fi
 
 echo "Deployment complete."

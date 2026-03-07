@@ -6,19 +6,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DEFAULT_ENV_FILE="/opt/coach/.env.production"
 ENV_FILE="${1:-$DEFAULT_ENV_FILE}"
 BACKUP_DIR="${2:-$PROJECT_ROOT/backups}"
-EVIDENCE_DIR="${RESTORE_DRILL_EVIDENCE_DIR:-$BACKUP_DIR/restore-drills}"
 TIMESTAMP="$(date -u +"%Y%m%dT%H%M%SZ")"
-EVIDENCE_FILE="$EVIDENCE_DIR/restore-drill-${TIMESTAMP}.log"
-DRILL_BASE_URL="${RESTORE_DRILL_BASE_URL:-http://127.0.0.1:3000}"
-
-mkdir -p "$EVIDENCE_DIR"
-
-{
-  echo "restore_drill_started_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-  echo "env_file=$ENV_FILE"
-  echo "backup_dir=$BACKUP_DIR"
-  echo "evidence_file=$EVIDENCE_FILE"
-} >"$EVIDENCE_FILE"
 
 log() {
   local message="$1"
@@ -41,9 +29,26 @@ record_success() {
 trap 'record_failure "$?"' ERR
 
 if [[ ! -f "$ENV_FILE" ]]; then
-  log "Missing env file: $ENV_FILE"
+  echo "Missing env file: $ENV_FILE" >&2
   exit 1
 fi
+
+set -a
+source "$ENV_FILE"
+set +a
+
+EVIDENCE_DIR="${RESTORE_DRILL_EVIDENCE_DIR:-$BACKUP_DIR/restore-drills}"
+EVIDENCE_FILE="$EVIDENCE_DIR/restore-drill-${TIMESTAMP}.log"
+DRILL_BASE_URL="${RESTORE_DRILL_BASE_URL:-http://127.0.0.1:3000}"
+
+mkdir -p "$EVIDENCE_DIR"
+
+{
+  echo "restore_drill_started_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  echo "env_file=$ENV_FILE"
+  echo "backup_dir=$BACKUP_DIR"
+  echo "evidence_file=$EVIDENCE_FILE"
+} >"$EVIDENCE_FILE"
 
 select_backup_file() {
   local backup_file="${RESTORE_DRILL_BACKUP_FILE:-}"
@@ -96,5 +101,8 @@ http_smoke_check "login" "$DRILL_BASE_URL/login"
 
 log "stage=smoke_dashboard"
 http_smoke_check "dashboard" "$DRILL_BASE_URL/dashboard"
+
+log "stage=smoke_dashboard_authenticated"
+node "$SCRIPT_DIR/smoke-authenticated-dashboard.mjs" "$DRILL_BASE_URL" | tee -a "$EVIDENCE_FILE"
 
 record_success
