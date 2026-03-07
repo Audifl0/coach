@@ -63,6 +63,10 @@ The script:
 - Runs HTTPS smoke test automatically when `APP_DOMAIN` is set.
 - Uses the same ops env contract later for authenticated dashboard smoke once the release-smoke account is provisioned.
 
+For the full phase-09 release gate, continue with
+`docs/operations/release-proof.md` after deploy-host prerequisites are in
+place.
+
 ## HTTPS Behavior
 
 - Caddy serves the domain from `infra/caddy/Caddyfile`.
@@ -102,6 +106,12 @@ For routine updates:
 ```bash
 git pull
 infra/scripts/deploy.sh /opt/coach/.env.production
+```
+
+For release candidates, prefer the full proof instead of deploy-only:
+
+```bash
+corepack pnpm release:proof -- /opt/coach/.env.production
 ```
 
 ## Failure Recovery Basics

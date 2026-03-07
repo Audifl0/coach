@@ -61,3 +61,23 @@ test('release-proof wrapper requires authenticated sanity as an explicit post-de
   assert.match(releaseProofScript, /node "\$SCRIPT_DIR\/smoke-authenticated-dashboard\.mjs"/);
   assert.match(deployScript, /DEPLOY_SKIP_POST_DEPLOY_SMOKE/);
 });
+
+test('release-proof runbook documents prerequisites, evidence contract, and deploy handoff', async () => {
+  const [releaseProofRunbook, deployRunbook] = await Promise.all([
+    readProjectFile('docs/operations/release-proof.md'),
+    readProjectFile('docs/operations/vps-deploy.md'),
+  ]);
+
+  assert.match(releaseProofRunbook, /APP_DOMAIN/);
+  assert.match(releaseProofRunbook, /OPS_SMOKE_USERNAME/);
+  assert.match(releaseProofRunbook, /OPS_SMOKE_PASSWORD/);
+  assert.match(releaseProofRunbook, /OPS_SMOKE_EXPECTED_FOCUS_LABEL/);
+  assert.match(releaseProofRunbook, /corepack pnpm release:proof -- \/opt\/coach\/\.env\.production/);
+  assert.match(releaseProofRunbook, /==> typecheck/);
+  assert.match(releaseProofRunbook, /==> deploy/);
+  assert.match(releaseProofRunbook, /smoke_business_data=ok/);
+  assert.match(releaseProofRunbook, /Release proof passed\./);
+  assert.match(releaseProofRunbook, /Stop Conditions/i);
+  assert.match(releaseProofRunbook, /vps-deploy\.md/);
+  assert.match(deployRunbook, /release-proof\.md/);
+});
