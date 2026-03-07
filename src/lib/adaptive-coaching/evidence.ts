@@ -85,6 +85,38 @@ function toShortEvidenceRef(entry: AdaptiveEvidenceCorpusEntry): string {
   return `${prefix}-${numericPart}`;
 }
 
+function compareMatchedEntries(
+  left: { entry: AdaptiveEvidenceCorpusEntry; score: number },
+  right: { entry: AdaptiveEvidenceCorpusEntry; score: number },
+): number {
+  if (left.score !== right.score) {
+    return right.score - left.score;
+  }
+
+  if (left.entry.sourceClass !== right.entry.sourceClass) {
+    return SOURCE_PRIORITY[right.entry.sourceClass] - SOURCE_PRIORITY[left.entry.sourceClass];
+  }
+
+  return left.entry.id.localeCompare(right.entry.id);
+}
+
+function compareFillEntries(left: AdaptiveEvidenceCorpusEntry, right: AdaptiveEvidenceCorpusEntry): number {
+  if (left.sourceClass !== right.sourceClass) {
+    return SOURCE_PRIORITY[right.sourceClass] - SOURCE_PRIORITY[left.sourceClass];
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
+function toEvidenceReference(entry: AdaptiveEvidenceCorpusEntry): AdaptiveEvidenceReference {
+  return {
+    ref: toShortEvidenceRef(entry),
+    sourceClass: entry.sourceClass,
+    title: entry.title,
+    summary: entry.summary,
+  };
+}
+
 export function retrieveAdaptiveEvidence(input: RetrieveAdaptiveEvidenceInput): AdaptiveEvidenceReference[] {
   const topK = Math.max(1, Math.min(input.topK ?? 3, 5));
   const runtimeCorpus =
@@ -95,31 +127,27 @@ export function retrieveAdaptiveEvidence(input: RetrieveAdaptiveEvidenceInput): 
   const corpus = runtimeCorpus.length > 0 ? runtimeCorpus : DEFAULT_ADAPTIVE_CORPUS;
   const query = new Set(input.queryTags.map(normalizeToken).filter(Boolean));
 
-  const scored = corpus
+  const matched = corpus
     .map((entry) => {
       const overlap = entry.tags.map(normalizeToken).filter((tag) => query.has(tag)).length;
       const score = overlap * 10 + SOURCE_PRIORITY[entry.sourceClass];
       return { entry, overlap, score };
     })
     .filter((item) => item.overlap > 0)
-    .sort((a, b) => {
-      if (a.score !== b.score) {
-        return b.score - a.score;
-      }
+    .sort(compareMatchedEntries);
 
-      if (a.entry.sourceClass !== b.entry.sourceClass) {
-        return SOURCE_PRIORITY[b.entry.sourceClass] - SOURCE_PRIORITY[a.entry.sourceClass];
-      }
+  const selected = matched.slice(0, topK).map(({ entry }) => entry);
+  if (selected.length < topK) {
+    const selectedIds = new Set(selected.map((entry) => entry.id));
+    const fill = corpus
+      .filter((entry) => !selectedIds.has(entry.id))
+      .sort(compareFillEntries)
+      .slice(0, topK - selected.length);
 
-      return a.entry.id.localeCompare(b.entry.id);
-    });
+    selected.push(...fill);
+  }
 
-  return scored.slice(0, topK).map(({ entry }) => ({
-    ref: toShortEvidenceRef(entry),
-    sourceClass: entry.sourceClass,
-    title: entry.title,
-    summary: entry.summary,
-  }));
+  return selected.map(toEvidenceReference);
 }
 
 export function buildAdaptiveExplanationEnvelope(input: {
