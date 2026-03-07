@@ -30,6 +30,15 @@ function toDateStart(isoDate: string): Date {
   return new Date(`${isoDate}T00:00:00.000Z`);
 }
 
+function isActivePlanConflictError(error: unknown): boolean {
+  if (!error || typeof error !== 'object' || !('code' in error)) {
+    return false;
+  }
+
+  const code = (error as { code?: string }).code;
+  return code === 'P2002' || code === '23505';
+}
+
 export function createProgramGenerationService(deps: ProgramGenerationServiceDeps) {
   return {
     async generate(userId: string, input: ProgramGenerateInput): Promise<ProgramGenerationResult> {
@@ -48,27 +57,35 @@ export function createProgramGenerationService(deps: ProgramGenerationServiceDep
         anchorDate: input.anchorDate,
       });
 
-      await deps.replaceActivePlan(userId, {
-        startDate: toDateStart(plan.startDate),
-        endDate: toDateStart(plan.endDate),
-        sessions: plan.sessions.map((session) => ({
-          scheduledDate: toDateStart(session.scheduledDate),
-          dayIndex: session.dayIndex,
-          focusLabel: session.focusLabel,
-          state: session.state,
-          exercises: session.exercises.map((exercise, orderIndex) => ({
-            orderIndex,
-            exerciseKey: exercise.exerciseKey,
-            displayName: exercise.displayName,
-            movementPattern: exercise.movementPattern,
-            sets: exercise.sets,
-            targetReps: exercise.targetReps,
-            targetLoad: exercise.targetLoad,
-            restMinSec: exercise.restMinSec,
-            restMaxSec: exercise.restMaxSec,
+      try {
+        await deps.replaceActivePlan(userId, {
+          startDate: toDateStart(plan.startDate),
+          endDate: toDateStart(plan.endDate),
+          sessions: plan.sessions.map((session) => ({
+            scheduledDate: toDateStart(session.scheduledDate),
+            dayIndex: session.dayIndex,
+            focusLabel: session.focusLabel,
+            state: session.state,
+            exercises: session.exercises.map((exercise, orderIndex) => ({
+              orderIndex,
+              exerciseKey: exercise.exerciseKey,
+              displayName: exercise.displayName,
+              movementPattern: exercise.movementPattern,
+              sets: exercise.sets,
+              targetReps: exercise.targetReps,
+              targetLoad: exercise.targetLoad,
+              restMinSec: exercise.restMinSec,
+              restMaxSec: exercise.restMaxSec,
+            })),
           })),
-        })),
-      });
+        });
+      } catch (error) {
+        if (isActivePlanConflictError(error)) {
+          throw new ProgramGenerationError('An active program already exists. Please retry generation.', 409);
+        }
+
+        throw error;
+      }
 
       return {
         startDate: plan.startDate,

@@ -52,6 +52,7 @@ model ProgramPlan {
   id          String           @id @default(cuid())
   userId      String
   user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Partial unique active-plan enforcement lives in migration 0006_runtime_consistency_guards.
   status      String
   startDate   DateTime
   endDate     DateTime
