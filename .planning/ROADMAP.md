@@ -137,8 +137,43 @@ Plans:
 | 05.2 - Pipeline web autonome corpus scientifique | 3/3 | Complete    | 2026-03-05 | 2026-03-05 |
 | 06 - Trends and Operational Reliability | 4/4 | Complete   | 2026-03-06 | 2026-03-05 |
 | 07 - Audit technique avance et stabilisation complete de l'application | 6/6 | Complete   | 2026-03-06 | 2026-03-06 |
+| 08 - Release blockers and regression restoration | 1/5 | In Progress | 2026-03-07 | 2026-03-07 |
 
 - Total v1 requirements: 26
 - Mapped to phases: 26
 - Unmapped: 0
 - Multi-phase assignments: 4
+
+### Phase 8: Release blockers and regression restoration
+
+**Goal:** Traiter tous les blockers P0/P1 qui empêchent une release crédible après l'audit de phase 07.
+**Requirements**: AUTH-01, AUTH-02, AUTH-03, ADAP-01, ADAP-02, ADAP-03, SAFE-03, PLAT-01, PLAT-03
+**Depends on:** Phase 7
+**Plans:** 1/5 plans complete
+
+Plans:
+- [ ] 08-01-PLAN.md - Prisma client refresh plus middleware-safe auth import split and focused auth regression rerun
+- [x] 08-02-PLAN.md - Dashboard/profile/provider typecheck restoration across the bounded RB-01 clusters
+- [ ] 08-03-PLAN.md - Production env file repository and Docker build-context guardrails
+- [ ] 08-04-PLAN.md - Focused auth throttling and abuse-proof verification
+- [ ] 08-05-PLAN.md - Adaptive lifecycle and evidence restoration plus final phase gates
+
+### Phase 9: Security, runtime, and release-proof stabilization
+
+**Goal:** Stabiliser les flux critiques, la resilience runtime, et la preuve de release apres la levee des blockers.
+**Requirements**: PROG-01, PROG-02, PROG-03, LOG-01, LOG-02, LOG-03, LOG-04, ADAP-01, ADAP-02, ADAP-03, SAFE-01, SAFE-02, SAFE-03, DASH-01, DASH-02, DASH-03, PLAT-02
+**Depends on:** Phase 8
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 9 to break down)
+
+### Phase 10: Maintainability cleanup and operational hardening
+
+**Goal:** Fermer la dette de maintainability et le hardening ops restant une fois la release stabilisee.
+**Requirements**: AUTH-03, PLAT-01, PLAT-02, PLAT-03
+**Depends on:** Phase 9
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 10 to break down)

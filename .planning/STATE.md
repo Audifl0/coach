@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 07
-current_phase_name: audit technique avancé et stabilisation complète de l'application
-current_plan: Not started
-status: completed
-stopped_at: Completed 07-06-PLAN.md
-last_updated: "2026-03-06T18:26:32.389Z"
-last_activity: 2026-03-06
+current_phase: 08
+current_phase_name: release blockers and regression restoration
+current_plan: 08-03
+status: in_progress
+stopped_at: Completed 08-02-PLAN.md
+last_updated: "2026-03-07T09:28:08Z"
+last_activity: 2026-03-07
 progress:
-  total_phases: 4
+  total_phases: 12
   completed_phases: 9
-  total_plans: 42
-  completed_plans: 42
-  percent: 100
+  total_plans: 47
+  completed_plans: 43
+  percent: 91
 ---
 
 # Project State
@@ -24,19 +24,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Fournir un coaching musculation personnalisé, sûr et adaptatif au quotidien, sans perdre la simplicité d'usage.
-**Current focus:** Phase 07 - Audit technique avancé et stabilisation complète de l'application
+**Current focus:** Phase 08 - Release blockers and regression restoration
 
 ## Current Position
 
-**Current Phase:** 07
-**Current Phase Name:** audit technique avancé et stabilisation complète de l'application
-**Total Phases:** 4
-**Current Plan:** Not started
-**Total Plans in Phase:** 6
-**Status:** Milestone complete
-**Last Activity:** 2026-03-06
-**Last Activity Description:** Phase 07 complete after approved audit package validation
-**Progress:** [██████████] 100%
+**Current Phase:** 08
+**Current Phase Name:** release blockers and regression restoration
+**Total Phases:** 12
+**Current Plan:** 08-03 (next) with 08-01 metadata still pending
+**Total Plans in Phase:** 5
+**Status:** In progress
+**Last Activity:** 2026-03-07
+**Last Activity Description:** Completed 08-02 and restored the repo-wide typecheck baseline for RB-01
+**Progress:** [█████████░] 91%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 07-audit-technique-avanc-et-stabilisation-compl-te-de-l-application P07-04 | 6 min | 2 tasks | 4 files |
 | Phase 07-audit-technique-avanc-et-stabilisation-compl-te-de-l-application P07-05 | 4 min | 2 tasks | 4 files |
 | Phase 07-audit-technique-avanc-et-stabilisation-compl-te-de-l-application P07-06 | 5 min | 3 tasks | 6 files |
+| Phase 08-release-blockers-and-regression-restoration P08-02 | 19 min | 4 tasks | 26 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,9 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 08-release-blockers-and-regression-restoration]: Shared dashboard/today-route session types now remain centralized in src/lib/program/contracts.ts instead of route-local unions.
+- [Phase 08-release-blockers-and-regression-restoration]: isProfileComplete now accepts unknown input and performs explicit object checks so callers do not need cast-based suppressions.
+- [Phase 08-release-blockers-and-regression-restoration]: Provider adapters normalize SDK request-id, payload-shape, and mutable-schema quirks before adaptive services consume fallback metadata.
 - [Phase 1]: Auth model is username + password with low-friction personal usage focus
 - [Phase 1]: AI coaching strategy locked as hybrid rules + LLM, safety-first
 - [Phase 01]: Pinned stable foundation dependencies with minimal scripts for deterministic installs.
@@ -176,6 +180,9 @@ Recent decisions affecting current work:
 - Phase 05.1 inserted after Phase 05: LLM provider réel: OpenAI/Anthropic + env model/key + structured output strict + tests SAFE-03 (URGENT)
 - Phase 05.2 inserted after Phase 05: Pipeline web autonome corpus scientifique: veille, synthèse, validation continue (URGENT)
 - Phase 7 added: Audit technique avancé et stabilisation complète de l'application
+- Phase 8 added: Release blockers and regression restoration
+- Phase 9 added: Security, runtime, and release-proof stabilization
+- Phase 10 added: Maintainability cleanup and operational hardening
 
 ### Pending Todos
 
@@ -187,6 +194,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-06T18:26:32.389Z
-**Stopped At:** Completed 07-06-PLAN.md
+**Last Date:** 2026-03-07T09:28:08Z
+**Stopped At:** Completed 08-02-PLAN.md
 **Resume File:** None
