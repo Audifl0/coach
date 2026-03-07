@@ -74,10 +74,23 @@ function createDeps(options?: {
   recommendation?: RecommendationRecord;
   targetSessionId?: string | null;
   proposalActionType?: 'progress' | 'hold' | 'deload' | 'substitution';
+  useProviderPath?: boolean;
+  proposalMetadata?: Record<string, unknown>;
 }): AdaptiveCoachingServiceDeps {
   let recommendation = options?.recommendation ?? buildRecommendation({});
   const targetSessionId = options?.targetSessionId ?? 'session_next';
   const proposalActionType = options?.proposalActionType ?? 'hold';
+  const proposalMetadata = options?.proposalMetadata ?? {};
+  const proposalPayload = {
+    actionType: proposalActionType,
+    status: 'proposed',
+    plannedSessionId: 'session_next',
+    reasons: ['Reason 1', 'Reason 2'],
+    evidenceTags: ['G-001'],
+    forecastProjection: { projectedReadiness: 3, projectedRpe: 7 },
+    modelConfidence: 0.8,
+    ...proposalMetadata,
+  };
 
   return {
     getProfile: async () => ({
@@ -132,15 +145,11 @@ function createDeps(options?: {
       return recommendation;
     },
     appendDecisionTrace: async () => ({ id: 'decision' }),
-    proposeRecommendation: async () => ({
-      actionType: proposalActionType,
-      status: 'proposed',
-      plannedSessionId: 'session_next',
-      reasons: ['Reason 1', 'Reason 2'],
-      evidenceTags: ['G-001'],
-      forecastProjection: { projectedReadiness: 3, projectedRpe: 7 },
-      modelConfidence: 0.8,
-    }),
+    proposeRecommendation: async () => proposalPayload,
+    realProviderEnabled: options?.useProviderPath ?? false,
+    proposeRecommendationWithProvider: options?.useProviderPath
+      ? async () => proposalPayload
+      : undefined,
     now: options?.now ? () => options.now as Date : undefined,
   };
 }
@@ -175,6 +184,51 @@ test('deload and substitution recommendations are stored as pending_confirmation
   const substitutionResult = await substitutionService.generate('user_1');
   assert.equal(substitutionResult.recommendation.status, 'pending_confirmation');
   assert.equal(substitutionResult.recommendation.actionType, 'substitution');
+});
+
+test('transport-only proposal metadata is stripped for local and provider payloads before parsing', async () => {
+  const localService = createAdaptiveCoachingService(
+    createDeps({
+      recommendation: buildRecommendation({
+        id: 'latest_local',
+        actionType: 'hold',
+        status: 'applied',
+      }),
+      proposalActionType: 'deload',
+      proposalMetadata: {
+        status: 'applied',
+        modelConfidence: 0.93,
+        requestId: 'req_local',
+      },
+    }),
+  );
+
+  const localResult = await localService.generate('user_1');
+  assert.equal(localResult.recommendation.actionType, 'deload');
+  assert.equal(localResult.recommendation.status, 'pending_confirmation');
+  assert.equal(localResult.recommendation.fallbackApplied, false);
+
+  const providerService = createAdaptiveCoachingService(
+    createDeps({
+      recommendation: buildRecommendation({
+        id: 'latest_provider',
+        actionType: 'hold',
+        status: 'applied',
+      }),
+      proposalActionType: 'substitution',
+      useProviderPath: true,
+      proposalMetadata: {
+        status: 'applied',
+        modelConfidence: 0.91,
+        requestId: 'req_provider',
+      },
+    }),
+  );
+
+  const providerResult = await providerService.generate('user_1');
+  assert.equal(providerResult.recommendation.actionType, 'substitution');
+  assert.equal(providerResult.recommendation.status, 'pending_confirmation');
+  assert.equal(providerResult.recommendation.fallbackApplied, false);
 });
 
 test('confirm fails when recommendation is expired, not pending, or no longer tied to next session', async () => {
