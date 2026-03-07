@@ -98,6 +98,7 @@ export type ReplaceActivePlanInput = {
 
 type ProgramDalClient = {
   $transaction<T>(callback: (tx: ProgramDalClientTx) => Promise<T>): Promise<T>;
+  $queryRawUnsafe?<T = unknown>(query: string, ...values: unknown[]): Promise<T>;
   programPlan: {
     updateMany(args: {
       where: { userId: string; status: 'active' | 'archived' };
@@ -149,7 +150,7 @@ type ProgramDalClient = {
       include: { exercises: { orderBy: { orderIndex: 'asc' | 'desc' } } };
     }): Promise<PlannedSessionRecord | null>;
     findUnique?(args: {
-      where: { id: string; userId: string };
+      where: { id: string };
     }): Promise<PlannedSessionRecord | null>;
     findMany?(args: {
       where: {
@@ -185,7 +186,7 @@ type ProgramDalClient = {
       >
     >;
     update?(args: {
-      where: { id: string; userId: string };
+      where: { id: string };
       data: {
         startedAt?: Date;
         completedAt?: Date;
@@ -197,6 +198,19 @@ type ProgramDalClient = {
         postSessionComment?: string | null;
       };
     }): Promise<PlannedSessionRecord>;
+    updateMany?(args: {
+      where: { id: string; userId: string; completedAt?: null; startedAt?: null };
+      data: {
+        startedAt?: Date;
+        completedAt?: Date;
+        effectiveDurationSec?: number;
+        durationCorrectedAt?: Date;
+        note?: string | null;
+        postSessionFatigue?: number;
+        postSessionReadiness?: number;
+        postSessionComment?: string | null;
+      };
+    }): Promise<{ count: number }>;
   };
   plannedExercise: {
     findUnique(args: {
@@ -208,7 +222,7 @@ type ProgramDalClient = {
       }) | null
     >;
     update(args: {
-      where: { id: string; userId: string };
+      where: { id: string };
       data: {
         exerciseKey?: string;
         displayName?: string;
@@ -278,6 +292,12 @@ function resolveTrendRange(period: TrendPeriod, now: Date): { from: Date; to: Da
   return { from, to, dates };
 }
 
+type LockedSessionRecord = {
+  id: string;
+  startedAt: Date | null;
+  completedAt: Date | null;
+};
+
 export function createProgramDal(db: ProgramDalClient, session: SessionContext | null | undefined) {
   const scope = requireAccountScope(session);
 
@@ -316,7 +336,6 @@ export function createProgramDal(db: ProgramDalClient, session: SessionContext |
     const plannedSession = await db.plannedSession.findUnique({
       where: {
         id: plannedSessionId,
-        userId: scope.userId,
       },
     });
 
@@ -326,6 +345,56 @@ export function createProgramDal(db: ProgramDalClient, session: SessionContext |
 
     assertAccountOwnership(scope, plannedSession.userId);
     return plannedSession;
+  }
+
+  async function lockOwnedSessionForMutation(
+    tx: ProgramDalClientTx,
+    plannedSessionId: string,
+    notFoundMessage: string,
+    fallback?: { startedAt?: Date | null; completedAt?: Date | null },
+  ): Promise<LockedSessionRecord> {
+    if (tx.$queryRawUnsafe) {
+      const rows = await tx.$queryRawUnsafe<Array<LockedSessionRecord>>(
+        'SELECT "id", "startedAt", "completedAt" FROM "PlannedSession" WHERE "id" = $1 AND "userId" = $2 FOR UPDATE',
+        plannedSessionId,
+        scope.userId,
+      );
+      const locked = rows[0];
+      if (!locked) {
+        throw new Error(notFoundMessage);
+      }
+
+      return locked;
+    }
+
+    if (!tx.plannedSession.findUnique) {
+      if (fallback) {
+        return {
+          id: plannedSessionId,
+          startedAt: fallback.startedAt ?? null,
+          completedAt: fallback.completedAt ?? null,
+        };
+      }
+
+      throw new Error('Program DAL client missing plannedSession.findUnique');
+    }
+
+    const plannedSession = await tx.plannedSession.findUnique({
+      where: {
+        id: plannedSessionId,
+      },
+    });
+
+    if (!plannedSession) {
+      throw new Error(notFoundMessage);
+    }
+
+    assertAccountOwnership(scope, plannedSession.userId);
+    return {
+      id: plannedSession.id,
+      startedAt: plannedSession.startedAt ?? null,
+      completedAt: plannedSession.completedAt ?? null,
+    };
   }
 
   return {
@@ -525,7 +594,6 @@ export function createProgramDal(db: ProgramDalClient, session: SessionContext |
       return db.plannedExercise.update({
         where: {
           id: plannedExerciseId,
-          userId: scope.userId,
         },
         data: {
           exerciseKey: substitution.replacementExerciseKey,
@@ -558,27 +626,44 @@ export function createProgramDal(db: ProgramDalClient, session: SessionContext |
         throw new Error('Cannot edit logged sets for a completed session');
       }
 
-      return db.loggedSet.upsert({
-        where: {
-          plannedExerciseId_setIndex: {
-            plannedExerciseId: input.plannedExerciseId,
-            setIndex: input.setIndex,
+      return db.$transaction(async (tx) => {
+        if (!tx.loggedSet) {
+          throw new Error('Program DAL client missing loggedSet methods');
+        }
+
+        const lockedSession = await lockOwnedSessionForMutation(
+          tx,
+          plannedExercise.plannedSessionId,
+          'Planned session not found',
+          plannedExercise.plannedSession,
+        );
+
+        if (lockedSession.completedAt) {
+          throw new Error('Cannot edit logged sets for a completed session');
+        }
+
+        return tx.loggedSet.upsert({
+          where: {
+            plannedExerciseId_setIndex: {
+              plannedExerciseId: input.plannedExerciseId,
+              setIndex: input.setIndex,
+            },
           },
-        },
-        create: {
-          plannedSessionId: plannedExercise.plannedSessionId,
-          plannedExerciseId: input.plannedExerciseId,
-          userId: scope.userId,
-          setIndex: input.setIndex,
-          weight: input.weight,
-          reps: input.reps,
-          rpe: input.rpe ?? null,
-        },
-        update: {
-          weight: input.weight,
-          reps: input.reps,
-          rpe: input.rpe ?? null,
-        },
+          create: {
+            plannedSessionId: plannedExercise.plannedSessionId,
+            plannedExerciseId: input.plannedExerciseId,
+            userId: scope.userId,
+            setIndex: input.setIndex,
+            weight: input.weight,
+            reps: input.reps,
+            rpe: input.rpe ?? null,
+          },
+          update: {
+            weight: input.weight,
+            reps: input.reps,
+            rpe: input.rpe ?? null,
+          },
+        });
       });
     },
 
@@ -605,17 +690,29 @@ export function createProgramDal(db: ProgramDalClient, session: SessionContext |
       }
 
       const reasonText = input.reasonText?.trim();
-      return db.plannedExercise.update({
-        where: {
-          id: input.plannedExerciseId,
-          userId: scope.userId,
-        },
-        data: {
-          isSkipped: true,
-          skipReasonCode: reasonCode,
-          skipReasonText: reasonText ? reasonText : null,
-          skippedAt: input.now ?? new Date(),
-        },
+      return db.$transaction(async (tx) => {
+        const lockedSession = await lockOwnedSessionForMutation(
+          tx,
+          plannedExercise.plannedSessionId,
+          'Planned session not found',
+          plannedExercise.plannedSession,
+        );
+
+        if (lockedSession.completedAt) {
+          throw new Error('Cannot skip exercises after session completion');
+        }
+
+        return tx.plannedExercise.update({
+          where: {
+            id: input.plannedExerciseId,
+          },
+          data: {
+            isSkipped: true,
+            skipReasonCode: reasonCode,
+            skipReasonText: reasonText ? reasonText : null,
+            skippedAt: input.now ?? new Date(),
+          },
+        });
       });
     },
 
@@ -630,17 +727,29 @@ export function createProgramDal(db: ProgramDalClient, session: SessionContext |
         throw new Error('Cannot revert exercise skip for a completed session');
       }
 
-      return db.plannedExercise.update({
-        where: {
-          id: plannedExerciseId,
-          userId: scope.userId,
-        },
-        data: {
-          isSkipped: false,
-          skipReasonCode: null,
-          skipReasonText: null,
-          skippedAt: null,
-        },
+      return db.$transaction(async (tx) => {
+        const lockedSession = await lockOwnedSessionForMutation(
+          tx,
+          plannedExercise.plannedSessionId,
+          'Planned session not found',
+          plannedExercise.plannedSession,
+        );
+
+        if (lockedSession.completedAt) {
+          throw new Error('Cannot revert exercise skip for a completed session');
+        }
+
+        return tx.plannedExercise.update({
+          where: {
+            id: plannedExerciseId,
+          },
+          data: {
+            isSkipped: false,
+            skipReasonCode: null,
+            skipReasonText: null,
+            skippedAt: null,
+          },
+        });
       });
     },
 
@@ -662,14 +771,29 @@ export function createProgramDal(db: ProgramDalClient, session: SessionContext |
         throw new Error('Program DAL client missing plannedSession.update');
       }
 
-      return db.plannedSession.update({
-        where: {
-          id: input.plannedSessionId,
-          userId: scope.userId,
-        },
-        data: {
-          note: input.note,
-        },
+      return db.$transaction(async (tx) => {
+        const lockedSession = await lockOwnedSessionForMutation(
+          tx,
+          input.plannedSessionId,
+          'Planned session not found',
+        );
+
+        if (lockedSession.completedAt) {
+          throw new Error('Cannot edit session note after completion');
+        }
+
+        if (!tx.plannedSession.update) {
+          throw new Error('Program DAL client missing plannedSession.update');
+        }
+
+        return tx.plannedSession.update({
+          where: {
+            id: input.plannedSessionId,
+          },
+          data: {
+            note: input.note,
+          },
+        });
       });
     },
 
@@ -695,18 +819,62 @@ export function createProgramDal(db: ProgramDalClient, session: SessionContext |
         throw new Error('Program DAL client missing plannedSession.update');
       }
 
-      return db.plannedSession.update({
-        where: {
-          id: input.plannedSessionId,
-          userId: scope.userId,
-        },
-        data: {
-          completedAt: input.completedAt,
-          effectiveDurationSec: input.effectiveDurationSec,
-          postSessionFatigue: input.fatigue,
-          postSessionReadiness: input.readiness,
-          postSessionComment: input.comment?.trim() ? input.comment.trim() : null,
-        },
+      return db.$transaction(async (tx) => {
+        const lockedSession = await lockOwnedSessionForMutation(
+          tx,
+          input.plannedSessionId,
+          'Planned session not found',
+        );
+
+        if (lockedSession.completedAt) {
+          throw new Error('Session already completed');
+        }
+
+        const comment = input.comment?.trim() ? input.comment.trim() : null;
+        if (tx.plannedSession.updateMany) {
+          const result = await tx.plannedSession.updateMany({
+            where: {
+              id: input.plannedSessionId,
+              userId: scope.userId,
+              completedAt: null,
+            },
+            data: {
+              completedAt: input.completedAt,
+              effectiveDurationSec: input.effectiveDurationSec,
+              postSessionFatigue: input.fatigue,
+              postSessionReadiness: input.readiness,
+              postSessionComment: comment,
+            },
+          });
+
+          if (result.count === 0) {
+            throw new Error('Session already completed');
+          }
+
+          const updated = await getOwnedSession(input.plannedSessionId);
+          if (!updated) {
+            throw new Error('Planned session not found');
+          }
+
+          return updated;
+        }
+
+        if (!tx.plannedSession.update) {
+          throw new Error('Program DAL client missing plannedSession.update');
+        }
+
+        return tx.plannedSession.update({
+          where: {
+            id: input.plannedSessionId,
+          },
+          data: {
+            completedAt: input.completedAt,
+            effectiveDurationSec: input.effectiveDurationSec,
+            postSessionFatigue: input.fatigue,
+            postSessionReadiness: input.readiness,
+            postSessionComment: comment,
+          },
+        });
       });
     },
 
@@ -729,10 +897,43 @@ export function createProgramDal(db: ProgramDalClient, session: SessionContext |
         throw new Error('Program DAL client missing plannedSession.update');
       }
 
+      if (db.plannedSession.updateMany) {
+        const result = await db.plannedSession.updateMany({
+          where: {
+            id: plannedSessionId,
+            userId: scope.userId,
+            completedAt: null,
+            startedAt: null,
+          },
+          data: {
+            startedAt,
+          },
+        });
+
+        if (result.count === 0) {
+          const nextSession = await getOwnedSession(plannedSessionId);
+          if (!nextSession) {
+            throw new Error('Planned session not found');
+          }
+
+          if (nextSession.completedAt) {
+            throw new Error('Cannot start a completed session');
+          }
+
+          return nextSession;
+        }
+
+        const nextSession = await getOwnedSession(plannedSessionId);
+        if (!nextSession) {
+          throw new Error('Planned session not found');
+        }
+
+        return nextSession;
+      }
+
       return db.plannedSession.update({
         where: {
           id: plannedSessionId,
-          userId: scope.userId,
         },
         data: {
           startedAt,
@@ -762,7 +963,6 @@ export function createProgramDal(db: ProgramDalClient, session: SessionContext |
       return db.plannedSession.update({
         where: {
           id: input.plannedSessionId,
-          userId: scope.userId,
         },
         data: {
           effectiveDurationSec: input.effectiveDurationSec,

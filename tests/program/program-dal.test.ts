@@ -650,7 +650,7 @@ test('markExerciseSkipped rejects when a concurrent completion wins before the g
         reasonCode: 'pain',
         reasonText: 'knee discomfort',
       }),
-    /completed/i,
+    /complet/i,
   );
   assert.equal(skipUpdateCount, 0);
 });
@@ -850,7 +850,7 @@ test('updateSessionNote rejects when a concurrent completion wins before the gua
         plannedSessionId: 'session_1',
         note: 'Tempo clean today',
       }),
-    /completed/i,
+    /complet/i,
   );
   assert.equal(noteUpdateCount, 0);
 });
