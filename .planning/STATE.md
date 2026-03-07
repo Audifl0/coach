@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 09
 current_phase_name: security runtime and release proof stabilization
-current_plan: 3
+current_plan: 4
 status: executing
-stopped_at: Completed 09-02-PLAN.md
-last_updated: "2026-03-07T18:22:42.672Z"
+stopped_at: Completed 09-04-PLAN.md
+last_updated: "2026-03-07T18:35:30.463Z"
 last_activity: 2026-03-07
 progress:
   total_phases: 12
   completed_phases: 10
   total_plans: 56
-  completed_plans: 50
-  percent: 89
+  completed_plans: 51
+  percent: 91
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 09
 **Current Phase Name:** security runtime and release proof stabilization
 **Total Phases:** 12
-**Current Plan:** 3
+**Current Plan:** 4
 **Total Plans in Phase:** 5
 **Status:** Ready to execute
 **Last Activity:** 2026-03-07
-**Last Activity Description:** Completed 09-02 persistence hardening and advanced Phase 09 execution
-**Progress:** [█████████░] 89%
+**Last Activity Description:** Completed 09-04 UTC selection, archived drilldown, and workout-resume parity
+**Progress:** [█████████░] 91%
 
 ## Performance Metrics
 
@@ -71,6 +71,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 08-release-blockers-and-regression-restoration P08-06 | 31 min | 3 tasks | 52 files |
 | Phase 09 P09-01 | 6 min | 2 tasks | 8 files |
 | Phase 09 P09-02 | 12min | 3 tasks | 10 files |
+| Phase 09 P09-04 | 8 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -198,6 +199,9 @@ Recent decisions affecting current work:
 - [Phase 09]: Session logging and completion-sensitive writes now guard mutable session state in the DAL with row locks and conditional updates.
 - [Phase 09]: Active-plan uniqueness is enforced by a manual PostgreSQL partial unique index and translated to 409 at generation boundaries.
 - [Phase 09]: Adaptive stale-state mismatches use typed DAL errors, and reject-plus-fallback persists atomically in one transaction.
+- [Phase 09]: Reused UTC day helpers and an inclusive next-day fallback so today/next session selection stays contract-stable while midnight UTC boundaries behave correctly.
+- [Phase 09]: Extended getSessionById to include archived completed sessions so history rows and drilldown detail share one account-scoped route surface.
+- [Phase 09]: Hydrated SessionLogger from existing session-detail responses and reused the today-card detail fetch so refresh and reopen restore real in-progress workout state.
 
 ### Roadmap Evolution
 
@@ -218,6 +222,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-07T18:22:42.669Z
-**Stopped At:** Completed 09-02-PLAN.md
+**Last Date:** 2026-03-07T18:35:30.459Z
+**Stopped At:** Completed 09-04-PLAN.md
 **Resume File:** None
