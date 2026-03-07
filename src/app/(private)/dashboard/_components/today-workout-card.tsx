@@ -3,6 +3,7 @@
 import { useState } from 'react';
 
 import {
+  type ProgramSessionDetailResponse,
   parseProgramSessionDetailResponse,
   type ProgramSessionSummary,
   type ProgramTodayResponse,
@@ -65,7 +66,7 @@ export function TodayWorkoutCard(props: TodayWorkoutCardProps) {
   const [loggerOpen, setLoggerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [detailSession, setDetailSession] = useState<ProgramSessionSummary | null>(null);
+  const [detailSession, setDetailSession] = useState<ProgramSessionDetailResponse['session'] | null>(null);
 
   const { session, mode } = resolveDisplayedSession(data);
   const actionLabel = getPrimaryActionLabel(data.primaryAction);
@@ -81,16 +82,12 @@ export function TodayWorkoutCard(props: TodayWorkoutCardProps) {
 
   const activeSession: ProgramSessionSummary = session;
   const detail = detailSession && detailSession.id === activeSession.id ? detailSession : null;
+  const loggerSession = detail ?? activeSession;
+  const showResumeAction = loggerSession.state === 'started' && !('completedAt' in loggerSession && loggerSession.completedAt);
 
-  async function handleToggleDetails() {
-    if (detailOpen) {
-      setDetailOpen(false);
-      return;
-    }
-
-    setDetailOpen(true);
+  async function ensureSessionDetail(): Promise<ProgramSessionDetailResponse['session'] | null> {
     if (detail) {
-      return;
+      return detail;
     }
 
     try {
@@ -104,15 +101,43 @@ export function TodayWorkoutCard(props: TodayWorkoutCardProps) {
 
       if (!response.ok) {
         setErrorMessage('Impossible de charger les details de la seance.');
-        return;
+        return null;
       }
 
       const parsed = parseProgramSessionDetailResponse(await response.json());
       setDetailSession(parsed.session);
+      return parsed.session;
     } catch {
       setErrorMessage('Impossible de charger les details de la seance.');
+      return null;
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleToggleDetails() {
+    if (detailOpen) {
+      setDetailOpen(false);
+      return;
+    }
+
+    setDetailOpen(true);
+    if (detail) {
+      return;
+    }
+
+    await ensureSessionDetail();
+  }
+
+  async function handleToggleLogger() {
+    if (loggerOpen) {
+      setLoggerOpen(false);
+      return;
+    }
+
+    setLoggerOpen(true);
+    if (activeSession.state === 'started') {
+      await ensureSessionDetail();
     }
   }
 
@@ -124,15 +149,15 @@ export function TodayWorkoutCard(props: TodayWorkoutCardProps) {
       </p>
       <p>Date: {activeSession.scheduledDate}</p>
       <div>
-        <button type="button" onClick={() => setLoggerOpen((current) => !current)}>
-          {loggerOpen ? 'Masquer suivi seance' : (activeSession.state === 'started' ? 'Reprendre seance' : actionLabel)}
+        <button type="button" onClick={handleToggleLogger}>
+          {loggerOpen ? 'Masquer suivi seance' : (showResumeAction ? 'Reprendre seance' : actionLabel)}
         </button>
         <button type="button" onClick={handleToggleDetails}>
           {detailOpen ? 'Masquer les exercices' : 'Voir les exercices'}
         </button>
       </div>
 
-      {loggerOpen ? <SessionLogger session={activeSession} /> : null}
+      {loggerOpen ? <SessionLogger session={loggerSession} /> : null}
 
       {loading ? <p>Chargement des details...</p> : null}
       {errorMessage ? <p>{errorMessage}</p> : null}

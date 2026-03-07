@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-import type { ProgramSessionSummary } from '@/lib/program/contracts';
+import type { ProgramSessionDetailResponse, ProgramSessionSummary } from '@/lib/program/contracts';
 
 type LoggedSetEntry = {
   setIndex: number;
@@ -15,6 +15,25 @@ type LoggerState = {
   timerStartedAtMs: number | null;
   timerCompletedAtMs: number | null;
 };
+
+type HydratedSkipState = {
+  skipped: boolean;
+  reasonCode: string;
+  reasonText?: string;
+};
+
+export type SessionLoggerHydration = {
+  loggerState: LoggerState;
+  loggedSets: Record<string, LoggedSetEntry[]>;
+  skipState: Record<string, HydratedSkipState>;
+  note: string;
+  fatigue: number | null;
+  readiness: number | null;
+  comment: string;
+  isCompleted: boolean;
+};
+
+type HydratableSession = ProgramSessionSummary | ProgramSessionDetailResponse['session'];
 
 type CompleteSessionInput = {
   fatigue: number | null;
@@ -51,6 +70,66 @@ export function createInitialLoggerState(): LoggerState {
   return {
     timerStartedAtMs: null,
     timerCompletedAtMs: null,
+  };
+}
+
+function isHydratableDetailSession(session: HydratableSession): session is ProgramSessionDetailResponse['session'] {
+  return 'startedAt' in session || 'completedAt' in session || 'note' in session;
+}
+
+function toTimestamp(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+export function buildSessionLoggerHydration(session: HydratableSession): SessionLoggerHydration {
+  if (!isHydratableDetailSession(session)) {
+    return {
+      loggerState: createInitialLoggerState(),
+      loggedSets: {},
+      skipState: {},
+      note: '',
+      fatigue: null,
+      readiness: null,
+      comment: '',
+      isCompleted: false,
+    };
+  }
+
+  const loggedSets = session.exercises.reduce<Record<string, LoggedSetEntry[]>>((accumulator, exercise) => {
+    accumulator[exercise.id] = [...exercise.loggedSets].sort((left, right) => left.setIndex - right.setIndex);
+    return accumulator;
+  }, {});
+
+  const skipState = session.exercises.reduce<Record<string, HydratedSkipState>>((accumulator, exercise) => {
+    if (!exercise.isSkipped) {
+      return accumulator;
+    }
+
+    accumulator[exercise.id] = {
+      skipped: true,
+      reasonCode: exercise.skipReasonCode ?? '',
+      ...(exercise.skipReasonText ? { reasonText: exercise.skipReasonText } : {}),
+    };
+    return accumulator;
+  }, {});
+
+  return {
+    loggerState: {
+      timerStartedAtMs: toTimestamp(session.startedAt),
+      timerCompletedAtMs: toTimestamp(session.completedAt),
+    },
+    loggedSets,
+    skipState,
+    note: session.note ?? '',
+    fatigue: session.postSessionFatigue ?? null,
+    readiness: session.postSessionReadiness ?? null,
+    comment: session.postSessionComment ?? '',
+    isCompleted: session.completedAt !== null || session.state === 'completed',
   };
 }
 
@@ -150,27 +229,39 @@ function defaultSetDraft(): SetDraft {
   };
 }
 
-export function SessionLogger({ session }: { session: ProgramSessionSummary }) {
-  const [loggerState, setLoggerState] = useState<LoggerState>(createInitialLoggerState);
+export function SessionLogger({ session }: { session: HydratableSession }) {
+  const [loggerState, setLoggerState] = useState<LoggerState>(() => buildSessionLoggerHydration(session).loggerState);
   const [nowMs, setNowMs] = useState(Date.now());
-  const [loggedSets, setLoggedSets] = useState<Record<string, LoggedSetEntry[]>>({});
+  const [loggedSets, setLoggedSets] = useState<Record<string, LoggedSetEntry[]>>(() => buildSessionLoggerHydration(session).loggedSets);
   const [setDrafts, setSetDrafts] = useState<Record<string, SetDraft>>({});
   const [skipReasonCode, setSkipReasonCode] = useState<Record<string, string>>({});
   const [skipReasonText, setSkipReasonText] = useState<Record<string, string>>({});
-  const [skipState, setSkipState] = useState<Record<string, { skipped: boolean; reasonCode: string; reasonText?: string }>>(
-    {},
+  const [skipState, setSkipState] = useState<Record<string, { skipped: boolean; reasonCode: string; reasonText?: string }>>(() =>
+    buildSessionLoggerHydration(session).skipState,
   );
   const [savingSetForExerciseId, setSavingSetForExerciseId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState(() => buildSessionLoggerHydration(session).note);
   const [savingNote, setSavingNote] = useState(false);
-  const [fatigue, setFatigue] = useState<number | null>(null);
-  const [readiness, setReadiness] = useState<number | null>(null);
-  const [comment, setComment] = useState('');
-  const [isCompleted, setIsCompleted] = useState(false);
+  const [fatigue, setFatigue] = useState<number | null>(() => buildSessionLoggerHydration(session).fatigue);
+  const [readiness, setReadiness] = useState<number | null>(() => buildSessionLoggerHydration(session).readiness);
+  const [comment, setComment] = useState(() => buildSessionLoggerHydration(session).comment);
+  const [isCompleted, setIsCompleted] = useState(() => buildSessionLoggerHydration(session).isCompleted);
   const [savingCompletion, setSavingCompletion] = useState(false);
   const [durationMinutes, setDurationMinutes] = useState('');
   const [savingDuration, setSavingDuration] = useState(false);
+
+  useEffect(() => {
+    const hydration = buildSessionLoggerHydration(session);
+    setLoggerState(hydration.loggerState);
+    setLoggedSets(hydration.loggedSets);
+    setSkipState(hydration.skipState);
+    setNote(hydration.note);
+    setFatigue(hydration.fatigue);
+    setReadiness(hydration.readiness);
+    setComment(hydration.comment);
+    setIsCompleted(hydration.isCompleted);
+  }, [session]);
 
   useEffect(() => {
     const shouldTick = loggerState.timerStartedAtMs !== null && loggerState.timerCompletedAtMs === null;
