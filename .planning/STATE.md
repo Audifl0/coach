@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 09
 current_phase_name: security runtime and release proof stabilization
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-03-07T18:06:00.560Z"
+stopped_at: Completed 09-02-PLAN.md
+last_updated: "2026-03-07T18:22:42.672Z"
 last_activity: 2026-03-07
 progress:
   total_phases: 12
   completed_phases: 10
   total_plans: 56
-  completed_plans: 49
-  percent: 88
+  completed_plans: 50
+  percent: 89
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 09
 **Current Phase Name:** security runtime and release proof stabilization
 **Total Phases:** 12
-**Current Plan:** 2
+**Current Plan:** 3
 **Total Plans in Phase:** 5
-**Status:** In Progress
+**Status:** Ready to execute
 **Last Activity:** 2026-03-07
-**Last Activity Description:** Completed 09-01 dashboard trust stabilization and advanced Phase 09 execution
-**Progress:** [█████████░] 88%
+**Last Activity Description:** Completed 09-02 persistence hardening and advanced Phase 09 execution
+**Progress:** [█████████░] 89%
 
 ## Performance Metrics
 
@@ -70,6 +70,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 08-release-blockers-and-regression-restoration P08-05 | 4 min | 3 tasks | 4 files |
 | Phase 08-release-blockers-and-regression-restoration P08-06 | 31 min | 3 tasks | 52 files |
 | Phase 09 P09-01 | 6 min | 2 tasks | 8 files |
+| Phase 09 P09-02 | 12min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -194,6 +195,9 @@ Recent decisions affecting current work:
 - [Phase 08-release-blockers-and-regression-restoration]: Preserve dashboard today and trends contracts by loading DAL/projection data directly on the server instead of same-origin HTTP self-fetches.
 - [Phase 09-security-runtime-and-release-proof-stabilization]: Dashboard SSR now consumes explicit server-side today/trends section loaders instead of nullable page-local loader results.
 - [Phase 09-security-runtime-and-release-proof-stabilization]: Client dashboard cards receive lightweight load-state props so degraded runtime states are visible without importing server-only modules into client code.
+- [Phase 09]: Session logging and completion-sensitive writes now guard mutable session state in the DAL with row locks and conditional updates.
+- [Phase 09]: Active-plan uniqueness is enforced by a manual PostgreSQL partial unique index and translated to 409 at generation boundaries.
+- [Phase 09]: Adaptive stale-state mismatches use typed DAL errors, and reject-plus-fallback persists atomically in one transaction.
 
 ### Roadmap Evolution
 
@@ -214,6 +218,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-07T18:06:00.557Z
-**Stopped At:** Completed 09-01-PLAN.md
+**Last Date:** 2026-03-07T18:22:42.669Z
+**Stopped At:** Completed 09-02-PLAN.md
 **Resume File:** None
