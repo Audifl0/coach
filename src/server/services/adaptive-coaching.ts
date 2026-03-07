@@ -163,17 +163,30 @@ function buildProviderPrompts(input: {
   };
 }
 
-function sanitizeProviderProposal(input: unknown): unknown {
+const ADAPTIVE_PROPOSAL_KEYS = new Set([
+  'actionType',
+  'plannedSessionId',
+  'reasons',
+  'evidenceTags',
+  'forecastProjection',
+  'substitutionTarget',
+]);
+
+function sanitizeAdaptiveProposal(input: unknown): unknown {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return input;
   }
 
-  const record = { ...(input as Record<string, unknown>) };
-  if ('status' in record) {
-    delete record.status;
+  const record = input as Record<string, unknown>;
+  const sanitized: Record<string, unknown> = {};
+
+  for (const key of ADAPTIVE_PROPOSAL_KEYS) {
+    if (key in record) {
+      sanitized[key] = record[key];
+    }
   }
 
-  return record;
+  return sanitized;
 }
 
 function createProviderClientByName(input: {
@@ -335,7 +348,7 @@ export function createAdaptiveCoachingService(deps: AdaptiveCoachingServiceDeps)
       confirmationExpiresAt.setDate(confirmationExpiresAt.getDate() + 1);
 
       const result = generateAdaptiveRecommendation({
-        rawProposal: sanitizeProviderProposal(rawProposal),
+        rawProposal: sanitizeAdaptiveProposal(rawProposal),
         plannedSessionId: targetSession.id,
         queryTags: ['fatigue', 'adherence', 'readiness'],
         modelConfidence: typeof rawProposalRecord?.modelConfidence === 'number' ? rawProposalRecord.modelConfidence : 0.6,
