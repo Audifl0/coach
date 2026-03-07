@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 09
 current_phase_name: security runtime and release proof stabilization
-current_plan: Not started
-status: planning
-stopped_at: Completed 08-06-PLAN.md
-last_updated: "2026-03-07T12:24:14.846Z"
+current_plan: 2
+status: executing
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-03-07T18:06:00.560Z"
 last_activity: 2026-03-07
 progress:
   total_phases: 12
   completed_phases: 10
   total_plans: 56
-  completed_plans: 48
-  percent: 86
+  completed_plans: 49
+  percent: 88
 ---
 
 # Project State
@@ -24,19 +24,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Fournir un coaching musculation personnalisé, sûr et adaptatif au quotidien, sans perdre la simplicité d'usage.
-**Current focus:** Phase 08 - Release blockers and regression restoration
+**Current focus:** Phase 09 - Security runtime and release proof stabilization
 
 ## Current Position
 
 **Current Phase:** 09
 **Current Phase Name:** security runtime and release proof stabilization
 **Total Phases:** 12
-**Current Plan:** Not started
-**Total Plans in Phase:** 6
-**Status:** Ready to plan
+**Current Plan:** 2
+**Total Plans in Phase:** 5
+**Status:** In Progress
 **Last Activity:** 2026-03-07
-**Last Activity Description:** Phase 8 complete, transitioned to Phase 09
-**Progress:** [█████████░] 86%
+**Last Activity Description:** Completed 09-01 dashboard trust stabilization and advanced Phase 09 execution
+**Progress:** [█████████░] 88%
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 08-release-blockers-and-regression-restoration P08-04 | 9 min | 3 tasks | 6 files |
 | Phase 08-release-blockers-and-regression-restoration P08-05 | 4 min | 3 tasks | 4 files |
 | Phase 08-release-blockers-and-regression-restoration P08-06 | 31 min | 3 tasks | 52 files |
+| Phase 09 P09-01 | 6 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -191,6 +192,8 @@ Recent decisions affecting current work:
 - [Phase 08-release-blockers-and-regression-restoration]: Force the entire (private) app segment dynamic so authenticated pages never enter the static-generation worker path.
 - [Phase 08-release-blockers-and-regression-restoration]: Keep Next app entry files export-safe by moving testable runtime helpers into companion page-helpers and route-handlers modules.
 - [Phase 08-release-blockers-and-regression-restoration]: Preserve dashboard today and trends contracts by loading DAL/projection data directly on the server instead of same-origin HTTP self-fetches.
+- [Phase 09-security-runtime-and-release-proof-stabilization]: Dashboard SSR now consumes explicit server-side today/trends section loaders instead of nullable page-local loader results.
+- [Phase 09-security-runtime-and-release-proof-stabilization]: Client dashboard cards receive lightweight load-state props so degraded runtime states are visible without importing server-only modules into client code.
 
 ### Roadmap Evolution
 
@@ -211,6 +214,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-07T12:20:18.818Z
-**Stopped At:** Completed 08-06-PLAN.md
+**Last Date:** 2026-03-07T18:06:00.557Z
+**Stopped At:** Completed 09-01-PLAN.md
 **Resume File:** None

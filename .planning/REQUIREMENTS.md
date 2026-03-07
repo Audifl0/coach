@@ -109,8 +109,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SAFE-01 | 5 | Complete |
 | SAFE-02 | 5, 05.2 | Complete |
 | SAFE-03 | 5, 05.1, 05.2, 08 | Complete |
-| DASH-01 | 3 | Complete |
-| DASH-02 | 6 | Complete |
+| DASH-01 | 3, 09 | Complete |
+| DASH-02 | 6, 09 | Complete |
 | DASH-03 | 5 | Complete |
 | PLAT-01 | 1, 08 | Complete |
 | PLAT-02 | 6 | Complete |
@@ -123,4 +123,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-04*
-*Last updated: 2026-03-07 after 08-03 traceability updates*
+*Last updated: 2026-03-07 after 09-01 traceability updates*
