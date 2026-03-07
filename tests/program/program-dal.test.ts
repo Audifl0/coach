@@ -155,8 +155,8 @@ test('getTodayOrNextSessionCandidates returns today first and falls back to next
       },
     },
     plannedSession: {
-      async findFirst(args: { where: { scheduledDate: { gte?: Date; gt?: Date } } }) {
-        const isTodayQuery = Boolean(args.where.scheduledDate.gte);
+      async findFirst(args: { where: { scheduledDate: { gte?: Date; lt?: Date; gt?: Date } } }) {
+        const isTodayQuery = Boolean(args.where.scheduledDate.lt);
 
         if (isTodayQuery && shouldReturnToday) {
           return todaySession;
@@ -250,7 +250,7 @@ test('getTodayOrNextSessionCandidates includes the first instant of the next UTC
     plannedSession: {
       async findFirst(args: { where: { scheduledDate: { gte?: Date; lt?: Date; gt?: Date } } }) {
         scheduledRanges.push(args.where.scheduledDate);
-        const isTodayQuery = Boolean(args.where.scheduledDate.gte);
+        const isTodayQuery = Boolean(args.where.scheduledDate.lt);
         return isTodayQuery ? null : nextSession;
       },
     },
@@ -270,7 +270,7 @@ test('getTodayOrNextSessionCandidates includes the first instant of the next UTC
 
   assert.equal(result.todaySession, null);
   assert.equal(result.nextSession?.id, 'session_2');
-  assert.equal(scheduledRanges[1]?.gt?.toISOString(), '2026-03-06T00:00:00.000Z');
+  assert.equal(scheduledRanges[1]?.gte?.toISOString(), '2026-03-06T00:00:00.000Z');
 });
 
 test('ownership checks enforce account boundary and substitution updates single row', async () => {

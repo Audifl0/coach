@@ -455,18 +455,16 @@ export function createProgramDal(db: ProgramDalClient, session: SessionContext |
       todaySession: PlannedSessionRecord | null;
       nextSession: PlannedSessionRecord | null;
     }> {
-      const startOfDay = new Date(now);
-      startOfDay.setHours(0, 0, 0, 0);
-
-      const endOfDay = new Date(startOfDay);
-      endOfDay.setDate(endOfDay.getDate() + 1);
+      const startOfDay = startOfUtcDay(now);
+      const startOfNextDay = new Date(startOfDay);
+      startOfNextDay.setUTCDate(startOfNextDay.getUTCDate() + 1);
 
       const todaySession = await db.plannedSession.findFirst({
         where: {
           ...buildAccountScopedWhere(scope),
           scheduledDate: {
             gte: startOfDay,
-            lt: endOfDay,
+            lt: startOfNextDay,
           },
           programPlan: {
             status: 'active',
@@ -492,7 +490,7 @@ export function createProgramDal(db: ProgramDalClient, session: SessionContext |
         where: {
           ...buildAccountScopedWhere(scope),
           scheduledDate: {
-            gt: endOfDay,
+            gte: startOfNextDay,
           },
           programPlan: {
             status: 'active',
