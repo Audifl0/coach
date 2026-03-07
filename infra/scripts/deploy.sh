@@ -2,8 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-ENV_FILE="${1:-$PROJECT_ROOT/.env.production}"
+DEFAULT_ENV_FILE="/opt/coach/.env.production"
+ENV_FILE="${1:-$DEFAULT_ENV_FILE}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Missing env file: $ENV_FILE" >&2

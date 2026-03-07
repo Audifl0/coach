@@ -15,7 +15,8 @@ with Caddy TLS termination.
 
 ## Environment Configuration
 
-Create `.env.production` at the repository root:
+Create the production env file outside the repository checkout at
+`/opt/coach/.env.production`:
 
 ```env
 APP_DOMAIN=coach.example.com
@@ -30,14 +31,16 @@ BETTER_AUTH_SECRET=replace-with-long-random-secret
 BETTER_AUTH_URL=https://coach.example.com
 ```
 
-Use strong secrets and avoid committing this file.
+Use strong secrets, keep the file owned by the deploy user with
+restrictive permissions, and do not place production secrets in the
+repository checkout.
 
 ## First Deployment
 
-Run from repository root:
+Run from repository root and pass the external env path explicitly:
 
 ```bash
-infra/scripts/deploy.sh .env.production
+infra/scripts/deploy.sh /opt/coach/.env.production
 ```
 
 The script:
@@ -69,8 +72,8 @@ infra/scripts/smoke-test-https.sh https://coach.example.com
 Inspect services:
 
 ```bash
-docker compose --env-file .env.production ps
-docker compose --env-file .env.production logs --tail=100 app caddy
+docker compose --env-file /opt/coach/.env.production ps
+docker compose --env-file /opt/coach/.env.production logs --tail=100 app caddy
 ```
 
 ## Update Procedure
@@ -79,7 +82,7 @@ For routine updates:
 
 ```bash
 git pull
-infra/scripts/deploy.sh .env.production
+infra/scripts/deploy.sh /opt/coach/.env.production
 ```
 
 ## Failure Recovery Basics

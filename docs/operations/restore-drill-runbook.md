@@ -9,7 +9,7 @@ dedicated drill database, with auditable evidence and smoke checks.
 
 - VPS has Docker + Docker Compose available.
 - `BACKUP_PASSPHRASE` is exported in the shell used for the drill.
-- `.env.production` contains:
+- `/opt/coach/.env.production` contains:
   - `POSTGRES_USER`
   - `POSTGRES_DB` (production source DB name, used only as guardrail)
   - `RESTORE_TARGET_DB` (dedicated drill DB, example: `coach_restore_drill`)
@@ -30,7 +30,7 @@ export BACKUP_PASSPHRASE='replace-with-backup-passphrase'
 2. Execute the drill wrapper:
 
 ```bash
-infra/scripts/run-restore-drill.sh .env.production backups
+infra/scripts/run-restore-drill.sh /opt/coach/.env.production backups
 ```
 
 3. Confirm command exits with status `0`.
@@ -67,13 +67,13 @@ If the drill fails:
 
 ```bash
 export RESTORE_DRILL_BACKUP_FILE=backups/coach-YYYYMMDDTHHMMSSZ.sql.enc
-infra/scripts/run-restore-drill.sh .env.production backups
+infra/scripts/run-restore-drill.sh /opt/coach/.env.production backups
 ```
 
 4. If restore errors persist, run direct restore diagnostics:
 
 ```bash
-infra/scripts/restore.sh backups/coach-YYYYMMDDTHHMMSSZ.sql.enc .env.production
+infra/scripts/restore.sh backups/coach-YYYYMMDDTHHMMSSZ.sql.enc /opt/coach/.env.production
 ```
 
 5. Escalate incident if failure blocks recoverability; attach the timestamped evidence log.

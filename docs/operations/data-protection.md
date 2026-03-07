@@ -30,7 +30,7 @@ Use encrypted dumps for off-host retention:
 
 ```bash
 export BACKUP_PASSPHRASE='replace-with-backup-passphrase'
-infra/scripts/backup.sh .env.production
+infra/scripts/backup.sh /opt/coach/.env.production
 ```
 
 Backups are encrypted with OpenSSL AES-256 (`-pbkdf2` with salted key derivation).
@@ -39,12 +39,13 @@ Restore flow:
 
 ```bash
 export BACKUP_PASSPHRASE='replace-with-backup-passphrase'
-infra/scripts/restore.sh backups/coach-YYYYMMDDTHHMMSSZ.sql.enc .env.production
+infra/scripts/restore.sh backups/coach-YYYYMMDDTHHMMSSZ.sql.enc /opt/coach/.env.production
 ```
 
 ## Secret Handling Baseline
 
-- Keep `.env.production` on the server only with restrictive file permissions.
+- Keep `/opt/coach/.env.production` on the server only with restrictive
+  file permissions and outside the repository checkout.
 - Rotate `BETTER_AUTH_SECRET`, database password, and backup passphrase
   on incident or periodic schedule.
 - Do not print secrets in logs or shell history.
@@ -54,7 +55,7 @@ infra/scripts/restore.sh backups/coach-YYYYMMDDTHHMMSSZ.sql.enc .env.production
 Run a periodic restore drill to confirm recoverability:
 
 1. Export backup passphrase.
-2. Run `infra/scripts/run-restore-drill.sh .env.production backups`.
+2. Run `infra/scripts/run-restore-drill.sh /opt/coach/.env.production backups`.
 3. Confirm smoke reachability checks for `/login` and `/dashboard`.
 4. Archive the timestamped evidence log under `backups/restore-drills/`.
 

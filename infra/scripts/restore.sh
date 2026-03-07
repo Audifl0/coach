@@ -2,9 +2,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BACKUP_FILE="${1:-}"
-ENV_FILE="${2:-$PROJECT_ROOT/.env.production}"
+DEFAULT_ENV_FILE="/opt/coach/.env.production"
+ENV_FILE="${2:-$DEFAULT_ENV_FILE}"
 
 if [[ -z "$BACKUP_FILE" ]]; then
   echo "Usage: $0 /path/to/backup.sql.enc [env-file]" >&2

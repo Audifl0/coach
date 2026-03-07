@@ -3,7 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-ENV_FILE="${1:-$PROJECT_ROOT/.env.production}"
+DEFAULT_ENV_FILE="/opt/coach/.env.production"
+ENV_FILE="${1:-$DEFAULT_ENV_FILE}"
 BACKUP_DIR="${2:-$PROJECT_ROOT/backups}"
 EVIDENCE_DIR="${RESTORE_DRILL_EVIDENCE_DIR:-$BACKUP_DIR/restore-drills}"
 TIMESTAMP="$(date -u +"%Y%m%dT%H%M%SZ")"
