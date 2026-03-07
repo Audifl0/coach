@@ -7,6 +7,7 @@ import {
   parseSessionNoteInput,
 } from '@/lib/program/contracts';
 import type { MovementPattern, SessionState } from '@/lib/program/types';
+import { logRouteFailure, type AppLogger } from '@/server/observability/app-logger';
 
 export type SessionRouteContext = {
   params: Promise<{ sessionId: string }>;
@@ -67,6 +68,7 @@ export type SessionDetailRecord = {
 export type ProgramSessionDetailRouteDeps = {
   resolveSession: () => Promise<{ userId: string } | null>;
   getSessionDetail: (sessionId: string, userId: string) => Promise<SessionDetailRecord | null>;
+  logger?: AppLogger;
 };
 
 export type ProgramSessionCompleteRouteDeps = {
@@ -249,50 +251,65 @@ function createSetMutationHandler(
 
 export function createProgramSessionDetailGetHandler(deps: ProgramSessionDetailRouteDeps) {
   return async function GET(_request: Request, context: SessionRouteContext): Promise<Response> {
-    const session = await deps.resolveSession();
-    if (!session) {
-      return json({ error: 'Unauthorized' }, 401);
+    try {
+      const session = await deps.resolveSession();
+      if (!session) {
+        return json({ error: 'Unauthorized' }, 401);
+      }
+
+      const { sessionId } = await context.params;
+      const detail = await deps.getSessionDetail(sessionId, session.userId);
+      if (!detail) {
+        return json({ error: 'Session not found' }, 404);
+      }
+
+      const scopedExercises = detail.exercises
+        .filter((exercise) => typeof exercise.userId === 'undefined' || exercise.userId === session.userId)
+        .map((exercise) => ({
+          id: exercise.id,
+          exerciseKey: exercise.exerciseKey,
+          displayName: exercise.displayName,
+          movementPattern: exercise.movementPattern,
+          sets: exercise.sets,
+          targetReps: exercise.targetReps,
+          targetLoad: exercise.targetLoad,
+          restMinSec: exercise.restMinSec,
+          restMaxSec: exercise.restMaxSec,
+          isSubstituted: exercise.isSubstituted,
+          originalExerciseKey: exercise.originalExerciseKey,
+          isSkipped: Boolean(exercise.isSkipped),
+          skipReasonCode: exercise.skipReasonCode ?? null,
+          skipReasonText: exercise.skipReasonText ?? null,
+          loggedSets: [...(exercise.loggedSets ?? [])]
+            .sort((a, b) => a.setIndex - b.setIndex)
+            .map((setItem) => ({
+              setIndex: setItem.setIndex,
+              weight: Number(toNumber(setItem.weight) ?? 0),
+              reps: setItem.reps,
+              rpe: toNumber(setItem.rpe),
+            })),
+        }));
+
+      const payload = buildSessionDetailProjection({
+        ...detail,
+        exercises: scopedExercises,
+      });
+
+      return json(payload, 200);
+    } catch (error) {
+      logRouteFailure(
+        {
+          route: '/api/program/sessions/[sessionId]',
+          method: 'GET',
+          status: 500,
+          source: 'route_handler',
+          error,
+        },
+        deps.logger,
+      );
+
+      return json({ error: 'Unable to load session detail' }, 500);
     }
-
-    const { sessionId } = await context.params;
-    const detail = await deps.getSessionDetail(sessionId, session.userId);
-    if (!detail) {
-      return json({ error: 'Session not found' }, 404);
-    }
-
-    const scopedExercises = detail.exercises
-      .filter((exercise) => typeof exercise.userId === 'undefined' || exercise.userId === session.userId)
-      .map((exercise) => ({
-        id: exercise.id,
-        exerciseKey: exercise.exerciseKey,
-        displayName: exercise.displayName,
-        movementPattern: exercise.movementPattern,
-        sets: exercise.sets,
-        targetReps: exercise.targetReps,
-        targetLoad: exercise.targetLoad,
-        restMinSec: exercise.restMinSec,
-        restMaxSec: exercise.restMaxSec,
-        isSubstituted: exercise.isSubstituted,
-        originalExerciseKey: exercise.originalExerciseKey,
-        isSkipped: Boolean(exercise.isSkipped),
-        skipReasonCode: exercise.skipReasonCode ?? null,
-        skipReasonText: exercise.skipReasonText ?? null,
-        loggedSets: [...(exercise.loggedSets ?? [])]
-          .sort((a, b) => a.setIndex - b.setIndex)
-          .map((setItem) => ({
-            setIndex: setItem.setIndex,
-            weight: Number(toNumber(setItem.weight) ?? 0),
-            reps: setItem.reps,
-            rpe: toNumber(setItem.rpe),
-          })),
-      }));
-
-    const payload = buildSessionDetailProjection({
-      ...detail,
-      exercises: scopedExercises,
-    });
-
-    return json(payload, 200);
   };
 }
 

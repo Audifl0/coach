@@ -1,5 +1,6 @@
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
 import { createProgramDal } from '@/server/dal/program';
+import { logRouteFailure } from '@/server/observability/app-logger';
 import {
   createProgramTrendsGetHandler,
   type ProgramTrendsRouteDeps,
@@ -23,6 +24,18 @@ async function buildDefaultDeps(): Promise<ProgramTrendsRouteDeps> {
 }
 
 export async function GET(request: Request): Promise<Response> {
-  const deps = await buildDefaultDeps();
-  return createProgramTrendsGetHandler(deps)(request);
+  try {
+    const deps = await buildDefaultDeps();
+    return createProgramTrendsGetHandler(deps)(request);
+  } catch (error) {
+    logRouteFailure({
+      route: '/api/program/trends',
+      method: 'GET',
+      status: 500,
+      source: 'route_module',
+      error,
+    });
+
+    return Response.json({ error: 'Unable to load trend summary' }, { status: 500 });
+  }
 }

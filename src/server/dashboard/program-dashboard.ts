@@ -8,6 +8,7 @@ import {
   selectTodayWorkoutProjection,
 } from '@/lib/program/select-today-session';
 import { parseProgramTrendsSummaryResponse } from '@/lib/program/contracts';
+import { logDegradedPath, type AppLogger } from '@/server/observability/app-logger';
 
 export type DashboardProgramTodaySection =
   | { status: 'ready'; data: ProgramTodayResponse }
@@ -21,6 +22,7 @@ export type DashboardTrendsSection =
 
 export async function loadDashboardProgramTodaySection(input: {
   getTodayOrNextSessionCandidates: () => Promise<ProgramTodaySessionCandidates>;
+  logger?: AppLogger;
 }): Promise<DashboardProgramTodaySection> {
   try {
     const data = selectTodayWorkoutProjection(await input.getTodayOrNextSessionCandidates());
@@ -36,7 +38,16 @@ export async function loadDashboardProgramTodaySection(input: {
       status: 'ready',
       data,
     };
-  } catch {
+  } catch (error) {
+    logDegradedPath(
+      {
+        route: '/dashboard',
+        boundary: 'program_today',
+        reason: 'load_failed',
+      },
+      input.logger,
+    );
+
     return {
       status: 'error',
     };
@@ -45,6 +56,7 @@ export async function loadDashboardProgramTodaySection(input: {
 
 export async function loadDashboardTrendsSection(input: {
   getTrendSummary: (input: { period: '30d' }) => Promise<unknown>;
+  logger?: AppLogger;
 }): Promise<DashboardTrendsSection> {
   try {
     const summary = await input.getTrendSummary({ period: '30d' });
@@ -58,7 +70,16 @@ export async function loadDashboardTrendsSection(input: {
       status: 'ready',
       data: parseProgramTrendsSummaryResponse(summary),
     };
-  } catch {
+  } catch (error) {
+    logDegradedPath(
+      {
+        route: '/dashboard',
+        boundary: 'program_trends',
+        reason: 'load_failed',
+      },
+      input.logger,
+    );
+
     return {
       status: 'error',
     };

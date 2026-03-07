@@ -1,5 +1,6 @@
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
 import { createProgramDal } from '@/server/dal/program';
+import { logRouteFailure } from '@/server/observability/app-logger';
 import {
   createProgramSessionDetailGetHandler,
   type ProgramSessionDetailRouteDeps,
@@ -69,6 +70,18 @@ async function buildDefaultDeps(): Promise<ProgramSessionDetailRouteDeps> {
 }
 
 export async function GET(request: Request, context: SessionRouteContext): Promise<Response> {
-  const deps = await buildDefaultDeps();
-  return createProgramSessionDetailGetHandler(deps)(request, context);
+  try {
+    const deps = await buildDefaultDeps();
+    return createProgramSessionDetailGetHandler(deps)(request, context);
+  } catch (error) {
+    logRouteFailure({
+      route: '/api/program/sessions/[sessionId]',
+      method: 'GET',
+      status: 500,
+      source: 'route_module',
+      error,
+    });
+
+    return Response.json({ error: 'Unable to load session detail' }, { status: 500 });
+  }
 }

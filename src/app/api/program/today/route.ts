@@ -1,5 +1,6 @@
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
 import { createProgramDal } from '@/server/dal/program';
+import { logRouteFailure } from '@/server/observability/app-logger';
 import {
   createProgramTodayGetHandler,
   type ProgramTodayRouteDeps,
@@ -19,6 +20,18 @@ async function buildDefaultDeps(): Promise<ProgramTodayRouteDeps> {
 }
 
 export async function GET(): Promise<Response> {
-  const deps = await buildDefaultDeps();
-  return createProgramTodayGetHandler(deps)();
+  try {
+    const deps = await buildDefaultDeps();
+    return createProgramTodayGetHandler(deps)();
+  } catch (error) {
+    logRouteFailure({
+      route: '/api/program/today',
+      method: 'GET',
+      status: 500,
+      source: 'route_module',
+      error,
+    });
+
+    return Response.json({ error: 'Unable to load today workout' }, { status: 500 });
+  }
 }

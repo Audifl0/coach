@@ -1,4 +1,5 @@
 import { parseHistoryQueryInput, parseProgramHistoryListResponse } from '@/lib/program/contracts';
+import { logRouteFailure, type AppLogger } from '@/server/observability/app-logger';
 
 type HistoryRow = {
   id: string;
@@ -12,6 +13,7 @@ export type ProgramHistoryRouteDeps = {
   resolveSession: () => Promise<{ userId: string } | null>;
   getHistoryList: (range: { from: Date; to: Date }, userId?: string) => Promise<HistoryRow[]>;
   now?: () => Date;
+  logger?: AppLogger;
 };
 
 function json(body: unknown, status: number): Response {
@@ -51,31 +53,57 @@ function resolveHistoryRange(
 
 export function createProgramHistoryGetHandler(deps: ProgramHistoryRouteDeps) {
   return async function GET(request: Request): Promise<Response> {
-    const session = await deps.resolveSession();
-    if (!session) {
-      return json({ error: 'Unauthorized' }, 401);
-    }
-
-    const { searchParams } = new URL(request.url);
-    const raw = {
-      period: searchParams.get('period') ?? '7d',
-      from: searchParams.get('from') ?? undefined,
-      to: searchParams.get('to') ?? undefined,
-    };
-
-    let query: { period: '7d' | '30d' | '90d' | 'custom'; from?: string; to?: string };
     try {
-      query = parseHistoryQueryInput(raw);
+      const session = await deps.resolveSession();
+      if (!session) {
+        return json({ error: 'Unauthorized' }, 401);
+      }
+
+      const { searchParams } = new URL(request.url);
+      const raw = {
+        period: searchParams.get('period') ?? '7d',
+        from: searchParams.get('from') ?? undefined,
+        to: searchParams.get('to') ?? undefined,
+      };
+
+      let query: { period: '7d' | '30d' | '90d' | 'custom'; from?: string; to?: string };
+      try {
+        query = parseHistoryQueryInput(raw);
+      } catch (error) {
+        return json({ error: error instanceof Error ? error.message : 'Invalid history query' }, 400);
+      }
+
+      try {
+        const range = resolveHistoryRange(query, deps.now ? deps.now() : new Date());
+        const sessions = await deps.getHistoryList(range, session.userId);
+        const payload = parseProgramHistoryListResponse({ sessions });
+        return json(payload, 200);
+      } catch (error) {
+        logRouteFailure(
+          {
+            route: '/api/program/history',
+            method: 'GET',
+            status: 500,
+            source: 'route_handler',
+            error,
+          },
+          deps.logger,
+        );
+
+        return json({ error: 'Unable to load program history' }, 500);
+      }
     } catch (error) {
-      return json({ error: error instanceof Error ? error.message : 'Invalid history query' }, 400);
-    }
+      logRouteFailure(
+        {
+          route: '/api/program/history',
+          method: 'GET',
+          status: 500,
+          source: 'route_handler',
+          error,
+        },
+        deps.logger,
+      );
 
-    try {
-      const range = resolveHistoryRange(query, deps.now ? deps.now() : new Date());
-      const sessions = await deps.getHistoryList(range, session.userId);
-      const payload = parseProgramHistoryListResponse({ sessions });
-      return json(payload, 200);
-    } catch {
       return json({ error: 'Unable to load program history' }, 500);
     }
   };
