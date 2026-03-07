@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createProgramTrendsExerciseGetHandler } from '../../src/app/api/program/trends/[exerciseKey]/route';
-import { createProgramTrendsGetHandler } from '../../src/app/api/program/trends/route';
+import { createProgramTrendsExerciseGetHandler } from '../../src/app/api/program/trends/[exerciseKey]/route-handlers';
+import { createProgramTrendsGetHandler } from '../../src/app/api/program/trends/route-handlers';
 
 test('unauthenticated requests return 401 on trend summary and exercise drilldown routes', async () => {
   const getSummary = createProgramTrendsGetHandler({

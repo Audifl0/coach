@@ -8,8 +8,7 @@ import {
 } from '../../src/lib/auth/auth';
 import { createAuthLogger, type AuthLogRecord } from '../../src/lib/auth/auth-logger';
 import { createAuthRateLimiter } from '../../src/lib/auth/rate-limit';
-import { createLoginHandler } from '../../src/app/api/auth/login/route';
-import { createSignupHandler } from '../../src/app/api/auth/signup/route';
+import { createLoginHandler, createSignupHandler } from '../../src/app/api/auth/handlers';
 
 test('login throttling keys repeated failures by normalized username and client IP', () => {
   let now = 1_700_000_000_000;

@@ -5,8 +5,10 @@ import {
   createAdaptiveCoachingService,
   type AdaptiveCoachingServiceDeps,
 } from '../../src/server/services/adaptive-coaching';
-import { createProgramAdaptationConfirmPostHandler } from '../../src/app/api/program/adaptation/[recommendationId]/confirm/route';
-import { createProgramAdaptationRejectPostHandler } from '../../src/app/api/program/adaptation/[recommendationId]/reject/route';
+import {
+  createProgramAdaptationConfirmPostHandler,
+  createProgramAdaptationRejectPostHandler,
+} from '../../src/app/api/program/adaptation/[recommendationId]/route-handlers';
 
 type RecommendationRecord = {
   id: string;

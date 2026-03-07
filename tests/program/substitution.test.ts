@@ -5,10 +5,10 @@ import { getSubstitutionCandidates } from '../../src/lib/program/substitution';
 import type { MovementPattern } from '../../src/lib/program/types';
 import {
   createSubstitutionCandidatesGetHandler,
-} from '../../src/app/api/program/exercises/[plannedExerciseId]/substitutions/route';
+} from '../../src/app/api/program/exercises/[plannedExerciseId]/route-handlers';
 import {
   createPlannedExerciseSubstitutePostHandler,
-} from '../../src/app/api/program/exercises/[plannedExerciseId]/substitute/route';
+} from '../../src/app/api/program/exercises/[plannedExerciseId]/route-handlers';
 
 test('returns at most top 3 substitution candidates', () => {
   const candidates = getSubstitutionCandidates({
@@ -60,7 +60,7 @@ test('substitution candidate route rejects unauthorized requests', async () => {
 
   const response = await get(
     new Request('http://localhost/api/program/exercises/ex_1/substitutions'),
-    { params: { plannedExerciseId: 'ex_1' } },
+    { params: Promise.resolve({ plannedExerciseId: 'ex_1' }) },
   );
   assert.equal(response.status, 401);
 });
@@ -87,7 +87,7 @@ test('substitution candidate route returns strict-safe top 3 for account-owned p
 
   const ownedResponse = await get(
     new Request('http://localhost/api/program/exercises/owned_exercise/substitutions'),
-    { params: { plannedExerciseId: 'owned_exercise' } },
+    { params: Promise.resolve({ plannedExerciseId: 'owned_exercise' }) },
   );
   assert.equal(ownedResponse.status, 200);
   const ownedBody = (await ownedResponse.json()) as { candidates: Array<{ exerciseKey: string }> };
@@ -95,7 +95,7 @@ test('substitution candidate route returns strict-safe top 3 for account-owned p
 
   const foreignResponse = await get(
     new Request('http://localhost/api/program/exercises/foreign_exercise/substitutions'),
-    { params: { plannedExerciseId: 'foreign_exercise' } },
+    { params: Promise.resolve({ plannedExerciseId: 'foreign_exercise' }) },
   );
   assert.equal(foreignResponse.status, 404);
 });
@@ -124,7 +124,7 @@ test('substitute route rejects invalid replacement keys with 400', async () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ replacementExerciseKey: '' }),
     }),
-    { params: { plannedExerciseId: 'owned_exercise' } },
+    { params: Promise.resolve({ plannedExerciseId: 'owned_exercise' }) },
   );
 
   assert.equal(response.status, 400);
@@ -154,7 +154,7 @@ test('substitute route rejects non-today plannedExerciseId with 400', async () =
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ replacementExerciseKey: 'leg_press' }),
     }),
-    { params: { plannedExerciseId: 'future_exercise' } },
+    { params: Promise.resolve({ plannedExerciseId: 'future_exercise' }) },
   );
 
   assert.equal(response.status, 400);
@@ -256,7 +256,7 @@ test('substitute route updates only targeted planned exercise row for today', as
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ replacementExerciseKey: 'leg_press' }),
     }),
-    { params: { plannedExerciseId: 'target_row' } },
+    { params: Promise.resolve({ plannedExerciseId: 'target_row' }) },
   );
 
   assert.equal(response.status, 200);

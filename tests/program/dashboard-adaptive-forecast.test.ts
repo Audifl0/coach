@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { buildAdaptiveForecastViewModel } from '../../src/lib/adaptive-coaching/forecast';
 import { AdaptiveForecastCard } from '../../src/app/(private)/dashboard/components/adaptive-forecast-card';
-import { resolveAdaptiveForecastCard } from '../../src/app/(private)/dashboard/page';
+import { resolveAdaptiveForecastCard } from '../../src/app/(private)/dashboard/page-helpers';
 
 type DashboardRecommendation = NonNullable<Parameters<typeof resolveAdaptiveForecastCard>[0]>;
 

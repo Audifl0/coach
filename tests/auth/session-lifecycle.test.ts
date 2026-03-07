@@ -9,10 +9,8 @@ import {
   createAuthService,
   hashSessionToken,
 } from '../../src/lib/auth/auth';
-import { createLoginHandler } from '../../src/app/api/auth/login/route';
-import { createLogoutHandler } from '../../src/app/api/auth/logout/route';
-import { createSignupHandler } from '../../src/app/api/auth/signup/route';
-import { resolveDashboardSession } from '../../src/app/(private)/dashboard/page';
+import { createLoginHandler, createLogoutHandler, createSignupHandler } from '../../src/app/api/auth/handlers';
+import { resolveDashboardSession } from '../../src/app/(private)/dashboard/page-helpers';
 import { middleware } from '../../src/middleware';
 
 type UserRecord = {

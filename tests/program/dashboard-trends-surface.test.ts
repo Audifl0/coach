@@ -20,7 +20,7 @@ import {
   buildDashboardTrendsRequest,
   loadProgramTrendsData,
   resolveDashboardSectionOrder,
-} from '../../src/app/(private)/dashboard/page';
+} from '../../src/app/(private)/dashboard/page-helpers';
 
 function createSummaryFixture(): ProgramTrendsSummaryResponse {
   return {

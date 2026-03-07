@@ -11,7 +11,7 @@ import {
   createAdaptiveCoachingService,
   type AdaptiveCoachingServiceDeps,
 } from '../../src/server/services/adaptive-coaching';
-import { createProgramAdaptationPostHandler } from '../../src/app/api/program/adaptation/route';
+import { createProgramAdaptationPostHandler } from '../../src/app/api/program/adaptation/route-handlers';
 
 function toPersistedRecommendationRecord(
   userId: string,

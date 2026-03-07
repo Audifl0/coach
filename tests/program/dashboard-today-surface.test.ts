@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createProgramSessionDetailGetHandler } from '../../src/app/api/program/sessions/[sessionId]/route';
-import { createProgramTodayGetHandler } from '../../src/app/api/program/today/route';
+import { createProgramSessionDetailGetHandler } from '../../src/app/api/program/sessions/[sessionId]/route-handlers';
+import { createProgramTodayGetHandler } from '../../src/app/api/program/today/route-handlers';
 import type { ProgramSessionSummary } from '../../src/lib/program/contracts';
 import { selectTodayWorkoutProjection } from '../../src/lib/program/select-today-session';
-import { loadProgramTodayData, pickDashboardSession } from '../../src/app/(private)/dashboard/page';
+import { loadProgramTodayData, pickDashboardSession } from '../../src/app/(private)/dashboard/page-helpers';
 import { getPrimaryActionLabel, resolveDisplayedSession } from '../../src/app/(private)/dashboard/_components/today-workout-card';
 import {
   buildCompleteSessionPayload,

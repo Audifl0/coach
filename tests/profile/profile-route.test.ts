@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createProfileDal, mergeProfilePatch, type AthleteProfileRecord } from '../../src/server/dal/profile';
-import { createProfileGetHandler, createProfilePutHandler } from '../../src/app/api/profile/route';
+import { createProfileGetHandler, createProfilePutHandler } from '../../src/app/api/profile/route-handlers';
 
 function createProfile() {
   return {

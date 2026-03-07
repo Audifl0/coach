@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createProgramGeneratePostHandler } from '../../src/app/api/program/generate/route';
+import { createProgramGeneratePostHandler } from '../../src/app/api/program/generate/route-handlers';
 
 type PersistCall = {
   userId: string;

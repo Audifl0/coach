@@ -4,23 +4,23 @@ import test from 'node:test';
 
 import {
   createProgramSessionCompletePostHandler,
-} from '../../src/app/api/program/sessions/[sessionId]/complete/route';
-import { createProgramHistoryGetHandler } from '../../src/app/api/program/history/route';
+} from '../../src/app/api/program/sessions/[sessionId]/route-handlers';
+import { createProgramHistoryGetHandler } from '../../src/app/api/program/history/route-handlers';
 import {
   createProgramSessionDurationPatchHandler,
-} from '../../src/app/api/program/sessions/[sessionId]/duration/route';
+} from '../../src/app/api/program/sessions/[sessionId]/route-handlers';
 import {
   createProgramSessionExerciseSetsPatchHandler,
   createProgramSessionExerciseSetsPostHandler,
-} from '../../src/app/api/program/sessions/[sessionId]/exercises/[plannedExerciseId]/sets/route';
+} from '../../src/app/api/program/sessions/[sessionId]/route-handlers';
 import {
   createProgramSessionExerciseSkipDeleteHandler,
   createProgramSessionExerciseSkipPostHandler,
-} from '../../src/app/api/program/sessions/[sessionId]/exercises/[plannedExerciseId]/skip/route';
+} from '../../src/app/api/program/sessions/[sessionId]/route-handlers';
 import {
   createProgramSessionNotePatchHandler,
-} from '../../src/app/api/program/sessions/[sessionId]/note/route';
-import { createProgramSessionDetailGetHandler } from '../../src/app/api/program/sessions/[sessionId]/route';
+} from '../../src/app/api/program/sessions/[sessionId]/route-handlers';
+import { createProgramSessionDetailGetHandler } from '../../src/app/api/program/sessions/[sessionId]/route-handlers';
 
 function mutationRouteContext() {
   return {
@@ -580,6 +580,6 @@ test('GET /api/program/history and session detail block unauthorized or non-owne
 });
 
 test('session detail route delegates response shaping to buildSessionDetailProjection', async () => {
-  const source = await readFile('src/app/api/program/sessions/[sessionId]/route.ts', 'utf8');
+  const source = await readFile('src/app/api/program/sessions/[sessionId]/route-handlers.ts', 'utf8');
   assert.match(source, /buildSessionDetailProjection/);
 });

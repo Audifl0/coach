@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { isProfileComplete } from '../../src/lib/profile/completeness';
-import { resolveDashboardRoute } from '../../src/app/(private)/dashboard/page';
+import { resolveDashboardRoute } from '../../src/app/(private)/dashboard/page-helpers';
 
 test('profile completeness handles explicit none limitation state', () => {
   const complete = isProfileComplete({

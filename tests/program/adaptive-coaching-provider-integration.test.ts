@@ -4,7 +4,7 @@ import test from 'node:test';
 import { createAdaptiveCoachingService } from '../../src/server/services/adaptive-coaching';
 import { createLlmProposalClient } from '../../src/server/llm/client';
 import type { LlmAttemptResult, LlmProposalProviderClient } from '../../src/server/llm/contracts';
-import { createProgramAdaptationPostHandler } from '../../src/app/api/program/adaptation/route';
+import { createProgramAdaptationPostHandler } from '../../src/app/api/program/adaptation/route-handlers';
 import type { AdaptiveCoachingServiceDeps } from '../../src/server/services/adaptive-coaching';
 
 function toPersistedRecommendationRecord(
