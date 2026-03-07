@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 08
 current_phase_name: release blockers and regression restoration
-current_plan: 08-04 (next)
+current_plan: 08-05 (next)
 status: in_progress
-stopped_at: Completed 08-03-PLAN.md; next 08-04-PLAN.md
-last_updated: "2026-03-07T10:34:49Z"
+stopped_at: Completed 08-04-PLAN.md; next 08-05-PLAN.md
+last_updated: "2026-03-07T10:48:02.285Z"
 last_activity: 2026-03-07
 progress:
   total_phases: 12
   completed_phases: 9
-  total_plans: 47
-  completed_plans: 45
-  percent: 96
+  total_plans: 55
+  completed_plans: 46
+  percent: 84
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 08
 **Current Phase Name:** release blockers and regression restoration
 **Total Phases:** 12
-**Current Plan:** 08-04 (next)
+**Current Plan:** 08-05 (next)
 **Total Plans in Phase:** 5
 **Status:** In progress
 **Last Activity:** 2026-03-07
-**Last Activity Description:** Completed 08-03 by closing the production env guardrail blocker, writing its summary, and advancing the next active plan to 08-04.
-**Progress:** [█████████░] 96%
+**Last Activity Description:** Completed 08-04 by hardening public auth throttling, writing its summary, and advancing the next active plan to 08-05.
+**Progress:** [████████░░] 84%
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 08-release-blockers-and-regression-restoration P08-02 | 19 min | 4 tasks | 26 files |
 | Phase 08-release-blockers-and-regression-restoration P08-01 | 32 min | 4 tasks | 4 files |
 | Phase 08-release-blockers-and-regression-restoration P08-03 | 26 min | 3 tasks | 10 files |
+| Phase 08-release-blockers-and-regression-restoration P08-04 | 9 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -180,6 +181,9 @@ Recent decisions affecting current work:
 - [Phase 08-release-blockers-and-regression-restoration]: Current-head 08-01 re-verification is split: Prisma generate and focused auth lifecycle tests pass, while full next build still needs follow-up because static page generation exits with a generic build-worker failure.
 - [Phase 08-release-blockers-and-regression-restoration]: The documented production env path is /opt/coach/.env.production, kept outside the repo and passed into existing scripts via explicit ENV_FILE arguments.
 - [Phase 08-release-blockers-and-regression-restoration]: Docker builds now exclude .env* and related local secret artifacts via .dockerignore so production secrets do not enter build context by operator mistake.
+- [Phase 08-release-blockers-and-regression-restoration]: Keep brute-force protection strictly on /api/auth/login and /api/auth/signup instead of introducing a generic abuse platform.
+- [Phase 08-release-blockers-and-regression-restoration]: Throttle login on normalized username plus client IP and signup on client IP only so sub-threshold auth semantics remain unchanged.
+- [Phase 08-release-blockers-and-regression-restoration]: Bind the shared auth limiter only in runtime POST handlers so production requests share state while direct handler factories stay isolated for deterministic tests.
 
 ### Roadmap Evolution
 
@@ -200,6 +204,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-07T10:33:56.080Z
-**Stopped At:** Completed 08-03-PLAN.md; next 08-04-PLAN.md
+**Last Date:** 2026-03-07T10:48:02.283Z
+**Stopped At:** Completed 08-04-PLAN.md; next 08-05-PLAN.md
 **Resume File:** None
