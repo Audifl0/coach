@@ -65,6 +65,8 @@ Each task was committed atomically:
 2. **Task 2: Align history drilldown detail with archived completed sessions**: `5c07525` (test), `a65593e` (feat)
 3. **Task 3: Restore deterministic workout-resume hydration after refresh or reopen**: `9a8814e` (test), `a6987fb` (feat)
 
+**Metadata sync:** `f2a0f82` (tooling-generated docs commit for summary/state/roadmap sync)
+
 ## Files Created/Modified
 - `src/server/dal/program.ts` - UTC-safe today lookup plus archived-completed fallback for session detail reads.
 - `src/app/(private)/dashboard/_components/session-logger.tsx` - Logger hydration helper and session-state rehydration from detail payloads.
