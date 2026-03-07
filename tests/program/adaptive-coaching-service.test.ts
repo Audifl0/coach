@@ -8,6 +8,7 @@ import {
   retrieveAdaptiveEvidence,
 } from '../../src/lib/adaptive-coaching/evidence';
 import {
+  AdaptiveCoachingError,
   createAdaptiveCoachingService,
   type AdaptiveCoachingServiceDeps,
 } from '../../src/server/services/adaptive-coaching';
@@ -31,6 +32,94 @@ function toPersistedRecommendationRecord(
     expiresAt: payload.expiresAt ?? null,
     appliedAt: null,
     rejectedAt: null,
+  };
+}
+
+type PersistedRecommendationRecord = Awaited<ReturnType<AdaptiveCoachingServiceDeps['createAdaptiveRecommendation']>>;
+
+function buildPersistedRecommendation(
+  overrides: Partial<PersistedRecommendationRecord> = {},
+): PersistedRecommendationRecord {
+  return {
+    id: 'rec_1',
+    userId: 'user_1',
+    plannedSessionId: 'session_next',
+    actionType: 'deload',
+    status: 'pending_confirmation',
+    confidence: 0.72,
+    confidenceLabel: 'medium',
+    confidenceReason: 'signals mixed',
+    warningFlag: false,
+    warningText: null,
+    fallbackApplied: false,
+    fallbackReason: null,
+    progressionDeltaLoadPct: -3,
+    progressionDeltaReps: -1,
+    progressionDeltaSets: 0,
+    substitutionExerciseKey: null,
+    substitutionDisplayName: null,
+    substitutionReason: null,
+    reasons: ['Fatigue elevated', 'Readiness dipped'],
+    evidenceTags: ['G-001', 'R-101'],
+    forecastPayload: { projectedReadiness: 3, projectedRpe: 7.6 },
+    expiresAt: new Date('2026-03-06T08:00:00.000Z'),
+    appliedAt: null,
+    rejectedAt: null,
+    createdAt: new Date('2026-03-05T08:00:00.000Z'),
+    updatedAt: new Date('2026-03-05T08:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+function createAdaptiveLifecycleDeps(options?: {
+  now?: Date;
+  recommendation?: PersistedRecommendationRecord;
+}): AdaptiveCoachingServiceDeps {
+  const recommendation = options?.recommendation ?? buildPersistedRecommendation();
+
+  return {
+    getProfile: async () => ({
+      goal: 'strength',
+      weeklySessionTarget: 4,
+      sessionDuration: '45_to_75m',
+      equipmentCategories: ['dumbbells'],
+      limitationsDeclared: false,
+      limitations: [],
+    }),
+    getTodayOrNextSessionCandidates: async () => ({
+      todaySession: null,
+      nextSession: {
+        id: 'session_next',
+        scheduledDate: new Date('2026-03-06T08:00:00.000Z'),
+      },
+    }),
+    getHistoryList: async () => [{ id: 'h1' }],
+    listLatestAdaptiveRecommendation: async () => recommendation,
+    getAdaptiveRecommendationById: async () => recommendation,
+    createAdaptiveRecommendation: async (_userId, payload) => ({
+      ...toPersistedRecommendationRecord(_userId, payload),
+      id: 'rec_fallback',
+      createdAt: new Date('2026-03-05T09:00:00.000Z'),
+      updatedAt: new Date('2026-03-05T09:00:00.000Z'),
+    }),
+    updateAdaptiveRecommendationStatus: async (_userId, input) => buildPersistedRecommendation({
+      id: input.recommendationId,
+      status: input.nextStatus,
+      expiresAt: input.expiresAt ?? recommendation.expiresAt,
+      appliedAt: input.nextStatus === 'applied' ? (options?.now ?? new Date('2026-03-05T09:00:00.000Z')) : recommendation.appliedAt,
+      rejectedAt: input.nextStatus === 'rejected' ? (options?.now ?? new Date('2026-03-05T09:00:00.000Z')) : recommendation.rejectedAt,
+      fallbackReason: input.fallbackReason ?? recommendation.fallbackReason,
+    }),
+    appendDecisionTrace: async () => ({ id: 'decision_1' }),
+    proposeRecommendation: async () => ({
+      actionType: 'hold',
+      plannedSessionId: 'session_next',
+      reasons: ['Reason 1', 'Reason 2'],
+      evidenceTags: ['G-001'],
+      forecastProjection: { projectedReadiness: 3, projectedRpe: 7 },
+      modelConfidence: 0.8,
+    }),
+    now: options?.now ? () => options.now as Date : undefined,
   };
 }
 
@@ -356,6 +445,123 @@ test('invalid model output follows fallback path and returns contract-valid reco
   const result = await service.generate('user_1');
   assert.equal(result.recommendation.fallbackApplied, true);
   assert.equal(result.recommendation.status, 'fallback_applied');
+});
+
+test('confirmAdaptiveRecommendation translates stale status mismatches into a 409 adaptive error', async () => {
+  const service = createAdaptiveCoachingService({
+    ...createAdaptiveLifecycleDeps({
+      now: new Date('2026-03-05T09:00:00.000Z'),
+    }),
+    updateAdaptiveRecommendationStatus: async () => {
+      throw new Error('Adaptive recommendation status mismatch: expected pending_confirmation, got applied');
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      service.confirmAdaptiveRecommendation({
+        userId: 'user_1',
+        recommendationId: 'rec_1',
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof AdaptiveCoachingError);
+      assert.equal(error.status, 409);
+      assert.equal(error.message, 'Recommendation state is stale. Refresh and retry.');
+      return true;
+    },
+  );
+});
+
+test('rejectAdaptiveRecommendation uses one atomic fallback persistence helper', async () => {
+  let atomicCalls = 0;
+  let updateCalls = 0;
+  let createCalls = 0;
+  let traceCalls = 0;
+
+  const deps = {
+    ...createAdaptiveLifecycleDeps({
+      now: new Date('2026-03-05T09:00:00.000Z'),
+      recommendation: buildPersistedRecommendation({
+        actionType: 'substitution',
+      }),
+    }),
+    updateAdaptiveRecommendationStatus: async () => {
+      updateCalls += 1;
+      return buildPersistedRecommendation({
+        status: 'rejected',
+        rejectedAt: new Date('2026-03-05T09:00:00.000Z'),
+      });
+    },
+    createAdaptiveRecommendation: async (_userId: string) => {
+      createCalls += 1;
+      return buildPersistedRecommendation({
+        id: 'rec_fallback',
+        actionType: 'hold',
+        status: 'applied',
+        fallbackApplied: true,
+        fallbackReason: 'user_rejected_high_impact',
+      });
+    },
+    appendDecisionTrace: async () => {
+      traceCalls += 1;
+      return { id: 'decision_extra' };
+    },
+    rejectRecommendationWithFallback: async () => {
+      atomicCalls += 1;
+      return {
+        rejectedRecommendation: buildPersistedRecommendation({
+          status: 'rejected',
+          rejectedAt: new Date('2026-03-05T09:00:00.000Z'),
+        }),
+        fallbackRecommendation: buildPersistedRecommendation({
+          id: 'rec_fallback',
+          actionType: 'hold',
+          status: 'applied',
+          fallbackApplied: true,
+          fallbackReason: 'user_rejected_high_impact',
+          appliedAt: new Date('2026-03-05T09:00:00.000Z'),
+        }),
+      };
+    },
+  } as AdaptiveCoachingServiceDeps & {
+    rejectRecommendationWithFallback: (input: {
+      userId: string;
+      recommendationId: string;
+      expectedCurrentStatus: 'pending_confirmation';
+      rejectionReason: string;
+      rejectionEvidenceTags: unknown;
+      fallbackReason: string;
+      fallbackMetadata: unknown;
+      fallback: {
+        plannedSessionId: string;
+        confidence: number;
+        confidenceLabel: 'low' | 'medium' | 'high';
+        confidenceReason: string;
+        warningFlag: boolean;
+        warningText: string | null;
+        evidenceTags: unknown;
+        forecastPayload: unknown;
+        progressionDeltaSets: number | null;
+      };
+    }) => Promise<{
+      rejectedRecommendation: PersistedRecommendationRecord;
+      fallbackRecommendation: PersistedRecommendationRecord;
+    }>;
+  };
+
+  const service = createAdaptiveCoachingService(deps);
+  const result = await service.rejectAdaptiveRecommendation({
+    userId: 'user_1',
+    recommendationId: 'rec_1',
+    reason: 'Prefer to keep original movement this session',
+  });
+
+  assert.equal(result.actionType, 'hold');
+  assert.equal(result.status, 'applied');
+  assert.equal(atomicCalls, 1);
+  assert.equal(updateCalls, 0);
+  assert.equal(createCalls, 0);
+  assert.equal(traceCalls, 0);
 });
 
 test('feature flag disabled keeps deterministic local proposal path', async () => {

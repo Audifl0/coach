@@ -416,3 +416,51 @@ test('non-owner or missing recommendation responses are masked as not-found', as
   assert.equal(confirmResponse.status, 404);
   assert.equal(rejectResponse.status, 404);
 });
+
+test('confirm and reject routes return 409 for stale recommendation state mismatches', async () => {
+  const staleDeps = createDeps({
+    now: new Date('2026-03-05T09:00:00.000Z'),
+  });
+  staleDeps.updateAdaptiveRecommendationStatus = async () => {
+    throw new Error('Adaptive recommendation status mismatch: expected pending_confirmation, got applied');
+  };
+
+  const service = createAdaptiveCoachingService(staleDeps);
+
+  const confirmPost = createProgramAdaptationConfirmPostHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    confirmRecommendation: (input) => service.confirmAdaptiveRecommendation(input),
+  });
+  const rejectPost = createProgramAdaptationRejectPostHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    rejectRecommendation: (input) => service.rejectAdaptiveRecommendation(input),
+  });
+
+  const confirmResponse = await confirmPost(
+    new Request('http://localhost/api/program/adaptation/rec_1/confirm', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ decision: 'accept' }),
+    }),
+    { params: Promise.resolve({ recommendationId: 'rec_1' }) },
+  );
+
+  const rejectResponse = await rejectPost(
+    new Request('http://localhost/api/program/adaptation/rec_1/reject', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ decision: 'reject', reason: 'not today' }),
+    }),
+    { params: Promise.resolve({ recommendationId: 'rec_1' }) },
+  );
+
+  assert.equal(confirmResponse.status, 409);
+  assert.deepEqual(await confirmResponse.json(), {
+    error: 'Recommendation state is stale. Refresh and retry.',
+  });
+
+  assert.equal(rejectResponse.status, 409);
+  assert.deepEqual(await rejectResponse.json(), {
+    error: 'Recommendation state is stale. Refresh and retry.',
+  });
+});
