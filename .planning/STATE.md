@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 09
 current_phase_name: security runtime and release proof stabilization
-current_plan: 4
+current_plan: 5
 status: executing
-stopped_at: Completed 09-04-PLAN.md
-last_updated: "2026-03-07T18:35:30.463Z"
+stopped_at: Completed 09-05-PLAN.md
+last_updated: "2026-03-07T18:51:44.763Z"
 last_activity: 2026-03-07
 progress:
   total_phases: 12
   completed_phases: 10
   total_plans: 56
-  completed_plans: 51
-  percent: 91
+  completed_plans: 52
+  percent: 93
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 09
 **Current Phase Name:** security runtime and release proof stabilization
 **Total Phases:** 12
-**Current Plan:** 4
+**Current Plan:** 5
 **Total Plans in Phase:** 5
 **Status:** Ready to execute
 **Last Activity:** 2026-03-07
-**Last Activity Description:** Completed 09-04 UTC selection, archived drilldown, and workout-resume parity
-**Progress:** [█████████░] 91%
+**Last Activity Description:** Completed 09-05 ops env contract, authenticated smoke, and structured critical-failure logging
+**Progress:** [█████████░] 93%
 
 ## Performance Metrics
 
@@ -72,6 +72,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 09 P09-01 | 6 min | 2 tasks | 8 files |
 | Phase 09 P09-02 | 12min | 3 tasks | 10 files |
 | Phase 09 P09-04 | 8 min | 3 tasks | 7 files |
+| Phase 09-security-runtime-and-release-proof-stabilization P09-05 | 12 min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -202,6 +203,9 @@ Recent decisions affecting current work:
 - [Phase 09]: Reused UTC day helpers and an inclusive next-day fallback so today/next session selection stays contract-stable while midnight UTC boundaries behave correctly.
 - [Phase 09]: Extended getSessionById to include archived completed sessions so history rows and drilldown detail share one account-scoped route surface.
 - [Phase 09]: Hydrated SessionLogger from existing session-detail responses and reused the today-card detail fetch so refresh and reopen restore real in-progress workout state.
+- [Phase 09-security-runtime-and-release-proof-stabilization]: Kept the phase-09 ops contract narrow around APP_DOMAIN, restore guardrails, and OPS_SMOKE_* variables instead of absorbing unrelated provider or pipeline env.
+- [Phase 09-security-runtime-and-release-proof-stabilization]: Authenticated release smoke proves business data by logging in and validating /api/program/today focus labels, not by treating dashboard status codes as sufficient evidence.
+- [Phase 09-security-runtime-and-release-proof-stabilization]: Structured logging stays allowlisted and server-boundary-only: route, method, status, source, errorName, and degraded dashboard boundary/reason.
 
 ### Roadmap Evolution
 
@@ -222,6 +226,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-07T18:35:30.459Z
-**Stopped At:** Completed 09-04-PLAN.md
+**Last Date:** 2026-03-07T18:51:44.759Z
+**Stopped At:** Completed 09-05-PLAN.md
 **Resume File:** None

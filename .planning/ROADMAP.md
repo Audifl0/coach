@@ -138,7 +138,7 @@ Plans:
 | 06 - Trends and Operational Reliability | 4/4 | Complete   | 2026-03-06 | 2026-03-05 |
 | 07 - Audit technique avance et stabilisation complete de l'application | 6/6 | Complete   | 2026-03-06 | 2026-03-06 |
 | 08 - Release blockers and regression restoration | 6/6 | Complete   | 2026-03-07 |
-| 09 - Security, runtime, and release-proof stabilization | 3/5 | In Progress | 2026-03-07 |
+| 09 - Security, runtime, and release-proof stabilization | 4/5 | In Progress | 2026-03-07 |
 
 - Total v1 requirements: 26
 - Mapped to phases: 26
@@ -165,14 +165,14 @@ Plans:
 **Goal:** Stabiliser les flux critiques, la resilience runtime, et la preuve de release apres la levee des blockers.
 **Requirements**: PROG-01, PROG-02, PROG-03, LOG-01, LOG-02, LOG-03, LOG-04, ADAP-01, ADAP-02, ADAP-03, SAFE-01, SAFE-02, SAFE-03, DASH-01, DASH-02, DASH-03, PLAT-02
 **Depends on:** Phase 8
-**Plans:** 3/5 plans complete
+**Plans:** 4/5 plans complete
 
 Plans:
 - [x] 09-01-PLAN.md - Dashboard trust removal and explicit today/trends degraded states
 - [x] 09-02-PLAN.md - Persistence hardening for active-plan, session logging, and adaptive transitions
 - [ ] 09-03-PLAN.md - Release-proof script and operator evidence runbook
 - [x] 09-04-PLAN.md - UTC session selection, archived history drilldown, and workout-resume parity
-- [ ] 09-05-PLAN.md - Env contract, authenticated smoke, and structured critical-failure logging
+- [x] 09-05-PLAN.md - Env contract, authenticated smoke, and structured critical-failure logging
 
 ### Phase 10: Maintainability cleanup and operational hardening
 
