@@ -29,8 +29,10 @@ echo "Deploying stack with env: $ENV_FILE"
 "${COMPOSE_CMD[@]}" --env-file "$ENV_FILE" up -d --remove-orphans
 
 if [[ -n "${APP_DOMAIN:-}" ]]; then
-  "$SCRIPT_DIR/smoke-test-https.sh" "https://${APP_DOMAIN}"
-  node "$SCRIPT_DIR/smoke-authenticated-dashboard.mjs" "https://${APP_DOMAIN}"
+  if [[ "${DEPLOY_SKIP_POST_DEPLOY_SMOKE:-0}" != "1" ]]; then
+    "$SCRIPT_DIR/smoke-test-https.sh" "https://${APP_DOMAIN}"
+    node "$SCRIPT_DIR/smoke-authenticated-dashboard.mjs" "https://${APP_DOMAIN}"
+  fi
 fi
 
 echo "Deployment complete."

@@ -8,7 +8,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "prisma:generate": "prisma generate",
-    "test": "tsx --test"
+    "test": "tsx --test",
+    "release:proof": "bash infra/scripts/release-proof.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
