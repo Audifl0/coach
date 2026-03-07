@@ -6,15 +6,15 @@ current_phase: 08
 current_phase_name: release blockers and regression restoration
 current_plan: 08-03
 status: in_progress
-stopped_at: Completed 08-02-PLAN.md
-last_updated: "2026-03-07T09:28:08Z"
+stopped_at: Completed 08-01-PLAN.md metadata backfill; next 08-03-PLAN.md
+last_updated: "2026-03-07T09:37:46.883Z"
 last_activity: 2026-03-07
 progress:
   total_phases: 12
   completed_phases: 9
   total_plans: 47
-  completed_plans: 43
-  percent: 91
+  completed_plans: 44
+  percent: 94
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 08
 **Current Phase Name:** release blockers and regression restoration
 **Total Phases:** 12
-**Current Plan:** 08-03 (next) with 08-01 metadata still pending
+**Current Plan:** 08-03 (next)
 **Total Plans in Phase:** 5
 **Status:** In progress
 **Last Activity:** 2026-03-07
-**Last Activity Description:** Completed 08-02 and restored the repo-wide typecheck baseline for RB-01
-**Progress:** [█████████░] 91%
+**Last Activity Description:** Backfilled 08-01 summary, reran its verification gates, and confirmed 08-03 is the next active plan.
+**Progress:** [█████████░] 94%
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 07-audit-technique-avanc-et-stabilisation-compl-te-de-l-application P07-05 | 4 min | 2 tasks | 4 files |
 | Phase 07-audit-technique-avanc-et-stabilisation-compl-te-de-l-application P07-06 | 5 min | 3 tasks | 6 files |
 | Phase 08-release-blockers-and-regression-restoration P08-02 | 19 min | 4 tasks | 26 files |
+| Phase 08-release-blockers-and-regression-restoration P08-01 | 32 min | 4 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -174,6 +175,8 @@ Recent decisions affecting current work:
 - [Phase 07-audit-technique-avanc-et-stabilisation-compl-te-de-l-application]: Treat same-service SSR dashboard fetches and in-memory trend/history aggregation as important runtime risks, but not standalone release blockers.
 - [Phase 07-audit-technique-avanc-et-stabilisation-compl-te-de-l-application]: Treat concurrent plan replacement, session-completion race windows, and adaptive decision partial writes as release-sensitive consistency issues.
 - [Phase 07-audit-technique-avanc-et-stabilisation-compl-te-de-l-application]: User approved the 07-06 audit package; Phase 07 closes without remediation or application-code changes.
+- [Phase 08-release-blockers-and-regression-restoration]: Middleware now consumes SESSION_COOKIE_NAME from a dependency-free session-contract module so Edge runtime imports stay clear of node:crypto auth helpers.
+- [Phase 08-release-blockers-and-regression-restoration]: Current-head 08-01 re-verification is split: Prisma generate and focused auth lifecycle tests pass, while full next build still needs follow-up because static page generation exits with a generic build-worker failure.
 
 ### Roadmap Evolution
 
@@ -194,6 +197,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-07T09:28:08Z
-**Stopped At:** Completed 08-02-PLAN.md
+**Last Date:** 2026-03-07T09:37:46.880Z
+**Stopped At:** Completed 08-01-PLAN.md metadata backfill; next 08-03-PLAN.md
 **Resume File:** None
