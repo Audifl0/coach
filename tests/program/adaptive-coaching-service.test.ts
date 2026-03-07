@@ -34,17 +34,105 @@ function toPersistedRecommendationRecord(
   };
 }
 
-test('evidence retrieval returns deterministic top-k snippets with short refs and source classes', () => {
+test('evidence retrieval returns exactly top-k deterministic references from the runtime corpus when enough usable entries exist', () => {
   const evidence = retrieveAdaptiveEvidence({
-    queryTags: ['fatigue', 'adherence', 'readiness'],
+    queryTags: ['fatigue', 'adherence'],
     topK: 3,
+    corpus: [
+      {
+        id: 'guideline-runtime-011',
+        sourceClass: 'guideline',
+        title: 'Runtime guideline fatigue',
+        summary: 'Fatigue-specific runtime evidence.',
+        tags: ['fatigue'],
+      },
+      {
+        id: 'review-runtime-022',
+        sourceClass: 'review',
+        title: 'Runtime review adherence',
+        summary: 'Adherence-specific runtime evidence.',
+        tags: ['adherence'],
+      },
+      {
+        id: 'expertise-runtime-033',
+        sourceClass: 'expertise',
+        title: 'Runtime expertise filler',
+        summary: 'Fallback filler from runtime corpus.',
+        tags: ['readiness'],
+      },
+      {
+        id: 'review-runtime-044',
+        sourceClass: 'review',
+        title: 'Runtime review extra',
+        summary: 'Additional runtime filler.',
+        tags: ['volume'],
+      },
+    ],
   });
 
   assert.equal(evidence.length, 3);
-  assert.ok(evidence[0]?.ref.startsWith('G-'));
-  assert.ok(evidence[1]?.ref.startsWith('R-') || evidence[1]?.ref.startsWith('G-'));
-  assert.ok(evidence[2]?.ref.startsWith('E-') || evidence[2]?.ref.startsWith('R-') || evidence[2]?.ref.startsWith('G-'));
-  assert.ok(['guideline', 'review', 'expertise'].includes(evidence[0]?.sourceClass ?? ''));
+  assert.deepEqual(
+    evidence.map((item) => item.ref),
+    ['G-011', 'R-022', 'R-044'],
+  );
+  assert.deepEqual(
+    evidence.map((item) => item.sourceClass),
+    ['guideline', 'review', 'review'],
+  );
+});
+
+test('runtime-corpus underfill is completed before built-in fallback corpus entries are considered', () => {
+  const evidence = retrieveAdaptiveEvidence({
+    queryTags: ['fatigue'],
+    topK: 3,
+    corpus: [
+      {
+        id: 'review-runtime-120',
+        sourceClass: 'review',
+        title: 'Runtime direct hit',
+        summary: 'Direct match in runtime corpus.',
+        tags: ['fatigue'],
+      },
+      {
+        id: 'guideline-runtime-110',
+        sourceClass: 'guideline',
+        title: 'Runtime guideline filler',
+        summary: 'Higher-priority runtime filler.',
+        tags: ['readiness'],
+      },
+      {
+        id: 'expertise-runtime-130',
+        sourceClass: 'expertise',
+        title: 'Runtime expertise filler',
+        summary: 'Lower-priority runtime filler.',
+        tags: ['pain'],
+      },
+    ],
+  });
+
+  assert.equal(evidence.length, 3);
+  assert.deepEqual(
+    evidence.map((item) => item.title),
+    ['Runtime direct hit', 'Runtime guideline filler', 'Runtime expertise filler'],
+  );
+  assert.equal(
+    evidence.some((item) => item.title === 'Progressive Overload Boundaries'),
+    false,
+  );
+});
+
+test('empty runtime corpus falls back conservatively to built-in evidence', () => {
+  const evidence = retrieveAdaptiveEvidence({
+    queryTags: ['fatigue'],
+    topK: 2,
+    corpus: [],
+  });
+
+  assert.equal(evidence.length, 2);
+  assert.deepEqual(
+    evidence.map((item) => item.ref),
+    ['G-001', 'R-102'],
+  );
 });
 
 test('explanation envelope requires 2-3 reasons and at least one evidence reference', () => {
