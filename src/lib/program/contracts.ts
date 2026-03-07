@@ -199,6 +199,13 @@ export const historyQueryInputSchema = z
 export type ProgramGenerateInput = z.infer<typeof programGenerateInputSchema>;
 export type ProgramPlannedExercise = z.infer<typeof programPlannedExerciseSchema>;
 export type ProgramSessionSummary = z.infer<typeof programSessionSummarySchema>;
+export type ProgramSessionSummaryCandidate = Omit<ProgramSessionSummary, 'scheduledDate'> & {
+  scheduledDate: Date | string;
+};
+export type ProgramTodaySessionCandidates = {
+  todaySession: ProgramSessionSummaryCandidate | null;
+  nextSession: ProgramSessionSummaryCandidate | null;
+};
 export type ProgramTodayResponse = z.infer<typeof programTodayResponseSchema>;
 export type ProgramSessionDetailResponse = z.infer<typeof programSessionDetailResponseSchema>;
 export type ProgramHistoryRow = z.infer<typeof programHistoryRowSchema>;

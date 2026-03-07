@@ -59,7 +59,8 @@ export function TodayWorkoutCard({ data }: { data: ProgramTodayResponse }) {
     );
   }
 
-  const detail = detailSession && detailSession.id === session.id ? detailSession : null;
+  const activeSession: ProgramSessionSummary = session;
+  const detail = detailSession && detailSession.id === activeSession.id ? detailSession : null;
 
   async function handleToggleDetails() {
     if (detailOpen) {
@@ -76,7 +77,7 @@ export function TodayWorkoutCard({ data }: { data: ProgramTodayResponse }) {
       setLoading(true);
       setErrorMessage(null);
 
-      const response = await fetch(`/api/program/sessions/${session.id}`, {
+      const response = await fetch(`/api/program/sessions/${activeSession.id}`, {
         method: 'GET',
         cache: 'no-store',
       });
@@ -99,19 +100,19 @@ export function TodayWorkoutCard({ data }: { data: ProgramTodayResponse }) {
     <section aria-label="today-workout-card">
       <h2>{mode === 'today' ? 'Seance du jour' : 'Prochaine seance planifiee'}</h2>
       <p>
-        {session.focusLabel} - {session.exercises.length} exercice(s)
+        {activeSession.focusLabel} - {activeSession.exercises.length} exercice(s)
       </p>
-      <p>Date: {session.scheduledDate}</p>
+      <p>Date: {activeSession.scheduledDate}</p>
       <div>
         <button type="button" onClick={() => setLoggerOpen((current) => !current)}>
-          {loggerOpen ? 'Masquer suivi seance' : (session.state === 'started' ? 'Reprendre seance' : actionLabel)}
+          {loggerOpen ? 'Masquer suivi seance' : (activeSession.state === 'started' ? 'Reprendre seance' : actionLabel)}
         </button>
         <button type="button" onClick={handleToggleDetails}>
           {detailOpen ? 'Masquer les exercices' : 'Voir les exercices'}
         </button>
       </div>
 
-      {loggerOpen ? <SessionLogger session={session} /> : null}
+      {loggerOpen ? <SessionLogger session={activeSession} /> : null}
 
       {loading ? <p>Chargement des details...</p> : null}
       {errorMessage ? <p>{errorMessage}</p> : null}

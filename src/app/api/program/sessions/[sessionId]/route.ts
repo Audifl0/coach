@@ -1,5 +1,6 @@
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
 import { buildSessionDetailProjection } from '@/lib/program/select-today-session';
+import type { MovementPattern, SessionState } from '@/lib/program/types';
 import { createProgramDal } from '@/server/dal/program';
 
 type RouteContext = {
@@ -18,7 +19,7 @@ type SessionDetailExercise = {
   userId?: string;
   exerciseKey: string;
   displayName: string;
-  movementPattern: string;
+  movementPattern: MovementPattern;
   sets: number;
   targetReps: number;
   targetLoad: string;
@@ -38,7 +39,7 @@ type SessionDetailRecord = {
   scheduledDate: Date | string;
   dayIndex: number;
   focusLabel: string;
-  state: 'planned' | 'completed' | 'skipped';
+  state: SessionState;
   startedAt?: Date | string | null;
   completedAt?: Date | string | null;
   effectiveDurationSec?: number | null;

@@ -1,51 +1,11 @@
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
+import type { ProgramTodaySessionCandidates } from '@/lib/program/contracts';
 import { selectTodayWorkoutProjection } from '@/lib/program/select-today-session';
 import { createProgramDal } from '@/server/dal/program';
 
 export type ProgramTodayRouteDeps = {
   resolveSession: () => Promise<{ userId: string } | null>;
-  getTodayOrNextSessionCandidates: (userId: string) => Promise<{
-    todaySession: {
-      id: string;
-      scheduledDate: Date | string;
-      dayIndex: number;
-      focusLabel: string;
-      state: 'planned' | 'completed' | 'skipped';
-      exercises: Array<{
-        id: string;
-        exerciseKey: string;
-        displayName: string;
-        movementPattern: string;
-        sets: number;
-        targetReps: number;
-        targetLoad: string;
-        restMinSec: number;
-        restMaxSec: number;
-        isSubstituted: boolean;
-        originalExerciseKey: string | null;
-      }>;
-    } | null;
-    nextSession: {
-      id: string;
-      scheduledDate: Date | string;
-      dayIndex: number;
-      focusLabel: string;
-      state: 'planned' | 'completed' | 'skipped';
-      exercises: Array<{
-        id: string;
-        exerciseKey: string;
-        displayName: string;
-        movementPattern: string;
-        sets: number;
-        targetReps: number;
-        targetLoad: string;
-        restMinSec: number;
-        restMaxSec: number;
-        isSubstituted: boolean;
-        originalExerciseKey: string | null;
-      }>;
-    } | null;
-  }>;
+  getTodayOrNextSessionCandidates: (userId: string) => Promise<ProgramTodaySessionCandidates>;
 };
 
 function json(body: unknown, status: number): Response {

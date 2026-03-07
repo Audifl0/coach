@@ -7,32 +7,14 @@ import {
   type ProgramHistorySessionDetailResponse,
   type ProgramSessionDetailResponse,
   type ProgramSessionSummary,
+  type ProgramSessionSummaryCandidate,
+  type ProgramTodaySessionCandidates,
   type ProgramTodayResponse,
 } from '@/lib/program/contracts';
 import type { SessionState } from '@/lib/program/types';
 
-type SessionExerciseLike = {
-  id: string;
-  exerciseKey: string;
-  displayName: string;
-  movementPattern: string;
-  sets: number;
-  targetReps: number;
-  targetLoad: string;
-  restMinSec: number;
-  restMaxSec: number;
-  isSubstituted: boolean;
-  originalExerciseKey: string | null;
-};
-
-type SessionRecordLike = {
-  id: string;
-  scheduledDate: Date | string;
-  dayIndex: number;
-  focusLabel: string;
-  state: SessionState;
-  exercises: SessionExerciseLike[];
-};
+type SessionExerciseLike = ProgramSessionSummaryCandidate['exercises'][number];
+type SessionRecordLike = ProgramSessionSummaryCandidate;
 
 type LoggedSetLike = {
   setIndex: number;
@@ -145,10 +127,7 @@ export function mapSessionSummary(record: SessionRecordLike): ProgramSessionSumm
   };
 }
 
-export function selectTodayWorkoutProjection(input: {
-  todaySession: SessionRecordLike | null;
-  nextSession: SessionRecordLike | null;
-}): ProgramTodayResponse {
+export function selectTodayWorkoutProjection(input: ProgramTodaySessionCandidates): ProgramTodayResponse {
   const todaySession = input.todaySession ? mapSessionSummary(input.todaySession) : null;
   const nextSession = input.todaySession
     ? null

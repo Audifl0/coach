@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { cookies, headers } from 'next/headers';
+import type { ComponentProps } from 'react';
 
 import { parseProgramTodayResponse, type ProgramTodayResponse } from '@/lib/program/contracts';
 import {
@@ -11,7 +12,7 @@ import {
 import { isProfileComplete } from '@/lib/profile/completeness';
 import { TodayWorkoutCard } from './_components/today-workout-card';
 import { SessionHistoryCard } from './_components/session-history-card';
-import { createAdaptiveCoachingDal } from '@/server/dal/adaptive-coaching';
+import { createAdaptiveCoachingDal, type AdaptiveRecommendationRecord } from '@/server/dal/adaptive-coaching';
 import { AdaptiveConfirmationBanner } from './components/adaptive-confirmation-banner';
 import { AdaptiveForecastCard } from './components/adaptive-forecast-card';
 import {
@@ -55,19 +56,21 @@ export function pickDashboardSession(data: ProgramTodayResponse | null) {
   };
 }
 
-type DashboardAdaptiveForecastSource = {
-  actionType: 'progress' | 'hold' | 'deload' | 'substitution';
-  status: 'proposed' | 'validated' | 'pending_confirmation' | 'applied' | 'rejected' | 'fallback_applied';
-  warningFlag: boolean;
-  warningText: string | null;
-  fallbackApplied: boolean;
-  fallbackReason: string | null;
-  reasons: unknown;
-  evidenceTags: unknown;
-  forecastPayload: unknown;
-  progressionDeltaLoadPct: number | null;
-  progressionDeltaReps: number | null;
-};
+type DashboardAdaptiveForecastSource = Pick<
+  AdaptiveRecommendationRecord,
+  | 'actionType'
+  | 'status'
+  | 'warningFlag'
+  | 'warningText'
+  | 'fallbackApplied'
+  | 'fallbackReason'
+  | 'reasons'
+  | 'evidenceTags'
+  | 'forecastPayload'
+  | 'progressionDeltaLoadPct'
+  | 'progressionDeltaReps'
+>;
+type PendingAdaptiveRecommendation = ComponentProps<typeof AdaptiveConfirmationBanner>['recommendation'];
 
 export function resolveAdaptiveForecastCard(
   recommendation: DashboardAdaptiveForecastSource | null,
@@ -91,13 +94,9 @@ export function resolveAdaptiveForecastCard(
   });
 }
 
-function toPendingConfirmationBannerData(record: {
-  id: string;
-  actionType: string;
-  status: string;
-  reasons: unknown;
-  expiresAt: Date | null;
-}) {
+function toPendingConfirmationBannerData(
+  record: Pick<AdaptiveRecommendationRecord, 'id' | 'actionType' | 'status' | 'reasons' | 'expiresAt'>,
+): PendingAdaptiveRecommendation | null {
   if (record.status !== 'pending_confirmation') {
     return null;
   }
@@ -229,6 +228,10 @@ export default async function DashboardPage() {
   );
 
   if (route === 'login') {
+    redirect('/login?next=/dashboard');
+  }
+
+  if (!session) {
     redirect('/login?next=/dashboard');
   }
 
