@@ -26,7 +26,7 @@ export function createProfileGetHandler(deps: ProfileRouteDeps) {
     return json(
       {
         profile,
-        complete: isProfileComplete(profile as never),
+        complete: isProfileComplete(profile),
       },
       200,
     );
@@ -55,12 +55,12 @@ export function createProfilePutHandler(deps: ProfileRouteDeps) {
       if (mode === 'edit') {
         const patch = validateProfilePatch(payload);
         const updated = await deps.patchProfile(session.userId, patch);
-        return json({ profile: updated, complete: isProfileComplete(updated as never) }, 200);
+        return json({ profile: updated, complete: isProfileComplete(updated) }, 200);
       }
 
       const input = validateProfileInput(payload);
       const saved = await deps.upsertProfile(session.userId, input);
-      return json({ profile: saved, complete: isProfileComplete(saved as never) }, 200);
+      return json({ profile: saved, complete: isProfileComplete(saved) }, 200);
     } catch (error) {
       return json({ error: error instanceof Error ? error.message : 'Invalid profile payload' }, 400);
     }

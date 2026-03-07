@@ -38,7 +38,7 @@ export async function resolveDashboardRoute(
   }
 
   const profile = await findProfileByUserId(session.userId);
-  if (!isProfileComplete(profile as never)) {
+  if (!isProfileComplete(profile)) {
     return 'onboarding';
   }
 
