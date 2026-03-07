@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 09
 current_phase_name: security runtime and release proof stabilization
 current_plan: 5
-status: executing
-stopped_at: Completed 09-05-PLAN.md
-last_updated: "2026-03-07T18:51:44.763Z"
+status: verifying
+stopped_at: Completed 09-03-PLAN.md
+last_updated: "2026-03-07T18:59:08.905Z"
 last_activity: 2026-03-07
 progress:
   total_phases: 12
-  completed_phases: 10
+  completed_phases: 11
   total_plans: 56
-  completed_plans: 52
-  percent: 93
+  completed_plans: 53
+  percent: 95
 ---
 
 # Project State
@@ -33,10 +33,10 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Total Phases:** 12
 **Current Plan:** 5
 **Total Plans in Phase:** 5
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 **Last Activity:** 2026-03-07
-**Last Activity Description:** Completed 09-05 ops env contract, authenticated smoke, and structured critical-failure logging
-**Progress:** [█████████░] 93%
+**Last Activity Description:** Completed 09-03 release-proof orchestration and operator evidence runbook
+**Progress:** [██████████] 95%
 
 ## Performance Metrics
 
@@ -73,6 +73,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 09 P09-02 | 12min | 3 tasks | 10 files |
 | Phase 09 P09-04 | 8 min | 3 tasks | 7 files |
 | Phase 09-security-runtime-and-release-proof-stabilization P09-05 | 12 min | 3 tasks | 19 files |
+| Phase 09-security-runtime-and-release-proof-stabilization P09-03 | 4 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -206,6 +207,9 @@ Recent decisions affecting current work:
 - [Phase 09-security-runtime-and-release-proof-stabilization]: Kept the phase-09 ops contract narrow around APP_DOMAIN, restore guardrails, and OPS_SMOKE_* variables instead of absorbing unrelated provider or pipeline env.
 - [Phase 09-security-runtime-and-release-proof-stabilization]: Authenticated release smoke proves business data by logging in and validating /api/program/today focus labels, not by treating dashboard status codes as sufficient evidence.
 - [Phase 09-security-runtime-and-release-proof-stabilization]: Structured logging stays allowlisted and server-boundary-only: route, method, status, source, errorName, and degraded dashboard boundary/reason.
+- [Phase 09-security-runtime-and-release-proof-stabilization]: Kept release proof as one shell wrapper around existing pnpm, deploy, HTTPS smoke, and authenticated smoke primitives instead of widening scope into CI or browser automation.
+- [Phase 09-security-runtime-and-release-proof-stabilization]: Made release-proof own the explicit post-deploy smoke order while keeping deploy.sh's default smoke behavior for deploy-only workflows through an opt-out flag.
+- [Phase 09-security-runtime-and-release-proof-stabilization]: Documented stage banners and authenticated smoke markers as the evidence contract so operators can prove business-data sanity, not just container startup.
 
 ### Roadmap Evolution
 
@@ -226,6 +230,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-07T18:51:44.759Z
-**Stopped At:** Completed 09-05-PLAN.md
+**Last Date:** 2026-03-07T18:59:08.902Z
+**Stopped At:** Completed 09-03-PLAN.md
 **Resume File:** None
