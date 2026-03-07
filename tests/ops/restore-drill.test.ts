@@ -42,6 +42,8 @@ test('restore drill wrapper enforces deterministic stage order and evidence logg
   assert.match(drillScript, /smoke/i);
   assert.match(drillScript, /evidence/i);
   assert.match(drillScript, /set -euo pipefail/);
+  assert.match(drillScript, /stage=smoke_dashboard_authenticated/);
+  assert.match(drillScript, /smoke-authenticated-dashboard\.mjs/);
 });
 
 test('systemd timer schedules persistent monthly restore drills', async () => {

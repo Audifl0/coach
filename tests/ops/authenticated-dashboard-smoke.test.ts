@@ -4,6 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { parseOpsRuntimeConfig } from '../../src/server/env/ops-config';
+import { runAuthenticatedDashboardSmoke } from '../../infra/scripts/smoke-authenticated-dashboard.mjs';
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 
@@ -92,4 +93,77 @@ test('ops config remains scoped to release-proof inputs instead of provider or p
   });
 
   assert.equal(parsed.restore.baseUrl, 'http://127.0.0.1:3000');
+});
+
+test('authenticated dashboard smoke logs in, reuses the session cookie, and verifies business data', async () => {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const logs: string[] = [];
+
+  const fetchImpl = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    calls.push({ url, init });
+
+    if (url.endsWith('/api/auth/login')) {
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          'set-cookie': 'coach_session=test-session; Path=/; HttpOnly; Secure; SameSite=Lax',
+        },
+      });
+    }
+
+    if (url.endsWith('/dashboard')) {
+      return new Response('<html><body>Dashboard</body></html>', { status: 200 });
+    }
+
+    if (url.endsWith('/api/program/today')) {
+      return new Response(
+        JSON.stringify({
+          todaySession: {
+            id: 'session_1',
+            scheduledDate: '2026-03-07',
+            dayIndex: 0,
+            focusLabel: 'Upper Body',
+            state: 'planned',
+            exercises: [],
+          },
+          nextSession: null,
+          primaryAction: 'start_workout',
+        }),
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected fetch URL: ${url}`);
+  };
+
+  await runAuthenticatedDashboardSmoke({
+    baseUrl: 'https://coach.example.com',
+    username: 'release-smoke',
+    password: 'smoke-secret',
+    expectedFocusLabel: 'Upper Body',
+    fetchImpl,
+    log: (message) => logs.push(message),
+  });
+
+  assert.equal(calls.length, 3);
+  assert.equal(calls[0]?.url, 'https://coach.example.com/api/auth/login');
+  assert.equal(calls[0]?.init?.method, 'POST');
+  assert.match(String(calls[1]?.init?.headers instanceof Headers ? calls[1]?.init?.headers.get('cookie') : (calls[1]?.init?.headers as Record<string, string>).cookie), /coach_session=test-session/);
+  assert.equal(calls[2]?.url, 'https://coach.example.com/api/program/today');
+  assert.match(logs.join('\n'), /smoke_login=ok/);
+  assert.match(logs.join('\n'), /smoke_dashboard=ok/);
+  assert.match(logs.join('\n'), /smoke_business_data=ok/);
+});
+
+test('deploy and restore scripts invoke the authenticated smoke helper with the centralized env contract', async () => {
+  const [deployScript, restoreDrillScript] = await Promise.all([
+    readProjectFile('infra/scripts/deploy.sh'),
+    readProjectFile('infra/scripts/run-restore-drill.sh'),
+  ]);
+
+  assert.match(deployScript, /source "\$ENV_FILE"/);
+  assert.match(deployScript, /smoke-authenticated-dashboard\.mjs/);
+  assert.match(restoreDrillScript, /stage=smoke_dashboard_authenticated/);
+  assert.match(restoreDrillScript, /smoke-authenticated-dashboard\.mjs/);
 });
