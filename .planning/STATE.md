@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 08
 current_phase_name: release blockers and regression restoration
-current_plan: 08-03
+current_plan: 08-04 (next)
 status: in_progress
-stopped_at: Completed 08-01-PLAN.md metadata backfill; next 08-03-PLAN.md
-last_updated: "2026-03-07T09:37:46.883Z"
+stopped_at: Completed 08-03-PLAN.md; next 08-04-PLAN.md
+last_updated: "2026-03-07T10:34:49Z"
 last_activity: 2026-03-07
 progress:
   total_phases: 12
   completed_phases: 9
   total_plans: 47
-  completed_plans: 44
-  percent: 94
+  completed_plans: 45
+  percent: 96
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 08
 **Current Phase Name:** release blockers and regression restoration
 **Total Phases:** 12
-**Current Plan:** 08-03 (next)
+**Current Plan:** 08-04 (next)
 **Total Plans in Phase:** 5
 **Status:** In progress
 **Last Activity:** 2026-03-07
-**Last Activity Description:** Backfilled 08-01 summary, reran its verification gates, and confirmed 08-03 is the next active plan.
-**Progress:** [█████████░] 94%
+**Last Activity Description:** Completed 08-03 by closing the production env guardrail blocker, writing its summary, and advancing the next active plan to 08-04.
+**Progress:** [█████████░] 96%
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 07-audit-technique-avanc-et-stabilisation-compl-te-de-l-application P07-06 | 5 min | 3 tasks | 6 files |
 | Phase 08-release-blockers-and-regression-restoration P08-02 | 19 min | 4 tasks | 26 files |
 | Phase 08-release-blockers-and-regression-restoration P08-01 | 32 min | 4 tasks | 4 files |
+| Phase 08-release-blockers-and-regression-restoration P08-03 | 26 min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -177,6 +178,8 @@ Recent decisions affecting current work:
 - [Phase 07-audit-technique-avanc-et-stabilisation-compl-te-de-l-application]: User approved the 07-06 audit package; Phase 07 closes without remediation or application-code changes.
 - [Phase 08-release-blockers-and-regression-restoration]: Middleware now consumes SESSION_COOKIE_NAME from a dependency-free session-contract module so Edge runtime imports stay clear of node:crypto auth helpers.
 - [Phase 08-release-blockers-and-regression-restoration]: Current-head 08-01 re-verification is split: Prisma generate and focused auth lifecycle tests pass, while full next build still needs follow-up because static page generation exits with a generic build-worker failure.
+- [Phase 08-release-blockers-and-regression-restoration]: The documented production env path is /opt/coach/.env.production, kept outside the repo and passed into existing scripts via explicit ENV_FILE arguments.
+- [Phase 08-release-blockers-and-regression-restoration]: Docker builds now exclude .env* and related local secret artifacts via .dockerignore so production secrets do not enter build context by operator mistake.
 
 ### Roadmap Evolution
 
@@ -197,6 +200,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-07T09:37:46.880Z
-**Stopped At:** Completed 08-01-PLAN.md metadata backfill; next 08-03-PLAN.md
+**Last Date:** 2026-03-07T10:33:56.080Z
+**Stopped At:** Completed 08-03-PLAN.md; next 08-04-PLAN.md
 **Resume File:** None

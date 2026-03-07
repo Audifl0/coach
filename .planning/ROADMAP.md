@@ -137,7 +137,7 @@ Plans:
 | 05.2 - Pipeline web autonome corpus scientifique | 3/3 | Complete    | 2026-03-05 | 2026-03-05 |
 | 06 - Trends and Operational Reliability | 4/4 | Complete   | 2026-03-06 | 2026-03-05 |
 | 07 - Audit technique avance et stabilisation complete de l'application | 6/6 | Complete   | 2026-03-06 | 2026-03-06 |
-| 08 - Release blockers and regression restoration | 2/5 | 5 | In Progress | 2026-03-07 |
+| 08 - Release blockers and regression restoration | 3/5 | In Progress | 2026-03-07 |
 
 - Total v1 requirements: 26
 - Mapped to phases: 26
@@ -149,12 +149,12 @@ Plans:
 **Goal:** Traiter tous les blockers P0/P1 qui empêchent une release crédible après l'audit de phase 07.
 **Requirements**: AUTH-01, AUTH-02, AUTH-03, ADAP-01, ADAP-02, ADAP-03, SAFE-03, PLAT-01, PLAT-03
 **Depends on:** Phase 7
-**Plans:** 2/5 plans complete
+**Plans:** 3/5 plans complete
 
 Plans:
 - [x] 08-01-PLAN.md - Prisma client refresh plus middleware-safe auth import split and focused auth regression rerun
 - [x] 08-02-PLAN.md - Dashboard/profile/provider typecheck restoration across the bounded RB-01 clusters
-- [ ] 08-03-PLAN.md - Production env file repository and Docker build-context guardrails
+- [x] 08-03-PLAN.md - Production env file repository and Docker build-context guardrails
 - [ ] 08-04-PLAN.md - Focused auth throttling and abuse-proof verification
 - [ ] 08-05-PLAN.md - Adaptive lifecycle and evidence restoration plus final phase gates
 

@@ -114,7 +114,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DASH-03 | 5 | Complete |
 | PLAT-01 | 1, 08 | Complete |
 | PLAT-02 | 6 | Complete |
-| PLAT-03 | 1 | Complete |
+| PLAT-03 | 1, 08 | Complete |
 
 **Coverage:**
 - v1 requirements: 26 total
@@ -123,4 +123,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-04*
-*Last updated: 2026-03-07 after 08-02 traceability updates*
+*Last updated: 2026-03-07 after 08-03 traceability updates*
