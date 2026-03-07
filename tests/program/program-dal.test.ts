@@ -395,6 +395,104 @@ test('upsertLoggedSet updates existing rows for matching plannedExerciseId and s
   assert.equal(persistedByKey.size, 1);
 });
 
+test('upsertLoggedSet rejects when a concurrent completion wins before the guarded write', async () => {
+  let upsertCount = 0;
+
+  const db = {
+    async $transaction<T>(callback: (tx: never) => Promise<T>): Promise<T> {
+      return callback(this as never);
+    },
+    async $queryRawUnsafe() {
+      return [
+        {
+          id: 'session_1',
+          startedAt: new Date('2026-03-04T08:00:00.000Z'),
+          completedAt: new Date('2026-03-04T09:00:00.000Z'),
+        },
+      ];
+    },
+    programPlan: {
+      async updateMany() {
+        return { count: 0 };
+      },
+      async create() {
+        return createPlan();
+      },
+    },
+    plannedSession: {
+      async findFirst() {
+        return null;
+      },
+      async findUnique() {
+        return createSession({
+          id: 'session_1',
+          userId: 'user_1',
+          completedAt: null as never,
+        } as never);
+      },
+      async findMany() {
+        return [];
+      },
+    },
+    plannedExercise: {
+      async findUnique() {
+        return {
+          ...createExercise(),
+          plannedSession: {
+            id: 'session_1',
+            userId: 'user_1',
+            scheduledDate: new Date('2026-03-04T08:00:00.000Z'),
+            startedAt: new Date('2026-03-04T08:00:00.000Z'),
+            completedAt: null,
+          },
+        };
+      },
+      async update() {
+        throw new Error('not used in this test');
+      },
+      async findMany() {
+        return [];
+      },
+    },
+    loggedSet: {
+      async upsert() {
+        upsertCount += 1;
+        return {
+          id: 'set_1',
+          plannedExerciseId: 'exercise_1',
+          setIndex: 1,
+          weight: 20,
+          reps: 8,
+          rpe: null,
+        };
+      },
+    },
+  };
+
+  const dal = createProgramDal(db as never, { userId: 'user_1' }) as unknown as {
+    upsertLoggedSet(args: {
+      plannedExerciseId: string;
+      setIndex: number;
+      weight: number;
+      reps: number;
+      rpe: number | null;
+    }): Promise<void>;
+  };
+
+  await assert.rejects(
+    () =>
+      dal.upsertLoggedSet({
+        plannedExerciseId: 'exercise_1',
+        setIndex: 1,
+        weight: 20,
+        reps: 8,
+        rpe: 7,
+      }),
+    /completed/i,
+  );
+  assert.equal(upsertCount, 0);
+});
+
 test('skip requires reason code and revert is blocked after session completion', async () => {
   let skipUpdateCount = 0;
   let completed = false;
@@ -472,6 +570,89 @@ test('skip requires reason code and revert is blocked after session completion',
 
   completed = true;
   await assert.rejects(() => dal.revertExerciseSkipped('exercise_1'), /completed/i);
+});
+
+test('markExerciseSkipped rejects when a concurrent completion wins before the guarded update', async () => {
+  let skipUpdateCount = 0;
+
+  const db = {
+    async $transaction<T>(callback: (tx: never) => Promise<T>): Promise<T> {
+      return callback(this as never);
+    },
+    async $queryRawUnsafe() {
+      return [
+        {
+          id: 'session_1',
+          startedAt: new Date('2026-03-04T08:00:00.000Z'),
+          completedAt: new Date('2026-03-04T09:00:00.000Z'),
+        },
+      ];
+    },
+    programPlan: {
+      async updateMany() {
+        return { count: 0 };
+      },
+      async create() {
+        return createPlan();
+      },
+    },
+    plannedSession: {
+      async findFirst() {
+        return null;
+      },
+      async findUnique() {
+        return createSession({
+          id: 'session_1',
+          userId: 'user_1',
+          completedAt: null as never,
+        } as never);
+      },
+      async findMany() {
+        return [];
+      },
+    },
+    plannedExercise: {
+      async findUnique() {
+        return {
+          ...createExercise(),
+          plannedSession: {
+            id: 'session_1',
+            userId: 'user_1',
+            scheduledDate: new Date('2026-03-04T08:00:00.000Z'),
+            startedAt: new Date('2026-03-04T08:00:00.000Z'),
+            completedAt: null,
+          },
+        };
+      },
+      async update() {
+        skipUpdateCount += 1;
+        return createExercise();
+      },
+      async findMany() {
+        return [];
+      },
+    },
+    loggedSet: {
+      async upsert() {
+        throw new Error('not used in this test');
+      },
+    },
+  };
+
+  const dal = createProgramDal(db as never, { userId: 'user_1' }) as unknown as {
+    markExerciseSkipped(args: { plannedExerciseId: string; reasonCode: string; reasonText?: string }): Promise<void>;
+  };
+
+  await assert.rejects(
+    () =>
+      dal.markExerciseSkipped({
+        plannedExerciseId: 'exercise_1',
+        reasonCode: 'pain',
+        reasonText: 'knee discomfort',
+      }),
+    /completed/i,
+  );
+  assert.equal(skipUpdateCount, 0);
 });
 
 test('completeSession persists feedback once and rejects post-completion set edits', async () => {
@@ -596,6 +777,177 @@ test('completeSession persists feedback once and rejects post-completion set edi
       }),
     /completed/i,
   );
+});
+
+test('updateSessionNote rejects when a concurrent completion wins before the guarded update', async () => {
+  let noteUpdateCount = 0;
+
+  const db = {
+    async $transaction<T>(callback: (tx: never) => Promise<T>): Promise<T> {
+      return callback(this as never);
+    },
+    async $queryRawUnsafe() {
+      return [
+        {
+          id: 'session_1',
+          startedAt: new Date('2026-03-04T08:00:00.000Z'),
+          completedAt: new Date('2026-03-04T09:00:00.000Z'),
+        },
+      ];
+    },
+    programPlan: {
+      async updateMany() {
+        return { count: 0 };
+      },
+      async create() {
+        return createPlan();
+      },
+    },
+    plannedSession: {
+      async findFirst() {
+        return null;
+      },
+      async findUnique() {
+        return createSession({
+          id: 'session_1',
+          userId: 'user_1',
+          completedAt: null as never,
+        } as never);
+      },
+      async update() {
+        noteUpdateCount += 1;
+        return createSession();
+      },
+      async findMany() {
+        return [];
+      },
+    },
+    plannedExercise: {
+      async findUnique() {
+        return null;
+      },
+      async update() {
+        throw new Error('not used in this test');
+      },
+      async findMany() {
+        return [];
+      },
+    },
+    loggedSet: {
+      async upsert() {
+        throw new Error('not used in this test');
+      },
+    },
+  };
+
+  const dal = createProgramDal(db as never, { userId: 'user_1' }) as unknown as {
+    updateSessionNote(args: { plannedSessionId: string; note: string | null }): Promise<void>;
+  };
+
+  await assert.rejects(
+    () =>
+      dal.updateSessionNote({
+        plannedSessionId: 'session_1',
+        note: 'Tempo clean today',
+      }),
+    /completed/i,
+  );
+  assert.equal(noteUpdateCount, 0);
+});
+
+test('completeSession rejects when a concurrent completion already won the single-writer update', async () => {
+  let updateCalls = 0;
+  let guardedUpdateCalls = 0;
+
+  const db = {
+    async $transaction<T>(callback: (tx: never) => Promise<T>): Promise<T> {
+      return callback(this as never);
+    },
+    async $queryRawUnsafe() {
+      return [
+        {
+          id: 'session_1',
+          startedAt: new Date('2026-03-04T08:00:00.000Z'),
+          completedAt: null,
+        },
+      ];
+    },
+    programPlan: {
+      async updateMany() {
+        return { count: 0 };
+      },
+      async create() {
+        return createPlan();
+      },
+    },
+    plannedSession: {
+      async findFirst() {
+        return null;
+      },
+      async findUnique() {
+        return createSession({
+          id: 'session_1',
+          userId: 'user_1',
+          completedAt: null as never,
+        } as never);
+      },
+      async updateMany() {
+        guardedUpdateCalls += 1;
+        return { count: 0 };
+      },
+      async update() {
+        updateCalls += 1;
+        return createSession({
+          completedAt: new Date('2026-03-04T10:10:00.000Z') as never,
+        } as never);
+      },
+      async findMany() {
+        return [];
+      },
+    },
+    plannedExercise: {
+      async findUnique() {
+        return null;
+      },
+      async update() {
+        throw new Error('not used in this test');
+      },
+      async findMany() {
+        return [];
+      },
+    },
+    loggedSet: {
+      async upsert() {
+        throw new Error('not used in this test');
+      },
+    },
+  };
+
+  const dal = createProgramDal(db as never, { userId: 'user_1' }) as unknown as {
+    completeSession(args: {
+      plannedSessionId: string;
+      fatigue: number;
+      readiness: number;
+      comment?: string;
+      completedAt: Date;
+      effectiveDurationSec: number;
+    }): Promise<void>;
+  };
+
+  await assert.rejects(
+    () =>
+      dal.completeSession({
+        plannedSessionId: 'session_1',
+        fatigue: 3,
+        readiness: 4,
+        comment: 'solid',
+        completedAt: new Date('2026-03-04T10:10:00.000Z'),
+        effectiveDurationSec: 3900,
+      }),
+    /already completed/i,
+  );
+  assert.equal(guardedUpdateCalls, 1);
+  assert.equal(updateCalls, 0);
 });
 
 test('history list/detail are account-scoped and include aggregated load with grouped sets', async () => {
