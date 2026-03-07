@@ -2,12 +2,20 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import { validateLoginInput, validateSignupInput } from './contracts';
 import { PasswordPolicyError, enforcePasswordPolicy, hashPassword, verifyPassword } from './password';
+import {
+  SESSION_COOKIE_NAME,
+  SESSION_DURATION_MS,
+  SESSION_MAX_AGE_SECONDS,
+  SESSION_ROLLING_WINDOW_MS,
+} from './session-contract';
 
-export const SESSION_COOKIE_NAME = 'coach_session';
-export const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
-export const SESSION_MAX_AGE_SECONDS = Math.floor(SESSION_DURATION_MS / 1000);
-export const SESSION_ROLLING_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 export const GENERIC_AUTH_ERROR_MESSAGE = 'Invalid username or password';
+export {
+  SESSION_COOKIE_NAME,
+  SESSION_DURATION_MS,
+  SESSION_MAX_AGE_SECONDS,
+  SESSION_ROLLING_WINDOW_MS,
+};
 
 type UserRecord = {
   id: string;
@@ -189,4 +197,3 @@ export function createAuthService(repository: AuthRepository) {
     },
   };
 }
-
