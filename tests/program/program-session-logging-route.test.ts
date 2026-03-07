@@ -556,6 +556,64 @@ test('GET /api/program/sessions/:sessionId includes grouped logged sets, skip me
   assert.equal(body.session.exercises[0]?.loggedSets[1]?.setIndex, 2);
 });
 
+test('GET /api/program/sessions/:sessionId keeps archived completed session detail payload stable', async () => {
+  const getDetail = createProgramSessionDetailGetHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    getSessionDetail: async () => ({
+      id: 'session_archived',
+      scheduledDate: '2026-03-03',
+      dayIndex: 2,
+      focusLabel: 'Full Body',
+      state: 'completed',
+      startedAt: '2026-03-03T08:00:00.000Z',
+      completedAt: '2026-03-03T09:05:00.000Z',
+      effectiveDurationSec: 3900,
+      durationCorrectedAt: null,
+      note: 'Archived but visible',
+      postSessionFatigue: 2,
+      postSessionReadiness: 4,
+      postSessionComment: 'Recovered well',
+      exercises: [
+        {
+          id: 'exercise_1',
+          userId: 'user_1',
+          exerciseKey: 'bench_press',
+          displayName: 'Bench Press',
+          movementPattern: 'horizontal_push',
+          sets: 3,
+          targetReps: 6,
+          targetLoad: '60kg',
+          restMinSec: 120,
+          restMaxSec: 150,
+          isSubstituted: false,
+          originalExerciseKey: null,
+          isSkipped: false,
+          skipReasonCode: null,
+          skipReasonText: null,
+          loggedSets: [
+            { setIndex: 2, weight: 60, reps: 6, rpe: 8 },
+            { setIndex: 1, weight: 57.5, reps: 6, rpe: 7 },
+          ],
+        },
+      ],
+    }),
+  });
+
+  const response = await getDetail(new Request('http://localhost/api/program/sessions/session_archived'), {
+    params: Promise.resolve({ sessionId: 'session_archived' }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.session.id, 'session_archived');
+  assert.equal(body.session.focusLabel, 'Full Body');
+  assert.equal(body.session.startedAt, '2026-03-03T08:00:00.000Z');
+  assert.equal(body.session.completedAt, '2026-03-03T09:05:00.000Z');
+  assert.equal(body.session.exercises[0]?.displayName, 'Bench Press');
+  assert.equal(body.session.exercises[0]?.loggedSets[0]?.setIndex, 1);
+  assert.equal(body.session.exercises[0]?.loggedSets[1]?.setIndex, 2);
+});
+
 test('GET /api/program/history and session detail block unauthorized or non-owned access', async () => {
   const unauthorizedHistory = createProgramHistoryGetHandler({
     resolveSession: async () => null,
