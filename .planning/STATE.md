@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 10
 current_phase_name: maintainability cleanup and operational hardening
-current_plan: Not started
-status: planning
-stopped_at: Completed 09-06-PLAN.md
-last_updated: "2026-03-09T21:00:21.810Z"
+current_plan: 2
+status: executing
+stopped_at: Completed 10-01-PLAN.md
+last_updated: "2026-03-09T21:15:40.986Z"
 last_activity: 2026-03-09
 progress:
   total_phases: 12
   completed_phases: 11
   total_plans: 57
-  completed_plans: 54
-  percent: 95
+  completed_plans: 55
+  percent: 96
 ---
 
 # Project State
@@ -24,19 +24,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Fournir un coaching musculation personnalisé, sûr et adaptatif au quotidien, sans perdre la simplicité d'usage.
-**Current focus:** Phase 09 - Security runtime and release proof stabilization
+**Current focus:** Phase 10 - Maintainability cleanup and operational hardening
 
 ## Current Position
 
 **Current Phase:** 10
 **Current Phase Name:** maintainability cleanup and operational hardening
 **Total Phases:** 12
-**Current Plan:** Not started
-**Total Plans in Phase:** 5
-**Status:** Ready to plan
+**Current Plan:** 2
+**Total Plans in Phase:** 3
+**Status:** executing
 **Last Activity:** 2026-03-09
-**Last Activity Description:** Phase 9 complete, transitioned to Phase 10
-**Progress:** [██████████] 95%
+**Last Activity Description:** Completed 10-01 typed seam cleanup and moved to plan 10-02
+**Progress:** [██████████] 96%
 
 ## Performance Metrics
 
@@ -75,6 +75,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 09-security-runtime-and-release-proof-stabilization P09-05 | 12 min | 3 tasks | 19 files |
 | Phase 09-security-runtime-and-release-proof-stabilization P09-03 | 4 min | 2 tasks | 6 files |
 | Phase 09-security-runtime-and-release-proof-stabilization P09-06 | 11 min | 3 tasks | 4 files |
+| Phase 10-maintainability-cleanup-and-operational-hardening P10-01 | 16min | 3 tasks | 28 files |
 
 ## Accumulated Context
 
@@ -214,6 +215,8 @@ Recent decisions affecting current work:
 - [Phase 09-security-runtime-and-release-proof-stabilization]: Removed optional updateMany branching and kept a single deterministic updateMany+re-read mutation path to preserve stale-state conflict detection.
 - [Phase 09-security-runtime-and-release-proof-stabilization]: Typed the authenticated smoke helper through explicit declaration files and explicit callback parameter typing, avoiding module-wide any fallbacks.
 - [Phase 09-security-runtime-and-release-proof-stabilization]: Captured Task 3 as an explicit verification commit to preserve per-task atomic history despite no source edits.
+- [Phase 10-maintainability-cleanup-and-operational-hardening]: Centralized Prisma compatibility casting inside DAL-local create*DbClient helpers instead of route/service entrypoints.
+- [Phase 10-maintainability-cleanup-and-operational-hardening]: Promoted route dependency contracts from unknown/userId-optional shapes to typed payloads with explicit authenticated user scope.
 
 ### Roadmap Evolution
 
@@ -234,6 +237,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-09T20:57:04.560Z
-**Stopped At:** Completed 09-06-PLAN.md
+**Last Date:** 2026-03-09T21:14:51.242Z
+**Stopped At:** Completed 10-01-PLAN.md
 **Resume File:** None

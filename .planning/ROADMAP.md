@@ -180,7 +180,7 @@ Plans:
 **Goal:** Fermer la dette de maintainability et le hardening ops restant une fois la release stabilisee.
 **Requirements**: AUTH-03, PLAT-01, PLAT-02, PLAT-03
 **Depends on:** Phase 9
-**Plans:** 0 plans
+**Plans:** 1/3 plans executed
 
 Plans:
 - [ ] TBD (run /gsd:plan-phase 10 to break down)
