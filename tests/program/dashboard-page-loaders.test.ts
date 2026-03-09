@@ -150,3 +150,15 @@ test('dashboard session selection still prioritizes today over next fallback', (
   assert.equal(selectedNext.mode, 'next');
   assert.equal(selectedNext.topSession?.id, 'next_1');
 });
+
+test('dashboard page internal loader modules are available for orchestration extraction', async () => {
+  const accessLoader = await import('../../src/app/(private)/dashboard/loaders/dashboard-access');
+  const todayLoader = await import('../../src/app/(private)/dashboard/loaders/today-workout');
+  const adaptiveLoader = await import('../../src/app/(private)/dashboard/loaders/adaptive-forecast');
+  const trendsLoader = await import('../../src/app/(private)/dashboard/loaders/trends-summary');
+
+  assert.equal(typeof accessLoader.resolveDashboardAccess, 'function');
+  assert.equal(typeof todayLoader.loadDashboardTodayWorkout, 'function');
+  assert.equal(typeof adaptiveLoader.loadDashboardAdaptiveForecast, 'function');
+  assert.equal(typeof trendsLoader.loadDashboardTrendsSummary, 'function');
+});

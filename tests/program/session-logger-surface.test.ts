@@ -120,3 +120,13 @@ test('session logger failed request classes keep the same user-visible error mes
   assert.equal(getSessionLoggerRequestErrorMessage('complete_session'), 'Impossible de terminer la seance.');
   assert.equal(getSessionLoggerRequestErrorMessage('correct_duration'), 'Impossible de corriger la duree.');
 });
+
+test('session logger internal state and client helper modules are available for decomposition', async () => {
+  const stateModule = await import('../../src/app/(private)/dashboard/_components/session-logger-state');
+  const clientModule = await import('../../src/app/(private)/dashboard/_components/session-logger-client');
+
+  assert.equal(typeof stateModule.buildSessionLoggerHydration, 'function');
+  assert.equal(typeof stateModule.reduceLoggerStateAfterSetSaved, 'function');
+  assert.equal(typeof clientModule.buildSaveSetRequest, 'function');
+  assert.equal(typeof clientModule.getSessionLoggerRequestErrorMessage, 'function');
+});
