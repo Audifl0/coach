@@ -1,11 +1,23 @@
 import { validateProfileInput, validateProfilePatch } from '@/lib/profile/contracts';
 import { isProfileComplete } from '@/lib/profile/completeness';
+import type { ProfileInput, ProfilePatchInput } from '@/lib/profile/contracts';
+import type { AthleteProfileRecord } from '@/server/dal/profile';
+
+export type ProfileRouteProfile = Pick<
+  AthleteProfileRecord,
+  | 'goal'
+  | 'weeklySessionTarget'
+  | 'sessionDuration'
+  | 'equipmentCategories'
+  | 'limitationsDeclared'
+  | 'limitations'
+>;
 
 export type ProfileRouteDeps = {
   resolveSession: () => Promise<{ userId: string } | null>;
-  getProfile: (userId: string) => Promise<unknown | null>;
-  upsertProfile: (userId: string, input: unknown) => Promise<unknown>;
-  patchProfile: (userId: string, patch: unknown) => Promise<unknown>;
+  getProfile: (userId: string) => Promise<ProfileRouteProfile | null>;
+  upsertProfile: (userId: string, input: ProfileInput) => Promise<ProfileRouteProfile>;
+  patchProfile: (userId: string, patch: ProfilePatchInput) => Promise<ProfileRouteProfile>;
 };
 
 function json(body: unknown, status: number): Response {

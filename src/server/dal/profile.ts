@@ -27,6 +27,10 @@ type ProfileDbClient = {
   };
 };
 
+export function createProfileDbClient(db: unknown): ProfileDbClient {
+  return db as ProfileDbClient;
+}
+
 export function mergeProfilePatch(current: ProfileInput, patch: ProfilePatchInput): ProfileInput {
   return {
     goal: patch.goal ?? current.goal,

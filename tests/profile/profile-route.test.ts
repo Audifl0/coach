@@ -86,8 +86,8 @@ test('profile route keeps untouched sections on edit patch', async () => {
   const put = createProfilePutHandler({
     resolveSession: async () => ({ userId: 'user_1' }),
     getProfile: async () => persisted,
-    upsertProfile: async (userId, input) => dal.upsertProfile(userId, input as never),
-    patchProfile: async (userId, input) => dal.patchProfile(userId, input as never),
+    upsertProfile: async (userId, input) => dal.upsertProfile(userId, input),
+    patchProfile: async (userId, input) => dal.patchProfile(userId, input),
   });
 
   const response = await put(

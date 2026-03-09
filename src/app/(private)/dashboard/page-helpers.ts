@@ -12,6 +12,7 @@ import {
   type AdaptiveForecastViewModel,
 } from '@/lib/adaptive-coaching/forecast';
 import type { AdaptiveRecommendationRecord } from '@/server/dal/adaptive-coaching';
+import type { ProfileCompletenessInput } from '@/lib/profile/completeness';
 
 export async function resolveDashboardSession(
   sessionToken: string | null | undefined,
@@ -22,7 +23,7 @@ export async function resolveDashboardSession(
 
 export async function resolveDashboardRoute(
   session: { userId: string } | null,
-  findProfileByUserId: (userId: string) => Promise<unknown | null>,
+  findProfileByUserId: (userId: string) => Promise<ProfileCompletenessInput | null>,
 ): Promise<'login' | 'onboarding' | 'dashboard'> {
   if (!session) {
     return 'login';

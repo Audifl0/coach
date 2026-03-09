@@ -1,5 +1,5 @@
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
-import { createProfileDal } from '@/server/dal/profile';
+import { createProfileDal, createProfileDbClient } from '@/server/dal/profile';
 import {
   createProfileGetHandler,
   createProfilePutHandler,
@@ -8,14 +8,14 @@ import {
 
 async function buildDefaultDeps(): Promise<ProfileRouteDeps> {
   const { prisma } = await import('@/lib/db/prisma');
-  const dal = createProfileDal(prisma as never);
+  const dal = createProfileDal(createProfileDbClient(prisma));
   const repository = await buildDefaultSessionGateRepository();
 
   return {
     resolveSession: () => validateSessionFromCookies(repository),
     getProfile: (userId) => dal.getProfileByUserId(userId),
-    upsertProfile: (userId, input) => dal.upsertProfile(userId, input as never),
-    patchProfile: (userId, patch) => dal.patchProfile(userId, patch as never),
+    upsertProfile: (userId, input) => dal.upsertProfile(userId, input),
+    patchProfile: (userId, patch) => dal.patchProfile(userId, patch),
   };
 }
 
