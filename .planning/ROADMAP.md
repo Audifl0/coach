@@ -165,7 +165,7 @@ Plans:
 **Goal:** Stabiliser les flux critiques, la resilience runtime, et la preuve de release apres la levee des blockers.
 **Requirements**: PROG-01, PROG-02, LOG-01, LOG-02, LOG-03, LOG-04, ADAP-01, ADAP-03, SAFE-03, DASH-01, DASH-02, DASH-03, PLAT-02
 **Depends on:** Phase 8
-**Plans:** 5/6 plans complete
+**Plans:** 6/6 plans complete
 
 Plans:
 - [x] 09-01-PLAN.md - Dashboard trust removal and explicit today/trends degraded states
