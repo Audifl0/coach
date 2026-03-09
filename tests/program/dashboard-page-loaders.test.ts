@@ -43,9 +43,9 @@ test('dashboard route resolution preserves login and onboarding redirects before
   assert.equal(loginRoute, 'login');
 
   const onboardingRoute = await resolveDashboardRoute({ userId: 'user_1' }, async () => ({
-    goal: null,
-    weeklySessionTarget: null,
-    sessionDuration: null,
+    goal: 'hypertrophy',
+    weeklySessionTarget: 0,
+    sessionDuration: '45_to_75m',
     equipmentCategories: [],
     limitationsDeclared: false,
     limitations: [],
@@ -53,9 +53,9 @@ test('dashboard route resolution preserves login and onboarding redirects before
   assert.equal(onboardingRoute, 'onboarding');
 
   const dashboardRoute = await resolveDashboardRoute({ userId: 'user_1' }, async () => ({
-    goal: 'muscle_gain',
+    goal: 'hypertrophy',
     weeklySessionTarget: 4,
-    sessionDuration: 60,
+    sessionDuration: '45_to_75m',
     equipmentCategories: ['barbell'],
     limitationsDeclared: false,
     limitations: [],
