@@ -41,6 +41,34 @@ type CompleteSessionInput = {
   comment?: string;
 };
 
+type SetRequestPayload = {
+  setIndex: number;
+  weight: number;
+  reps: number;
+  rpe?: number;
+};
+
+type SkipRequestPayload = {
+  reasonCode: string;
+  reasonText?: string;
+};
+
+type NoteRequestPayload = {
+  note: string | null;
+};
+
+type DurationCorrectionRequestPayload = {
+  effectiveDurationSec: number;
+};
+
+type SessionLoggerRequestErrorKind =
+  | 'save_set'
+  | 'skip_exercise'
+  | 'revert_skip'
+  | 'save_note'
+  | 'complete_session'
+  | 'correct_duration';
+
 const MAX_NOTE_LENGTH = 280;
 const SKIP_REASON_OPTIONS = [
   { value: 'pain', label: 'Douleur' },
@@ -64,6 +92,70 @@ function clampComment(value: string | undefined): string | undefined {
   }
 
   return trimmed.slice(0, MAX_NOTE_LENGTH);
+}
+
+function createJsonRequest(url: string, method: 'POST' | 'PATCH', payload: unknown) {
+  return {
+    url,
+    init: {
+      method,
+      cache: 'no-store' as const,
+      headers: { 'content-type': 'application/json' as const },
+      body: JSON.stringify(payload),
+    },
+  };
+}
+
+export function buildSaveSetRequest(input: { sessionId: string; exerciseId: string; payload: SetRequestPayload }) {
+  return createJsonRequest(`/api/program/sessions/${input.sessionId}/exercises/${input.exerciseId}/sets`, 'POST', input.payload);
+}
+
+export function buildSkipRequest(input: { sessionId: string; exerciseId: string; payload: SkipRequestPayload }) {
+  return createJsonRequest(`/api/program/sessions/${input.sessionId}/exercises/${input.exerciseId}/skip`, 'POST', input.payload);
+}
+
+export function buildRevertSkipRequest(input: { sessionId: string; exerciseId: string }) {
+  return {
+    url: `/api/program/sessions/${input.sessionId}/exercises/${input.exerciseId}/skip`,
+    init: {
+      method: 'DELETE' as const,
+      cache: 'no-store' as const,
+    },
+  };
+}
+
+export function buildNoteRequest(input: { sessionId: string; payload: NoteRequestPayload }) {
+  return createJsonRequest(`/api/program/sessions/${input.sessionId}/note`, 'PATCH', input.payload);
+}
+
+export function buildCompleteSessionRequest(input: {
+  sessionId: string;
+  payload: ReturnType<typeof buildCompleteSessionPayload>;
+}) {
+  return createJsonRequest(`/api/program/sessions/${input.sessionId}/complete`, 'POST', input.payload);
+}
+
+export function buildDurationCorrectionRequest(input: { sessionId: string; payload: DurationCorrectionRequestPayload }) {
+  return createJsonRequest(`/api/program/sessions/${input.sessionId}/duration`, 'PATCH', input.payload);
+}
+
+export function getSessionLoggerRequestErrorMessage(kind: SessionLoggerRequestErrorKind): string {
+  switch (kind) {
+    case 'save_set':
+      return 'Impossible de sauvegarder la serie.';
+    case 'skip_exercise':
+      return 'Impossible de marquer cet exercice comme saute.';
+    case 'revert_skip':
+      return 'Impossible d annuler le skip.';
+    case 'save_note':
+      return 'Impossible de sauvegarder la note.';
+    case 'complete_session':
+      return 'Impossible de terminer la seance.';
+    case 'correct_duration':
+      return 'Impossible de corriger la duree.';
+    default:
+      return 'Une erreur est survenue.';
+  }
 }
 
 export function createInitialLoggerState(): LoggerState {
@@ -305,12 +397,12 @@ export function SessionLogger({ session }: { session: HydratableSession }) {
     };
 
     try {
-      const response = await fetch(`/api/program/sessions/${session.id}/exercises/${exerciseId}/sets`, {
-        method: 'POST',
-        cache: 'no-store',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
+      const request = buildSaveSetRequest({
+        sessionId: session.id,
+        exerciseId,
+        payload,
       });
+      const response = await fetch(request.url, request.init);
 
       if (!response.ok) {
         throw new Error('Unable to save set');
@@ -327,7 +419,7 @@ export function SessionLogger({ session }: { session: HydratableSession }) {
       }));
       setLoggerState((previous) => reduceLoggerStateAfterSetSaved(previous, { nowMs: Date.now() }));
     } catch {
-      setErrorMessage('Impossible de sauvegarder la serie.');
+      setErrorMessage(getSessionLoggerRequestErrorMessage('save_set'));
     } finally {
       setSavingSetForExerciseId(null);
     }
@@ -345,12 +437,12 @@ export function SessionLogger({ session }: { session: HydratableSession }) {
     }
 
     try {
-      const response = await fetch(`/api/program/sessions/${session.id}/exercises/${exerciseId}/skip`, {
-        method: 'POST',
-        cache: 'no-store',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
+      const request = buildSkipRequest({
+        sessionId: session.id,
+        exerciseId,
+        payload,
       });
+      const response = await fetch(request.url, request.init);
 
       if (!response.ok) {
         throw new Error('Unable to skip');
@@ -361,7 +453,7 @@ export function SessionLogger({ session }: { session: HydratableSession }) {
         [exerciseId]: { skipped: true, ...payload },
       }));
     } catch {
-      setErrorMessage('Impossible de marquer cet exercice comme saute.');
+      setErrorMessage(getSessionLoggerRequestErrorMessage('skip_exercise'));
     }
   }
 
@@ -369,10 +461,11 @@ export function SessionLogger({ session }: { session: HydratableSession }) {
     setErrorMessage(null);
 
     try {
-      const response = await fetch(`/api/program/sessions/${session.id}/exercises/${exerciseId}/skip`, {
-        method: 'DELETE',
-        cache: 'no-store',
+      const request = buildRevertSkipRequest({
+        sessionId: session.id,
+        exerciseId,
       });
+      const response = await fetch(request.url, request.init);
 
       if (!response.ok) {
         throw new Error('Unable to revert skip');
@@ -383,7 +476,7 @@ export function SessionLogger({ session }: { session: HydratableSession }) {
         [exerciseId]: { skipped: false, reasonCode: '' },
       }));
     } catch {
-      setErrorMessage('Impossible d annuler le skip.');
+      setErrorMessage(getSessionLoggerRequestErrorMessage('revert_skip'));
     }
   }
 
@@ -392,18 +485,17 @@ export function SessionLogger({ session }: { session: HydratableSession }) {
     setSavingNote(true);
 
     try {
-      const response = await fetch(`/api/program/sessions/${session.id}/note`, {
-        method: 'PATCH',
-        cache: 'no-store',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ note: clampComment(note) ?? null }),
+      const request = buildNoteRequest({
+        sessionId: session.id,
+        payload: { note: clampComment(note) ?? null },
       });
+      const response = await fetch(request.url, request.init);
 
       if (!response.ok) {
         throw new Error('Unable to save note');
       }
     } catch {
-      setErrorMessage('Impossible de sauvegarder la note.');
+      setErrorMessage(getSessionLoggerRequestErrorMessage('save_note'));
     } finally {
       setSavingNote(false);
     }
@@ -422,12 +514,11 @@ export function SessionLogger({ session }: { session: HydratableSession }) {
 
     setSavingCompletion(true);
     try {
-      const response = await fetch(`/api/program/sessions/${session.id}/complete`, {
-        method: 'POST',
-        cache: 'no-store',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
+      const request = buildCompleteSessionRequest({
+        sessionId: session.id,
+        payload,
       });
+      const response = await fetch(request.url, request.init);
 
       if (!response.ok) {
         throw new Error('Unable to complete');
@@ -436,7 +527,7 @@ export function SessionLogger({ session }: { session: HydratableSession }) {
       setLoggerState((previous) => reduceLoggerStateAfterCompletion(previous, { nowMs: Date.now() }));
       setIsCompleted(true);
     } catch {
-      setErrorMessage('Impossible de terminer la seance.');
+      setErrorMessage(getSessionLoggerRequestErrorMessage('complete_session'));
     } finally {
       setSavingCompletion(false);
     }
@@ -452,18 +543,17 @@ export function SessionLogger({ session }: { session: HydratableSession }) {
 
     setSavingDuration(true);
     try {
-      const response = await fetch(`/api/program/sessions/${session.id}/duration`, {
-        method: 'PATCH',
-        cache: 'no-store',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ effectiveDurationSec: Math.round(value * 60) }),
+      const request = buildDurationCorrectionRequest({
+        sessionId: session.id,
+        payload: { effectiveDurationSec: Math.round(value * 60) },
       });
+      const response = await fetch(request.url, request.init);
 
       if (!response.ok) {
         throw new Error('Unable to correct duration');
       }
     } catch {
-      setErrorMessage('Impossible de corriger la duree.');
+      setErrorMessage(getSessionLoggerRequestErrorMessage('correct_duration'));
     } finally {
       setSavingDuration(false);
     }

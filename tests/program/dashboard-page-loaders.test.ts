@@ -43,30 +43,22 @@ test('dashboard route resolution preserves login and onboarding redirects before
   assert.equal(loginRoute, 'login');
 
   const onboardingRoute = await resolveDashboardRoute({ userId: 'user_1' }, async () => ({
-    objective: null,
-    level: null,
-    experienceYears: null,
-    weightKg: null,
-    heightCm: null,
+    goal: null,
+    weeklySessionTarget: null,
+    sessionDuration: null,
+    equipmentCategories: [],
+    limitationsDeclared: false,
     limitations: [],
-    equipment: [],
-    availableDays: [],
-    sessionDurationMin: null,
-    completedAt: null,
   }));
   assert.equal(onboardingRoute, 'onboarding');
 
   const dashboardRoute = await resolveDashboardRoute({ userId: 'user_1' }, async () => ({
-    objective: 'hypertrophy',
-    level: 'intermediate',
-    experienceYears: 3,
-    weightKg: 80,
-    heightCm: 180,
+    goal: 'muscle_gain',
+    weeklySessionTarget: 4,
+    sessionDuration: 60,
+    equipmentCategories: ['barbell'],
+    limitationsDeclared: false,
     limitations: [],
-    equipment: ['dumbbells'],
-    availableDays: ['monday'],
-    sessionDurationMin: 60,
-    completedAt: new Date().toISOString(),
   }));
   assert.equal(dashboardRoute, 'dashboard');
 });
@@ -118,9 +110,9 @@ test('dashboard today and trends loader outcomes stay explicit: ready, empty, an
       period: '30d',
       generatedAt: '2026-03-05T12:00:00.000Z',
       metrics: {
-        volume: { kpi: 1000, unit: 'kg', points: [] },
-        intensity: { kpi: 80, unit: 'kg', points: [] },
-        adherence: { kpi: 0.7, unit: 'ratio', points: [] },
+        volume: { kpi: 1000, unit: 'kg', points: [{ date: '2026-03-05', value: 1000 }] },
+        intensity: { kpi: 80, unit: 'kg', points: [{ date: '2026-03-05', value: 80 }] },
+        adherence: { kpi: 0.7, unit: 'ratio', points: [{ date: '2026-03-05', value: 0.7 }] },
       },
     }),
   });
