@@ -1369,3 +1369,15 @@ test('service blocks set skip and note mutations after completion but allows val
   });
   assert.equal(correctionCalls, 1);
 });
+
+test('program DAL internal concern modules are available behind stable factory seams', async () => {
+  const planLifecycle = await import('../../src/server/dal/program/plan-lifecycle');
+  const sessionLogging = await import('../../src/server/dal/program/session-logging');
+  const trendsReadModel = await import('../../src/server/dal/program/trends-read-model');
+  const historyReadModel = await import('../../src/server/dal/program/history-read-model');
+
+  assert.equal(typeof planLifecycle.createPlanLifecycleDal, 'function');
+  assert.equal(typeof sessionLogging.createSessionLoggingDal, 'function');
+  assert.equal(typeof trendsReadModel.createTrendsReadModelDal, 'function');
+  assert.equal(typeof historyReadModel.createHistoryReadModelDal, 'function');
+});
