@@ -84,7 +84,7 @@ type AdaptiveDalClient = {
       };
       orderBy?: { createdAt: 'asc' | 'desc' };
     }): Promise<AdaptiveRecommendationRecord | null>;
-    updateMany?(args: {
+    updateMany(args: {
       where: {
         id: string;
         userId: string;
@@ -307,51 +307,37 @@ export function createAdaptiveCoachingDal(db: AdaptiveDalClient, session: Sessio
       const now = new Date();
       const nextData = buildRecommendationUpdateData(existing, input, now);
 
-      let updated: AdaptiveRecommendationRecord | null = null;
-      if (tx.adaptiveRecommendation.updateMany) {
-        const updateResult = await tx.adaptiveRecommendation.updateMany({
-          where: {
-            id: existing.id,
-            userId: scope.userId,
-            status: input.expectedCurrentStatus,
-          },
-          data: nextData,
-        });
+      const updateResult = await tx.adaptiveRecommendation.updateMany({
+        where: {
+          id: existing.id,
+          userId: scope.userId,
+          ...(input.expectedCurrentStatus ? { status: input.expectedCurrentStatus } : {}),
+        },
+        data: nextData,
+      });
 
-        if (updateResult.count === 0) {
-          const current = await tx.adaptiveRecommendation.findFirst({
-            where: buildAccountScopedWhere(scope, {
-              id: input.recommendationId,
-            }),
-          });
-
-          if (!current) {
-            return null;
-          }
-
-          throw new AdaptiveRecommendationStaleStateError(
-            input.expectedCurrentStatus ?? existing.status,
-            current.status,
-          );
-        }
-
-        updated = await tx.adaptiveRecommendation.findFirst({
+      if (updateResult.count === 0) {
+        const current = await tx.adaptiveRecommendation.findFirst({
           where: buildAccountScopedWhere(scope, {
-            id: existing.id,
+            id: input.recommendationId,
           }),
         });
-      } else {
-        if (input.expectedCurrentStatus && existing.status !== input.expectedCurrentStatus) {
-          throw new AdaptiveRecommendationStaleStateError(input.expectedCurrentStatus, existing.status);
+
+        if (!current) {
+          return null;
         }
 
-        updated = await tx.adaptiveRecommendation.update({
-          where: {
-            id: existing.id,
-          },
-          data: nextData,
-        });
+        throw new AdaptiveRecommendationStaleStateError(
+          input.expectedCurrentStatus ?? existing.status,
+          current.status,
+        );
       }
+
+      const updated = await tx.adaptiveRecommendation.findFirst({
+        where: buildAccountScopedWhere(scope, {
+          id: existing.id,
+        }),
+      });
 
       if (!updated) {
         return null;
@@ -410,43 +396,34 @@ export function createAdaptiveCoachingDal(db: AdaptiveDalClient, session: Sessio
         now,
       );
 
-      const rejectedRecommendation = tx.adaptiveRecommendation.updateMany
-        ? await (async () => {
-          const result = await tx.adaptiveRecommendation.updateMany({
-            where: {
-              id: existing.id,
-              userId: scope.userId,
-              status: input.expectedCurrentStatus,
-            },
-            data: rejectionData,
-          });
+      const result = await tx.adaptiveRecommendation.updateMany({
+        where: {
+          id: existing.id,
+          userId: scope.userId,
+          status: input.expectedCurrentStatus,
+        },
+        data: rejectionData,
+      });
 
-          if (result.count === 0) {
-            const current = await tx.adaptiveRecommendation.findFirst({
-              where: buildAccountScopedWhere(scope, {
-                id: input.recommendationId,
-              }),
-            });
-
-            if (!current) {
-              return null;
-            }
-
-            throw new AdaptiveRecommendationStaleStateError(input.expectedCurrentStatus, current.status);
-          }
-
-          return tx.adaptiveRecommendation.findFirst({
-            where: buildAccountScopedWhere(scope, {
-              id: existing.id,
-            }),
-          });
-        })()
-        : await tx.adaptiveRecommendation.update({
-          where: {
-            id: existing.id,
-          },
-          data: rejectionData,
+      if (result.count === 0) {
+        const current = await tx.adaptiveRecommendation.findFirst({
+          where: buildAccountScopedWhere(scope, {
+            id: input.recommendationId,
+          }),
         });
+
+        if (!current) {
+          return null;
+        }
+
+        throw new AdaptiveRecommendationStaleStateError(input.expectedCurrentStatus, current.status);
+      }
+
+      const rejectedRecommendation = await tx.adaptiveRecommendation.findFirst({
+        where: buildAccountScopedWhere(scope, {
+          id: existing.id,
+        }),
+      });
 
       if (!rejectedRecommendation) {
         return null;
