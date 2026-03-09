@@ -79,6 +79,18 @@ place.
 
 These headers support secure cookie/session handling in the app layer.
 
+### Browser Header Hardening
+
+Caddy now emits low-risk hardening headers at the HTTPS entrypoint:
+
+- `X-Content-Type-Options: nosniff`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+- `X-Frame-Options: DENY`
+- `Content-Security-Policy-Report-Only: frame-ancestors 'none'`
+
+This phase intentionally avoids a blocking CSP rollout.
+
 ## Operator Checks
 
 After deploy, verify health:
@@ -97,6 +109,25 @@ Inspect services:
 ```bash
 docker compose --env-file /opt/coach/.env.production ps
 docker compose --env-file /opt/coach/.env.production logs --tail=100 app caddy
+```
+
+Reload Caddy after Caddyfile updates:
+
+```bash
+docker compose --env-file /opt/coach/.env.production exec caddy caddy reload --config /etc/caddy/Caddyfile
+```
+
+Verify response headers over HTTPS:
+
+```bash
+curl -sSI https://coach.example.com | grep -E "X-Content-Type-Options|Referrer-Policy|Permissions-Policy|X-Frame-Options|Content-Security-Policy-Report-Only"
+```
+
+Then run the existing authenticated release-proof path and capture the
+header-check evidence with the normal smoke proof:
+
+```bash
+corepack pnpm release:proof -- /opt/coach/.env.production
 ```
 
 ## Update Procedure
