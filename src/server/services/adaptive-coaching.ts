@@ -5,10 +5,11 @@ import type { AdaptiveRecommendation as PolicyRecommendation } from '@/lib/adapt
 import {
   AdaptiveRecommendationStaleStateError,
   createAdaptiveCoachingDal,
+  createAdaptiveCoachingDbClient,
   type AdaptiveRecommendationRecord,
 } from '@/server/dal/adaptive-coaching';
-import { createProfileDal } from '@/server/dal/profile';
-import { createProgramDal } from '@/server/dal/program';
+import { createProfileDal, createProfileDbClient } from '@/server/dal/profile';
+import { createProgramDal, createProgramDbClient } from '@/server/dal/program';
 import { parseLlmRuntimeConfig, type LlmRuntimeConfig } from '@/server/llm/config';
 import { createLlmProposalClient } from '@/server/llm/client';
 import { createOpenAiProposalClient } from '@/server/llm/providers/openai-client';
@@ -619,7 +620,9 @@ export function createAdaptiveCoachingService(deps: AdaptiveCoachingServiceDeps)
 
 export async function buildDefaultAdaptiveCoachingService() {
   const { prisma } = await import('@/lib/db/prisma');
-  const profileDal = createProfileDal(prisma as never);
+  const profileDal = createProfileDal(createProfileDbClient(prisma));
+  const adaptiveDbClient = createAdaptiveCoachingDbClient(prisma);
+  const programDbClient = createProgramDbClient(prisma);
   const runtimeConfig = parseLlmRuntimeConfig(process.env);
 
   const providerProposalSource =
@@ -660,31 +663,31 @@ export async function buildDefaultAdaptiveCoachingService() {
   return createAdaptiveCoachingService({
     getProfile: (userId) => profileDal.getProfileByUserId(userId),
     getTodayOrNextSessionCandidates: (userId) => {
-      const programDal = createProgramDal(prisma as never, { userId });
+      const programDal = createProgramDal(programDbClient, { userId });
       return programDal.getTodayOrNextSessionCandidates();
     },
     getHistoryList: (userId, range) => {
-      const programDal = createProgramDal(prisma as never, { userId });
+      const programDal = createProgramDal(programDbClient, { userId });
       return programDal.getHistoryList(range);
     },
     listLatestAdaptiveRecommendation: (userId) => {
-      const dal = createAdaptiveCoachingDal(prisma as never, { userId });
+      const dal = createAdaptiveCoachingDal(adaptiveDbClient, { userId });
       return dal.listLatestAdaptiveRecommendation();
     },
     getAdaptiveRecommendationById: (userId, recommendationId) => {
-      const dal = createAdaptiveCoachingDal(prisma as never, { userId });
+      const dal = createAdaptiveCoachingDal(adaptiveDbClient, { userId });
       return dal.getAdaptiveRecommendationById(recommendationId);
     },
     createAdaptiveRecommendation: (userId, input) => {
-      const dal = createAdaptiveCoachingDal(prisma as never, { userId });
+      const dal = createAdaptiveCoachingDal(adaptiveDbClient, { userId });
       return dal.createAdaptiveRecommendation(input);
     },
     updateAdaptiveRecommendationStatus: (userId, input) => {
-      const dal = createAdaptiveCoachingDal(prisma as never, { userId });
+      const dal = createAdaptiveCoachingDal(adaptiveDbClient, { userId });
       return dal.updateAdaptiveRecommendationStatus(input);
     },
     rejectRecommendationWithFallback: (input) => {
-      const dal = createAdaptiveCoachingDal(prisma as never, { userId: input.userId });
+      const dal = createAdaptiveCoachingDal(adaptiveDbClient, { userId: input.userId });
       return dal.rejectRecommendationWithFallback({
         recommendationId: input.recommendationId,
         expectedCurrentStatus: input.expectedCurrentStatus,
@@ -696,7 +699,7 @@ export async function buildDefaultAdaptiveCoachingService() {
       });
     },
     appendDecisionTrace: (userId, input) => {
-      const dal = createAdaptiveCoachingDal(prisma as never, { userId });
+      const dal = createAdaptiveCoachingDal(adaptiveDbClient, { userId });
       return dal.appendDecisionTrace(input);
     },
     proposeRecommendation: async (input) => buildDefaultProposal(input),

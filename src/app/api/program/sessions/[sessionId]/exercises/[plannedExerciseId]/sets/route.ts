@@ -1,5 +1,5 @@
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
-import { createProgramDal } from '@/server/dal/program';
+import { createProgramDal, createProgramDbClient } from '@/server/dal/program';
 import { createSessionLoggingService } from '@/server/services/session-logging';
 import {
   createProgramSessionExerciseSetsPatchHandler,
@@ -15,19 +15,11 @@ async function buildDefaultDeps(): Promise<ProgramSessionExerciseSetsRouteDeps> 
   return {
     resolveSession: () => validateSessionFromCookies(repository),
     getExerciseOwnership: (plannedExerciseId, userId) => {
-      if (!userId) {
-        return Promise.resolve(null);
-      }
-
-      const dal = createProgramDal(prisma as never, { userId });
+      const dal = createProgramDal(createProgramDbClient(prisma), { userId });
       return dal.getPlannedExerciseOwnership(plannedExerciseId);
     },
     logSet: async (input, userId) => {
-      if (!userId) {
-        throw new Error('Unauthorized');
-      }
-
-      const dal = createProgramDal(prisma as never, { userId });
+      const dal = createProgramDal(createProgramDbClient(prisma), { userId });
       const service = createSessionLoggingService({ programDal: dal });
       await service.logSet(input);
 

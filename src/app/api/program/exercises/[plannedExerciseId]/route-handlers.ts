@@ -28,7 +28,7 @@ export type SubstituteRouteDeps = {
   getProfile: (userId: string) => Promise<ProfileForSubstitution | null>;
   getPlannedExerciseOwnership: (
     plannedExerciseId: string,
-    userId?: string,
+    userId: string,
   ) => Promise<PlannedExerciseOwnership | null>;
   updatePlannedExercise: (
     input: {
@@ -37,7 +37,7 @@ export type SubstituteRouteDeps = {
       replacementDisplayName: string;
       replacementMovementPattern: MovementPattern;
     },
-    userId?: string,
+    userId: string,
   ) => Promise<PlannedExerciseRecord>;
   now?: () => Date;
 };
@@ -47,7 +47,7 @@ export type CandidateRouteDeps = {
   getProfile: (userId: string) => Promise<ProfileForSubstitution | null>;
   getPlannedExerciseOwnership: (
     plannedExerciseId: string,
-    userId?: string,
+    userId: string,
   ) => Promise<PlannedExerciseOwnership | null>;
 };
 

@@ -75,18 +75,18 @@ export type ProgramSessionCompleteRouteDeps = {
   resolveSession: () => Promise<{ userId: string } | null>;
   completeSession: (
     input: { plannedSessionId: string; fatigue: number; readiness: number; comment?: string },
-    userId?: string,
+    userId: string,
   ) => Promise<void>;
 };
 
 export type ProgramSessionDurationRouteDeps = {
   resolveSession: () => Promise<{ userId: string } | null>;
-  correctDuration: (input: { plannedSessionId: string; effectiveDurationSec: number }, userId?: string) => Promise<void>;
+  correctDuration: (input: { plannedSessionId: string; effectiveDurationSec: number }, userId: string) => Promise<void>;
 };
 
 export type ProgramSessionExerciseSetsRouteDeps = {
   resolveSession: () => Promise<{ userId: string } | null>;
-  getExerciseOwnership: (plannedExerciseId: string, userId?: string) => Promise<OwnedExercise | null>;
+  getExerciseOwnership: (plannedExerciseId: string, userId: string) => Promise<OwnedExercise | null>;
   logSet: (
     input: {
       plannedExerciseId: string;
@@ -95,20 +95,20 @@ export type ProgramSessionExerciseSetsRouteDeps = {
       reps: number;
       rpe?: number;
     },
-    userId?: string,
+    userId: string,
   ) => Promise<unknown>;
 };
 
 export type ProgramSessionExerciseSkipRouteDeps = {
   resolveSession: () => Promise<{ userId: string } | null>;
-  getExerciseOwnership: (plannedExerciseId: string, userId?: string) => Promise<OwnedExercise | null>;
-  skipExercise: (input: { plannedExerciseId: string; reasonCode: string; reasonText?: string }, userId?: string) => Promise<void>;
-  revertSkippedExercise: (input: { plannedExerciseId: string }, userId?: string) => Promise<void>;
+  getExerciseOwnership: (plannedExerciseId: string, userId: string) => Promise<OwnedExercise | null>;
+  skipExercise: (input: { plannedExerciseId: string; reasonCode: string; reasonText?: string }, userId: string) => Promise<void>;
+  revertSkippedExercise: (input: { plannedExerciseId: string }, userId: string) => Promise<void>;
 };
 
 export type ProgramSessionNoteRouteDeps = {
   resolveSession: () => Promise<{ userId: string } | null>;
-  updateSessionNote: (input: { plannedSessionId: string; note: string | null }, userId?: string) => Promise<void>;
+  updateSessionNote: (input: { plannedSessionId: string; note: string | null }, userId: string) => Promise<void>;
 };
 
 function json(body: unknown, status: number): Response {

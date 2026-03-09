@@ -8,7 +8,11 @@ export type ProfileCompletenessInput = Pick<
   | 'equipmentCategories'
   | 'limitationsDeclared'
   | 'limitations'
->;
+> & {
+  userId?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
 
 export function isProfileComplete(profile: ProfileCompletenessInput | null | undefined): boolean {
   if (!profile) {

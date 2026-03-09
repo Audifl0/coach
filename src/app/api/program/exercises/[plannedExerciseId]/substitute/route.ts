@@ -1,6 +1,6 @@
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
-import { createProfileDal } from '@/server/dal/profile';
-import { createProgramDal } from '@/server/dal/program';
+import { createProfileDal, createProfileDbClient } from '@/server/dal/profile';
+import { createProgramDal, createProgramDbClient } from '@/server/dal/program';
 import {
   createPlannedExerciseSubstitutePostHandler,
   type ProfileForSubstitution,
@@ -10,26 +10,18 @@ import {
 
 async function buildDefaultDeps(): Promise<SubstituteRouteDeps> {
   const { prisma } = await import('@/lib/db/prisma');
-  const profileDal = createProfileDal(prisma as never);
+  const profileDal = createProfileDal(createProfileDbClient(prisma));
   const sessionRepository = await buildDefaultSessionGateRepository();
 
   return {
     resolveSession: () => validateSessionFromCookies(sessionRepository),
-    getProfile: (userId) => profileDal.getProfileByUserId(userId) as Promise<ProfileForSubstitution | null>,
+    getProfile: (userId) => profileDal.getProfileByUserId(userId),
     getPlannedExerciseOwnership: (plannedExerciseId, userId) => {
-      if (!userId) {
-        return Promise.resolve(null);
-      }
-
-      const programDal = createProgramDal(prisma as never, { userId });
+      const programDal = createProgramDal(createProgramDbClient(prisma), { userId });
       return programDal.getPlannedExerciseOwnership(plannedExerciseId);
     },
     updatePlannedExercise: (input, userId) => {
-      if (!userId) {
-        throw new Error('Unauthorized');
-      }
-
-      const programDal = createProgramDal(prisma as never, { userId });
+      const programDal = createProgramDal(createProgramDbClient(prisma), { userId });
       return programDal.applyPlannedExerciseSubstitution(input.plannedExerciseId, {
         replacementExerciseKey: input.replacementExerciseKey,
         replacementDisplayName: input.replacementDisplayName,

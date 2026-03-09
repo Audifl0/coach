@@ -39,11 +39,12 @@ test('account isolation and merge semantics', async () => {
 });
 
 test('profile route rejects unauthorized access', async () => {
+  const profile = createProfile();
   const get = createProfileGetHandler({
     resolveSession: async () => null,
     getProfile: async () => null,
-    upsertProfile: async () => null,
-    patchProfile: async () => null,
+    upsertProfile: async () => profile,
+    patchProfile: async () => profile,
   });
 
   const response = await get();
@@ -51,11 +52,12 @@ test('profile route rejects unauthorized access', async () => {
 });
 
 test('profile route enforces first-pass payload for onboarding save', async () => {
+  const profile = createProfile();
   const put = createProfilePutHandler({
     resolveSession: async () => ({ userId: 'user_1' }),
     getProfile: async () => null,
-    upsertProfile: async () => null,
-    patchProfile: async () => null,
+    upsertProfile: async () => profile,
+    patchProfile: async () => profile,
   });
 
   const response = await put(

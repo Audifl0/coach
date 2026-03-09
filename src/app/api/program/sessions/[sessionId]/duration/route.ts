@@ -1,5 +1,5 @@
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
-import { createProgramDal } from '@/server/dal/program';
+import { createProgramDal, createProgramDbClient } from '@/server/dal/program';
 import { createSessionLoggingService } from '@/server/services/session-logging';
 import {
   createProgramSessionDurationPatchHandler,
@@ -14,11 +14,7 @@ async function buildDefaultDeps(): Promise<ProgramSessionDurationRouteDeps> {
   return {
     resolveSession: () => validateSessionFromCookies(repository),
     correctDuration: async (input, userId) => {
-      if (!userId) {
-        throw new Error('Unauthorized');
-      }
-
-      const dal = createProgramDal(prisma as never, { userId });
+      const dal = createProgramDal(createProgramDbClient(prisma), { userId });
       const service = createSessionLoggingService({ programDal: dal });
       await service.correctDuration(input);
     },

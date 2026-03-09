@@ -127,6 +127,10 @@ type AdaptiveDalClient = {
   };
 };
 
+export function createAdaptiveCoachingDbClient(db: unknown): AdaptiveDalClient {
+  return db as AdaptiveDalClient;
+}
+
 type AdaptiveDalClientTx = Omit<AdaptiveDalClient, '$transaction'>;
 
 export type CreateAdaptiveRecommendationInput = {
