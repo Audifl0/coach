@@ -1,5 +1,5 @@
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
-import { createProgramDal } from '@/server/dal/program';
+import { createProgramDal, createProgramDbClient } from '@/server/dal/program';
 import { logRouteFailure } from '@/server/observability/app-logger';
 import {
   createProgramTodayGetHandler,
@@ -13,7 +13,7 @@ async function buildDefaultDeps(): Promise<ProgramTodayRouteDeps> {
   return {
     resolveSession: () => validateSessionFromCookies(repository),
     getTodayOrNextSessionCandidates: async (userId: string) => {
-      const programDal = createProgramDal(prisma as never, { userId });
+      const programDal = createProgramDal(createProgramDbClient(prisma), { userId });
       return programDal.getTodayOrNextSessionCandidates();
     },
   };

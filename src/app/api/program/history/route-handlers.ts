@@ -1,17 +1,13 @@
-import { parseHistoryQueryInput, parseProgramHistoryListResponse } from '@/lib/program/contracts';
+import {
+  parseHistoryQueryInput,
+  parseProgramHistoryListResponse,
+  type ProgramHistoryRow,
+} from '@/lib/program/contracts';
 import { logRouteFailure, type AppLogger } from '@/server/observability/app-logger';
-
-type HistoryRow = {
-  id: string;
-  date: string;
-  duration: number;
-  exerciseCount: number;
-  totalLoad: number;
-};
 
 export type ProgramHistoryRouteDeps = {
   resolveSession: () => Promise<{ userId: string } | null>;
-  getHistoryList: (range: { from: Date; to: Date }, userId?: string) => Promise<HistoryRow[]>;
+  getHistoryList: (range: { from: Date; to: Date }, userId: string) => Promise<ProgramHistoryRow[]>;
   now?: () => Date;
   logger?: AppLogger;
 };

@@ -10,6 +10,8 @@ import { AdaptiveConfirmationBanner } from './components/adaptive-confirmation-b
 import { AdaptiveForecastCard } from './components/adaptive-forecast-card';
 import { TrendsSummaryCard } from './_components/trends-summary-card';
 import { createProgramDal } from '@/server/dal/program';
+import { createProgramDbClient } from '@/server/dal/program';
+import { createProfileDal, createProfileDbClient } from '@/server/dal/profile';
 import {
   loadDashboardProgramTodaySection,
   loadDashboardTrendsSection,
@@ -50,25 +52,12 @@ function toPendingConfirmationBannerData(
 }
 export default async function DashboardPage() {
   const { prisma } = await import('@/lib/db/prisma');
+  const profileDal = createProfileDal(createProfileDbClient(prisma));
   const repository = await buildDefaultSessionGateRepository();
   const session = await validateSessionFromCookies(repository);
   const route = await resolveDashboardRoute(
     session,
-    async (userId) =>
-      prisma.athleteProfile.findUnique({
-        where: { userId },
-        select: {
-          userId: true,
-          goal: true,
-          weeklySessionTarget: true,
-          sessionDuration: true,
-          equipmentCategories: true,
-          limitationsDeclared: true,
-          limitations: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      }),
+    async (userId) => profileDal.getProfileByUserId(userId),
   );
 
   if (route === 'login') {
@@ -83,7 +72,7 @@ export default async function DashboardPage() {
     redirect('/onboarding');
   }
 
-  const programDal = createProgramDal(prisma as never, { userId: session.userId });
+  const programDal = createProgramDal(createProgramDbClient(prisma), { userId: session.userId });
   const programTodaySection = await loadDashboardProgramTodaySection({
     getTodayOrNextSessionCandidates: async () => programDal.getTodayOrNextSessionCandidates(),
   });

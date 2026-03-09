@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createProgramDal, type PlannedExerciseRecord, type PlannedSessionRecord, type ProgramPlanRecord } from '../../src/server/dal/program';
+import {
+  createProgramDal,
+  createProgramDbClient,
+  type PlannedExerciseRecord,
+  type PlannedSessionRecord,
+  type ProgramPlanRecord,
+} from '../../src/server/dal/program';
 import {
   buildHistoryQueryString,
   buildHistoryViewState,
@@ -185,7 +191,7 @@ test('history drilldown DAL returns archived completed sessions that already app
     },
   };
 
-  const dal = createProgramDal(db as never, { userId: 'user_1' });
+  const dal = createProgramDal(createProgramDbClient(db), { userId: 'user_1' });
 
   const historyRows = await dal.getHistoryList({
     from: new Date('2026-03-01T00:00:00.000Z'),

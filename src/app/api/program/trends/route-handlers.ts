@@ -1,12 +1,13 @@
 import {
   parseProgramTrendQueryInput,
   parseProgramTrendsSummaryResponse,
+  type ProgramTrendsSummaryResponse,
 } from '@/lib/program/contracts';
 import { logRouteFailure, type AppLogger } from '@/server/observability/app-logger';
 
 export type ProgramTrendsRouteDeps = {
   resolveSession: () => Promise<{ userId: string } | null>;
-  getTrendSummary: (input: { period: '7d' | '30d' | '90d' }, userId?: string) => Promise<unknown>;
+  getTrendSummary: (input: { period: '7d' | '30d' | '90d' }, userId: string) => Promise<ProgramTrendsSummaryResponse>;
   logger?: AppLogger;
 };
 

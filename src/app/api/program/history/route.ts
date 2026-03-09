@@ -1,5 +1,5 @@
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
-import { createProgramDal } from '@/server/dal/program';
+import { createProgramDal, createProgramDbClient } from '@/server/dal/program';
 import { logRouteFailure } from '@/server/observability/app-logger';
 import {
   createProgramHistoryGetHandler,
@@ -13,11 +13,7 @@ async function buildDefaultDeps(): Promise<ProgramHistoryRouteDeps> {
   return {
     resolveSession: () => validateSessionFromCookies(repository),
     getHistoryList: async (range, userId) => {
-      if (!userId) {
-        throw new Error('Unauthorized');
-      }
-
-      const dal = createProgramDal(prisma as never, { userId });
+      const dal = createProgramDal(createProgramDbClient(prisma), { userId });
       return dal.getHistoryList(range);
     },
   };

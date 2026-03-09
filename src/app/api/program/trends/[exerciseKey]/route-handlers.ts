@@ -1,6 +1,7 @@
 import {
   parseProgramTrendQueryInput,
   parseProgramTrendsExerciseResponse,
+  type ProgramTrendsExerciseResponse,
 } from '@/lib/program/contracts';
 
 export type ExerciseTrendRouteContext = {
@@ -11,8 +12,8 @@ export type ProgramTrendsExerciseRouteDeps = {
   resolveSession: () => Promise<{ userId: string } | null>;
   getExerciseTrendSeries: (
     input: { period: '7d' | '30d' | '90d'; exerciseKey: string },
-    userId?: string,
-  ) => Promise<unknown | null>;
+    userId: string,
+  ) => Promise<ProgramTrendsExerciseResponse | null>;
 };
 
 function json(body: unknown, status: number): Response {

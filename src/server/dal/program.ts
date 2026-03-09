@@ -260,6 +260,10 @@ type ProgramDalClient = {
   };
 };
 
+export function createProgramDbClient(db: unknown): ProgramDalClient {
+  return db as ProgramDalClient;
+}
+
 type ProgramDalClientTx = Omit<ProgramDalClient, '$transaction'>;
 
 function toIsoDate(date: Date): string {

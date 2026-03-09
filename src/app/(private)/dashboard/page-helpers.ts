@@ -119,7 +119,7 @@ export async function loadProgramTrendsData(input: {
   cookieHeader: string;
   fetchImpl?: typeof fetch;
 } | {
-  getTrendSummary: (input: { period: '30d' }) => Promise<unknown>;
+  getTrendSummary: (input: { period: '30d' }) => Promise<ProgramTrendsSummaryResponse>;
 }): Promise<ProgramTrendsSummaryResponse | null> {
   if ('getTrendSummary' in input) {
     try {
