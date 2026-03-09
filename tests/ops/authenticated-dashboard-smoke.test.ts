@@ -1,3 +1,5 @@
+/// <reference path="../../infra/scripts/smoke-authenticated-dashboard.d.ts" />
+
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -184,7 +186,7 @@ test('authenticated dashboard smoke logs in, reuses the session cookie, and veri
     password: 'smoke-secret',
     expectedFocusLabel: 'Upper Body',
     fetchImpl,
-    log: (message) => logs.push(message),
+    log: (message: string) => logs.push(message),
   });
 
   assert.equal(calls.length, 3);
