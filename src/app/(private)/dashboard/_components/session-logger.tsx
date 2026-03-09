@@ -2,308 +2,55 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-import type { ProgramSessionDetailResponse, ProgramSessionSummary } from '@/lib/program/contracts';
+import type { LoggedSetEntry, LoggerState } from './session-logger-state';
+import {
+  MAX_NOTE_LENGTH,
+  buildCompleteSessionPayload,
+  buildSessionLoggerHydration,
+  buildSkipPayload,
+  clampSessionNote,
+  formatElapsedSeconds,
+  reduceLoggerStateAfterCompletion,
+  reduceLoggerStateAfterSetSaved,
+  type HydratableSession,
+  upsertLoggedSet,
+} from './session-logger-state';
+import {
+  buildCompleteSessionRequest,
+  buildDurationCorrectionRequest,
+  buildNoteRequest,
+  buildRevertSkipRequest,
+  buildSaveSetRequest,
+  buildSkipRequest,
+  getSessionLoggerRequestErrorMessage,
+} from './session-logger-client';
 
-type LoggedSetEntry = {
-  setIndex: number;
-  weight: number;
-  reps: number;
-  rpe: number | null;
-};
+export {
+  buildCompleteSessionPayload,
+  buildSessionLoggerHydration,
+  buildSkipPayload,
+  createInitialLoggerState,
+  formatElapsedSeconds,
+  reduceLoggerStateAfterCompletion,
+  reduceLoggerStateAfterSetSaved,
+  upsertLoggedSet,
+} from './session-logger-state';
+export {
+  buildCompleteSessionRequest,
+  buildDurationCorrectionRequest,
+  buildNoteRequest,
+  buildRevertSkipRequest,
+  buildSaveSetRequest,
+  buildSkipRequest,
+  getSessionLoggerRequestErrorMessage,
+} from './session-logger-client';
 
-type LoggerState = {
-  timerStartedAtMs: number | null;
-  timerCompletedAtMs: number | null;
-};
-
-type HydratedSkipState = {
-  skipped: boolean;
-  reasonCode: string;
-  reasonText?: string;
-};
-
-export type SessionLoggerHydration = {
-  loggerState: LoggerState;
-  loggedSets: Record<string, LoggedSetEntry[]>;
-  skipState: Record<string, HydratedSkipState>;
-  note: string;
-  fatigue: number | null;
-  readiness: number | null;
-  comment: string;
-  isCompleted: boolean;
-};
-
-type HydratableSession = ProgramSessionSummary | ProgramSessionDetailResponse['session'];
-
-type CompleteSessionInput = {
-  fatigue: number | null;
-  readiness: number | null;
-  comment?: string;
-};
-
-type SetRequestPayload = {
-  setIndex: number;
-  weight: number;
-  reps: number;
-  rpe?: number;
-};
-
-type SkipRequestPayload = {
-  reasonCode: string;
-  reasonText?: string;
-};
-
-type NoteRequestPayload = {
-  note: string | null;
-};
-
-type DurationCorrectionRequestPayload = {
-  effectiveDurationSec: number;
-};
-
-type SessionLoggerRequestErrorKind =
-  | 'save_set'
-  | 'skip_exercise'
-  | 'revert_skip'
-  | 'save_note'
-  | 'complete_session'
-  | 'correct_duration';
-
-const MAX_NOTE_LENGTH = 280;
 const SKIP_REASON_OPTIONS = [
   { value: 'pain', label: 'Douleur' },
   { value: 'fatigue', label: 'Fatigue excessive' },
   { value: 'equipment_unavailable', label: 'Materiel indisponible' },
   { value: 'time', label: 'Manque de temps' },
 ] as const;
-
-function toTwoDigits(value: number): string {
-  return value < 10 ? `0${value}` : String(value);
-}
-
-function clampComment(value: string | undefined): string | undefined {
-  if (!value) {
-    return undefined;
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-
-  return trimmed.slice(0, MAX_NOTE_LENGTH);
-}
-
-function createJsonRequest(url: string, method: 'POST' | 'PATCH', payload: unknown) {
-  return {
-    url,
-    init: {
-      method,
-      cache: 'no-store' as const,
-      headers: { 'content-type': 'application/json' as const },
-      body: JSON.stringify(payload),
-    },
-  };
-}
-
-export function buildSaveSetRequest(input: { sessionId: string; exerciseId: string; payload: SetRequestPayload }) {
-  return createJsonRequest(`/api/program/sessions/${input.sessionId}/exercises/${input.exerciseId}/sets`, 'POST', input.payload);
-}
-
-export function buildSkipRequest(input: { sessionId: string; exerciseId: string; payload: SkipRequestPayload }) {
-  return createJsonRequest(`/api/program/sessions/${input.sessionId}/exercises/${input.exerciseId}/skip`, 'POST', input.payload);
-}
-
-export function buildRevertSkipRequest(input: { sessionId: string; exerciseId: string }) {
-  return {
-    url: `/api/program/sessions/${input.sessionId}/exercises/${input.exerciseId}/skip`,
-    init: {
-      method: 'DELETE' as const,
-      cache: 'no-store' as const,
-    },
-  };
-}
-
-export function buildNoteRequest(input: { sessionId: string; payload: NoteRequestPayload }) {
-  return createJsonRequest(`/api/program/sessions/${input.sessionId}/note`, 'PATCH', input.payload);
-}
-
-export function buildCompleteSessionRequest(input: {
-  sessionId: string;
-  payload: ReturnType<typeof buildCompleteSessionPayload>;
-}) {
-  return createJsonRequest(`/api/program/sessions/${input.sessionId}/complete`, 'POST', input.payload);
-}
-
-export function buildDurationCorrectionRequest(input: { sessionId: string; payload: DurationCorrectionRequestPayload }) {
-  return createJsonRequest(`/api/program/sessions/${input.sessionId}/duration`, 'PATCH', input.payload);
-}
-
-export function getSessionLoggerRequestErrorMessage(kind: SessionLoggerRequestErrorKind): string {
-  switch (kind) {
-    case 'save_set':
-      return 'Impossible de sauvegarder la serie.';
-    case 'skip_exercise':
-      return 'Impossible de marquer cet exercice comme saute.';
-    case 'revert_skip':
-      return 'Impossible d annuler le skip.';
-    case 'save_note':
-      return 'Impossible de sauvegarder la note.';
-    case 'complete_session':
-      return 'Impossible de terminer la seance.';
-    case 'correct_duration':
-      return 'Impossible de corriger la duree.';
-    default:
-      return 'Une erreur est survenue.';
-  }
-}
-
-export function createInitialLoggerState(): LoggerState {
-  return {
-    timerStartedAtMs: null,
-    timerCompletedAtMs: null,
-  };
-}
-
-function isHydratableDetailSession(session: HydratableSession): session is ProgramSessionDetailResponse['session'] {
-  return 'startedAt' in session || 'completedAt' in session || 'note' in session;
-}
-
-function toTimestamp(value: string | null | undefined): number | null {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? null : parsed;
-}
-
-export function buildSessionLoggerHydration(session: HydratableSession): SessionLoggerHydration {
-  if (!isHydratableDetailSession(session)) {
-    return {
-      loggerState: createInitialLoggerState(),
-      loggedSets: {},
-      skipState: {},
-      note: '',
-      fatigue: null,
-      readiness: null,
-      comment: '',
-      isCompleted: false,
-    };
-  }
-
-  const loggedSets = session.exercises.reduce<Record<string, LoggedSetEntry[]>>((accumulator, exercise) => {
-    accumulator[exercise.id] = [...exercise.loggedSets].sort((left, right) => left.setIndex - right.setIndex);
-    return accumulator;
-  }, {});
-
-  const skipState = session.exercises.reduce<Record<string, HydratedSkipState>>((accumulator, exercise) => {
-    if (!exercise.isSkipped) {
-      return accumulator;
-    }
-
-    accumulator[exercise.id] = {
-      skipped: true,
-      reasonCode: exercise.skipReasonCode ?? '',
-      ...(exercise.skipReasonText ? { reasonText: exercise.skipReasonText } : {}),
-    };
-    return accumulator;
-  }, {});
-
-  return {
-    loggerState: {
-      timerStartedAtMs: toTimestamp(session.startedAt),
-      timerCompletedAtMs: toTimestamp(session.completedAt),
-    },
-    loggedSets,
-    skipState,
-    note: session.note ?? '',
-    fatigue: session.postSessionFatigue ?? null,
-    readiness: session.postSessionReadiness ?? null,
-    comment: session.postSessionComment ?? '',
-    isCompleted: session.completedAt !== null || session.state === 'completed',
-  };
-}
-
-export function reduceLoggerStateAfterSetSaved(state: LoggerState, input: { nowMs: number }): LoggerState {
-  if (state.timerStartedAtMs !== null) {
-    return state;
-  }
-
-  return {
-    timerStartedAtMs: input.nowMs,
-    timerCompletedAtMs: null,
-  };
-}
-
-export function reduceLoggerStateAfterCompletion(state: LoggerState, input: { nowMs: number }): LoggerState {
-  const startedAt = state.timerStartedAtMs ?? input.nowMs;
-
-  return {
-    timerStartedAtMs: startedAt,
-    timerCompletedAtMs: input.nowMs,
-  };
-}
-
-export function formatElapsedSeconds(state: LoggerState, nowMs: number): string {
-  if (state.timerStartedAtMs === null) {
-    return '00:00';
-  }
-
-  const end = state.timerCompletedAtMs ?? nowMs;
-  const totalSeconds = Math.max(0, Math.floor((end - state.timerStartedAtMs) / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${toTwoDigits(minutes)}:${toTwoDigits(seconds)}`;
-}
-
-export function upsertLoggedSet(existing: LoggedSetEntry[], incoming: LoggedSetEntry): LoggedSetEntry[] {
-  const index = existing.findIndex((item) => item.setIndex === incoming.setIndex);
-  if (index === -1) {
-    return [...existing, incoming].sort((a, b) => a.setIndex - b.setIndex);
-  }
-
-  const next = [...existing];
-  next[index] = incoming;
-  return next.sort((a, b) => a.setIndex - b.setIndex);
-}
-
-export function buildSkipPayload(reasonCode: string, reasonText?: string): { reasonCode: string; reasonText?: string } {
-  const normalizedReason = reasonCode.trim();
-  if (!normalizedReason) {
-    throw new Error('Skip reason is required.');
-  }
-
-  const normalizedText = reasonText?.trim().slice(0, MAX_NOTE_LENGTH);
-  if (!normalizedText) {
-    return { reasonCode: normalizedReason };
-  }
-
-  return {
-    reasonCode: normalizedReason,
-    reasonText: normalizedText,
-  };
-}
-
-export function buildCompleteSessionPayload(input: CompleteSessionInput): {
-  fatigue: number;
-  readiness: number;
-  comment?: string;
-} {
-  if (input.fatigue === null || input.fatigue < 1 || input.fatigue > 5) {
-    throw new Error('Fatigue is required and must be between 1 and 5.');
-  }
-
-  if (input.readiness === null || input.readiness < 1 || input.readiness > 5) {
-    throw new Error('Readiness is required and must be between 1 and 5.');
-  }
-
-  return {
-    fatigue: input.fatigue,
-    readiness: input.readiness,
-    ...(clampComment(input.comment) ? { comment: clampComment(input.comment) } : {}),
-  };
-}
 
 type SetDraft = {
   setIndex: string;
@@ -487,7 +234,7 @@ export function SessionLogger({ session }: { session: HydratableSession }) {
     try {
       const request = buildNoteRequest({
         sessionId: session.id,
-        payload: { note: clampComment(note) ?? null },
+        payload: { note: clampSessionNote(note) ?? null },
       });
       const response = await fetch(request.url, request.init);
 
