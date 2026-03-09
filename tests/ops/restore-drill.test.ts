@@ -34,6 +34,24 @@ test('backup and restore scripts fail clearly when required env contract is miss
   assert.match(restoreScript, /RESTORE_TARGET_DB is required/);
 });
 
+test('backup script streams pg_dump directly into encryption without plaintext SQL temp files', async () => {
+  const backupScript = await readScript('infra/scripts/backup.sh');
+
+  assert.match(backupScript, /pg_dump[\s\S]*\|\s*openssl enc -aes-256-cbc/);
+  assert.doesNotMatch(backupScript, /mktemp.*\.sql/);
+  assert.doesNotMatch(backupScript, />\s*\"?\$PLAIN_SQL\"?/);
+});
+
+test('restore script streams decrypted SQL directly into psql with guardrails intact', async () => {
+  const restoreScript = await readScript('infra/scripts/restore.sh');
+
+  assert.match(restoreScript, /openssl enc -d -aes-256-cbc[\s\S]*\|\s*\"\$\{COMPOSE_CMD\[@\]\}\"[\s\S]*psql/);
+  assert.match(restoreScript, /ON_ERROR_STOP=1|ON_ERROR_STOP=on/);
+  assert.match(restoreScript, /--single-transaction/);
+  assert.match(restoreScript, /RESTORE_TARGET_DB/);
+  assert.doesNotMatch(restoreScript, /mktemp.*\.sql/);
+});
+
 test('restore drill wrapper enforces deterministic stage order and evidence logging', async () => {
   const drillScript = await readScript('infra/scripts/run-restore-drill.sh');
 

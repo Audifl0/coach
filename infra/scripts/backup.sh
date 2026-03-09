@@ -28,7 +28,6 @@ else
 fi
 
 mkdir -p "$BACKUP_DIR"
-PLAIN_SQL="$(mktemp "$BACKUP_DIR/coach-${TIMESTAMP}.XXXXXX.sql")"
 ENCRYPTED_FILE="$BACKUP_DIR/coach-${TIMESTAMP}.sql.enc"
 
 set -a
@@ -40,13 +39,9 @@ POSTGRES_DB="${POSTGRES_DB:-coach}"
 
 echo "Creating PostgreSQL dump for database '$POSTGRES_DB'..."
 "${COMPOSE_CMD[@]}" --env-file "$ENV_FILE" exec -T db \
-  pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists >"$PLAIN_SQL"
+  pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists \
+  | openssl enc -aes-256-cbc -salt -pbkdf2 \
+      -pass env:BACKUP_PASSPHRASE \
+      -out "$ENCRYPTED_FILE"
 
-echo "Encrypting backup..."
-openssl enc -aes-256-cbc -salt -pbkdf2 \
-  -pass env:BACKUP_PASSPHRASE \
-  -in "$PLAIN_SQL" \
-  -out "$ENCRYPTED_FILE"
-
-rm -f "$PLAIN_SQL"
 echo "Backup created: $ENCRYPTED_FILE"

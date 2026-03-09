@@ -4,6 +4,8 @@
 
 Run a monthly restore drill that proves recoverability of encrypted backups into a
 dedicated drill database, with auditable evidence and smoke checks.
+Backup and restore run in streaming mode (`pg_dump | openssl` and `openssl -d | psql`)
+so plaintext SQL files are not created on disk in the normal drill path.
 
 ## Prerequisites
 

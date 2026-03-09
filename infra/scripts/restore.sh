@@ -53,21 +53,11 @@ if [[ "$RESTORE_TARGET_DB" == "$PRODUCTION_DB_NAME" ]]; then
   exit 1
 fi
 
-DECRYPTED_SQL="$(mktemp "${TMPDIR:-/tmp}/coach-restore.XXXXXX.sql")"
-
-cleanup() {
-  rm -f "$DECRYPTED_SQL"
-}
-trap cleanup EXIT
-
 echo "Decrypting backup..."
 openssl enc -d -aes-256-cbc -pbkdf2 \
   -pass env:BACKUP_PASSPHRASE \
   -in "$BACKUP_FILE" \
-  -out "$DECRYPTED_SQL"
-
-echo "Restoring PostgreSQL database '$RESTORE_TARGET_DB'..."
-"${COMPOSE_CMD[@]}" --env-file "$ENV_FILE" exec -T db \
-  psql -X -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$RESTORE_TARGET_DB" <"$DECRYPTED_SQL"
+  | "${COMPOSE_CMD[@]}" --env-file "$ENV_FILE" exec -T db \
+      psql -X -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$RESTORE_TARGET_DB"
 
 echo "Restore complete."

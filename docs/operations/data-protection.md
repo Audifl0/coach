@@ -34,6 +34,8 @@ infra/scripts/backup.sh /opt/coach/.env.production
 ```
 
 Backups are encrypted with OpenSSL AES-256 (`-pbkdf2` with salted key derivation).
+The backup flow streams `pg_dump` directly into OpenSSL and does not write plaintext
+SQL dumps to disk in the normal path.
 
 Restore flow:
 
@@ -41,6 +43,9 @@ Restore flow:
 export BACKUP_PASSPHRASE='replace-with-backup-passphrase'
 infra/scripts/restore.sh backups/coach-YYYYMMDDTHHMMSSZ.sql.enc /opt/coach/.env.production
 ```
+
+Restore decrypts and replays SQL as a stream (`openssl -d | psql`) while preserving
+`RESTORE_TARGET_DB`, `ON_ERROR_STOP`, and single-transaction guardrails.
 
 ## Secret Handling Baseline
 
