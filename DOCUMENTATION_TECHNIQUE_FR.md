@@ -79,6 +79,72 @@ Le chemin d'exploitation present dans le depot est axe Compose + Caddy:
 - Sauvegarde/restauration: `infra/scripts/backup.sh`, `infra/scripts/restore.sh`, `infra/scripts/run-restore-drill.sh`
 - Verifications ops/tests: `docs/operations/*`, `tests/ops/*`
 
+## Scenarios metier de bout en bout
+
+Les scenarios ci-dessous decrivent le fonctionnement reel en reliant points d'entree `src/app/api/*`, modules metier `src/lib/*`, et executions serveur `src/server/dal/*` + `src/server/services/*`.
+
+### Scenario 1 - Authentification et session persistante
+
+1. L'utilisateur cree un compte via `src/app/api/auth/signup/route.ts` (handler: `src/app/api/auth/handlers.ts`).
+2. Les validations d'entree passent par `src/lib/auth/contracts.ts`; le service `src/lib/auth/auth.ts` applique la politique mot de passe et le hash.
+3. La connexion passe par `src/app/api/auth/login/route.ts`, puis creation de session en base (`Session` dans `prisma/schema.prisma`) avec cookie HTTP-only secure.
+4. Les routes privees et le dashboard s'appuient sur la validation de cookie/session (`src/lib/auth/session-gate.ts`) au lieu de la simple presence d'un cookie brut.
+5. La deconnexion (`src/app/api/auth/logout/route.ts`) revoque la session courante via token hash.
+6. Garde-fous: limitation de debit login/signup dans `src/lib/auth/rate-limit.ts` et logs auth via `src/lib/auth/auth-logger.ts`.
+
+### Scenario 2 - Onboarding et profil
+
+1. L'acces dashboard prive passe par `src/app/(private)/dashboard/loaders/dashboard-access.ts`, qui decide login/onboarding/dashboard.
+2. Le parcours onboarding lit puis met a jour le profil via `src/app/(private)/onboarding/page.tsx` et `/api/profile`.
+3. Les handlers profil (`src/app/api/profile/route-handlers.ts`) valident payload complet ou patch (`src/lib/profile/contracts.ts`).
+4. La persistance passe par `src/server/dal/profile.ts` (get/upsert/patch profile).
+5. Le critere de completion (gate onboarding) est calcule par `src/lib/profile/completeness.ts`.
+
+### Scenario 3 - Generation du programme
+
+1. Le point d'entree est `src/app/api/program/generate/route.ts`.
+2. Le handler parse le payload (`src/lib/program/contracts.ts`) puis appelle `src/server/services/program-generation.ts`.
+3. Le service charge le profil, verifie sa completion, produit un plan hebdo via `src/lib/program/planner.ts`.
+4. Le remplacement atomique du plan actif passe par `src/server/dal/program.ts` + `src/server/dal/program/plan-lifecycle.ts` (`replaceActivePlan`).
+5. Donnees produites: `ProgramPlan` + `PlannedSession` + `PlannedExercise` dans `prisma/schema.prisma`.
+6. Garde-fou de concurrence: conflit de plan actif mappe vers erreur explicite de regeneration.
+
+### Scenario 4 - Seance du jour et journalisation
+
+1. Le dashboard charge la carte du jour via `src/app/(private)/dashboard/loaders/today-workout.ts`.
+2. La route `/api/program/today` (`src/app/api/program/today/route.ts`) s'appuie sur `selectTodayWorkoutProjection` (`src/lib/program/select-today-session.ts`) pour choisir today/next.
+3. Les mutations de seance utilisent les routes `src/app/api/program/sessions/**` (sets, skip, note, duration, complete).
+4. L'orchestration metier est dans `src/server/services/session-logging.ts`: debut implicite de seance, interdiction de modifier une seance deja complete, correction de duree limitee a 24h.
+5. La persistance est geree par `src/server/dal/program/session-logging.ts` avec verrous transactionnels et controles d'etat.
+6. Les vues historiques utilisent `src/app/api/program/history/route.ts` et `src/server/dal/program/history-read-model.ts`.
+
+### Scenario 5 - Adaptation et recommandations
+
+1. Le point d'entree est `src/app/api/program/adaptation/route.ts`.
+2. Le service `src/server/services/adaptive-coaching.ts` recupere profil + session cible + historique 30 jours via DAL.
+3. La proposition passe par l'orchestrateur `src/lib/adaptive-coaching/orchestrator.ts`, puis application de politique de securite `src/server/services/adaptive-coaching-policy.ts`.
+4. Les statuts (proposed, pending_confirmation, applied, rejected, fallback_applied) sont portes par `AdaptiveRecommendation` dans `prisma/schema.prisma`.
+5. Pour deload/substitution, la confirmation utilisateur est geree via routes `/api/program/adaptation/[recommendationId]/confirm|reject`.
+6. En cas de rejet, un fallback conservateur est applique et trace dans `AdaptiveRecommendationDecision`.
+7. Si `LLM_REAL_PROVIDER_ENABLED=true`, la chaine provider utilise `src/server/llm/*` (OpenAI primaire, Anthropic fallback) selon `src/server/llm/config.ts`.
+
+### Scenario 6 - Tendances et dashboard
+
+1. Le dashboard charge les tendances via `src/app/(private)/dashboard/loaders/trends-summary.ts`.
+2. L'API resume est `src/app/api/program/trends/route.ts`; le detail exercice est `src/app/api/program/trends/[exerciseKey]/route.ts`.
+3. Le read model `src/server/dal/program/trends-read-model.ts` calcule volume, intensite, adherence sur periodes 7d/30d/90d.
+4. L'intensite s'appuie sur l'exercice cle (orderIndex minimal) avec agrat de charge moyenne.
+5. En mode degrade (echec chargement), le dashboard expose explicitement un etat d'erreur plutot qu'un faux "OK".
+
+### Scenario 7 - Fiabilite ops et preuve de release
+
+1. Le deploiement passe par `infra/scripts/deploy.sh` (pull/build/up compose, smokes HTTPS et dashboard authentifie si domaine present).
+2. La gate de release (`infra/scripts/release-proof.sh`) execute en sequence: typecheck, test, build, deploy, smoke HTTPS, smoke authentifie.
+3. La sauvegarde est chiffree (stream `pg_dump` -> `openssl`) dans `infra/scripts/backup.sh`.
+4. La restauration impose une base cible differente de la base production (`RESTORE_TARGET_DB != POSTGRES_DB`) dans `infra/scripts/restore.sh`.
+5. L'exercice de reprise `infra/scripts/run-restore-drill.sh` produit des preuves horodatees et execute des smokes post-restore.
+6. La configuration runtime ops stricte est parsee dans `src/server/env/ops-config.ts`.
+
 ## Hypotheses explicites
 
 - Hypothese d'exploitation principale: la voie reference est `docker-compose.yml` + `infra/caddy/Caddyfile` + scripts `infra/scripts/*`.
@@ -90,4 +156,3 @@ Le chemin d'exploitation present dans le depot est axe Compose + Caddy:
 - Ce document ne remplace pas les runbooks detaillees (`docs/operations/*`) pour les procedures pas-a-pas.
 - Certaines decisions d'exploitation sont contextualisees par des variables d'environnement et par l'etat des donnees (ex: compte de smoke authentifie ops).
 - La preuve "en production" d'un chemin reel deploiement n'est pas encodee dans le depot; la documentation s'appuie sur les artefacts versionnes disponibles.
-
