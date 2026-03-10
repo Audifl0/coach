@@ -43,6 +43,7 @@ This phase should improve runtime resilience and verification proof without abso
 ## Specific Ideas
 
 - Map plans primarily to `STAB-01` through `STAB-05`, with `STAB-05` allowed to split if too large.
+- If verification later finds release-entry failures inside the already-approved `STAB-02`, `STAB-03`, or `STAB-05` artifacts, close them as a narrow gap-closure continuation of those stabilization tracks rather than opening a new product scope.
 - Pair each risky mutation surface with explicit regression or repro validation.
 - Keep release-proof work centered on existing commands and scripts before introducing new automation layers.
 </specifics>
