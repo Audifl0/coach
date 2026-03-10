@@ -6,15 +6,15 @@ current_phase: 10
 current_phase_name: maintainability cleanup and operational hardening
 current_plan: 3
 status: verifying
-stopped_at: Completed 11-02-PLAN.md
-last_updated: "2026-03-10T11:12:13.554Z"
+stopped_at: Completed 11-04-PLAN.md
+last_updated: "2026-03-10T11:17:24.167Z"
 last_activity: 2026-03-10
 progress:
   total_phases: 12
-  completed_phases: 12
+  completed_phases: 13
   total_plans: 61
-  completed_plans: 60
-  percent: 98
+  completed_plans: 61
+  percent: 100
 ---
 
 # Project State
@@ -36,7 +36,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Status:** Phase complete — ready for verification
 **Last Activity:** 2026-03-10
 **Last Activity Description:** Completed 10-01 typed seam cleanup and moved to plan 10-02
-**Progress:** [██████████] 98%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -81,6 +81,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu P11-03 | 3 min | 3 tasks | 1 files |
 | Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu P11-01 | 2 min | 3 tasks | 2 files |
 | Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu P11-02 | 3 min | 3 tasks | 2 files |
+| Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu P11-04 | 2m14s | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -234,6 +235,9 @@ Recent decisions affecting current work:
 - [Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu]: Chemin canonique deploiement: Docker Compose + Caddy via infra/scripts/deploy.sh
 - [Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu]: Contrat d'environnement reconcilie depuis plusieurs sources runtime/ops et pas uniquement .env.example
 - [Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu]: Verification post-deploiement exige smoke HTTPS + smoke authentifie + release:proof + logs compose
+- [Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu]: Le README_FR reste un portail court et renvoie vers les guides specialises sans duplication massive.
+- [Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu]: La checklist suit strictement release-proof/deploy/smokes comme sequence de controle executable.
+- [Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu]: Les hypotheses/limites operationnelles restent explicites dans les documents de cloture de phase.
 
 ### Roadmap Evolution
 
@@ -255,6 +259,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-10T11:12:13.550Z
-**Stopped At:** Completed 11-02-PLAN.md
+**Last Date:** 2026-03-10T11:17:24.163Z
+**Stopped At:** Completed 11-04-PLAN.md
 **Resume File:** None
