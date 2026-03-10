@@ -1,6 +1,7 @@
 # Checklist de deploiement et release (FR)
 
 Checklist operationnelle courte pour piloter une release sans reconstituer tout le runbook.
+Point d'entree documentaire: `README_FR.md`.
 
 References detaillees:
 - `GUIDE_INSTALLATION_VPS_UBUNTU_FR.md` (installation/deploiement complet)

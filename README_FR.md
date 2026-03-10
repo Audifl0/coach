@@ -43,6 +43,11 @@ Coach est une application web de coaching musculation personnalise qui couvre:
 | Construire/valider `.env.production` | `CONFIGURATION_ENVIRONNEMENT_FR.md` |
 | Piloter un deploiement/release pas-a-pas | `DEPLOIEMENT_CHECKLIST_FR.md` |
 
+Terminologie harmonisee de la phase 11:
+- "guide" = document explicatif detaille;
+- "checklist" = controle d'execution court;
+- "portail" = entree de navigation (ce README).
+
 ## Parcours de lecture recommande
 
 1. `README_FR.md` (ce portail)
