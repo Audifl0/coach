@@ -56,6 +56,8 @@ Each task was committed atomically:
 2. **Task 2: Formaliser les procedures critiques avec commandes, pre-requis et preuves attendues** - `7153029` (feat)
 3. **Task 3: Integrer la maintenance preventive et les limites d'exploitation reelles** - `4579f0a` (feat)
 
+**Plan metadata:** `911ea45` (docs)
+
 ## Files Created/Modified
 
 - `GUIDE_EXPLOITATION_MAINTENANCE_FR.md` - Guide unique d'exploitation/maintenance FR avec procedures critiques verifiables.
