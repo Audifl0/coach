@@ -6,15 +6,15 @@ current_phase: 10
 current_phase_name: maintainability cleanup and operational hardening
 current_plan: 3
 status: verifying
-stopped_at: Completed 11-03-PLAN.md
-last_updated: "2026-03-10T11:10:55.400Z"
+stopped_at: Completed 11-02-PLAN.md
+last_updated: "2026-03-10T11:12:13.554Z"
 last_activity: 2026-03-10
 progress:
   total_phases: 12
   completed_phases: 12
   total_plans: 61
-  completed_plans: 58
-  percent: 95
+  completed_plans: 60
+  percent: 98
 ---
 
 # Project State
@@ -36,7 +36,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Status:** Phase complete — ready for verification
 **Last Activity:** 2026-03-10
 **Last Activity Description:** Completed 10-01 typed seam cleanup and moved to plan 10-02
-**Progress:** [██████████] 95%
+**Progress:** [██████████] 98%
 
 ## Performance Metrics
 
@@ -79,6 +79,8 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 10-maintainability-cleanup-and-operational-hardening P10-02 | 15 min | 3 tasks | 16 files |
 | Phase 10-maintainability-cleanup-and-operational-hardening P10-03 | 5 min | 3 tasks | 11 files |
 | Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu P11-03 | 3 min | 3 tasks | 1 files |
+| Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu P11-01 | 2 min | 3 tasks | 2 files |
+| Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu P11-02 | 3 min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -228,6 +230,10 @@ Recent decisions affecting current work:
 - [Phase 10-maintainability-cleanup-and-operational-hardening]: Applied low-risk Caddy response headers with report-only frame-ancestors policy instead of strict blocking CSP.
 - [Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu]: Ancrer chaque procedure critique sur les scripts infra existants, sans flux parallele manuel.
 - [Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu]: Documenter explicitement l'hypothese de bootstrap du compte smoke faute d'automatisation dediee dans le depot.
+- [Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu]: Business behavior is documented as end-to-end scenarios tied to routes, services, and DAL modules.
+- [Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu]: Chemin canonique deploiement: Docker Compose + Caddy via infra/scripts/deploy.sh
+- [Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu]: Contrat d'environnement reconcilie depuis plusieurs sources runtime/ops et pas uniquement .env.example
+- [Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu]: Verification post-deploiement exige smoke HTTPS + smoke authentifie + release:proof + logs compose
 
 ### Roadmap Evolution
 
@@ -249,6 +255,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-10T11:10:55.397Z
-**Stopped At:** Completed 11-03-PLAN.md
+**Last Date:** 2026-03-10T11:12:13.550Z
+**Stopped At:** Completed 11-02-PLAN.md
 **Resume File:** None
