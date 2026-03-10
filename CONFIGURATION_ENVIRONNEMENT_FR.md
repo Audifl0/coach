@@ -140,6 +140,28 @@ rg -n "DATABASE_URL|BETTER_AUTH_SECRET|BETTER_AUTH_URL|APP_DOMAIN|ACME_EMAIL|POS
 corepack pnpm release:proof -- /opt/coach/.env.production
 ```
 
+## Sequence post-deploiement recommandee (preuves concretes)
+
+Utiliser les scripts deja supportes par le depot, dans cet ordre:
+
+```bash
+# 1) Reachability HTTPS
+infra/scripts/smoke-test-https.sh "https://${APP_DOMAIN}"
+
+# 2) Verification authentifiee + donnees metier
+node infra/scripts/smoke-authenticated-dashboard.mjs "https://${APP_DOMAIN}"
+
+# 3) Gate complet release
+corepack pnpm release:proof -- /opt/coach/.env.production
+
+# 4) Logs d'interpretation
+docker compose --env-file /opt/coach/.env.production logs --tail=100 app caddy
+```
+
+Limite locale: la verification `release:proof` n'est fiable que si le compte
+`OPS_SMOKE_*` est provisionne avec des donnees compatibles
+(`OPS_SMOKE_EXPECTED_FOCUS_LABEL`).
+
 ## Hypotheses et limites (visibles localement)
 
 - Hypothese: `ACME_EMAIL` est traitee comme obligatoire pour l'exploitation

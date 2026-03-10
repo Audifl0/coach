@@ -196,6 +196,9 @@ pas seulement sur reachability HTTPS.
 
 Hypothese locale critique: le compte `OPS_SMOKE_USERNAME` doit exister et disposer
 de donnees dashboard compatibles avec `OPS_SMOKE_EXPECTED_FOCUS_LABEL`.
+Limite locale: le script peut utiliser `RESTORE_DRILL_BASE_URL` dans d'autres
+contextes (restore drill), mais dans ce tutoriel de deploiement la reference est
+`https://${APP_DOMAIN}`.
 
 ## 9) Executer la preuve de release complete
 
@@ -213,6 +216,13 @@ Etapes attendues (ordre fixe):
 6. `==> authenticated_smoke`
 
 Resultat attendu final: `Release proof passed.`
+
+Scripts effectivement impliques dans cette preuve:
+
+- `infra/scripts/deploy.sh`
+- `infra/scripts/smoke-test-https.sh`
+- `infra/scripts/smoke-authenticated-dashboard.mjs`
+- `infra/scripts/release-proof.sh` (via `corepack pnpm release:proof`)
 
 ## 10) Procedure de mise a jour
 
