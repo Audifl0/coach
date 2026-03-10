@@ -6,15 +6,15 @@ current_phase: 10
 current_phase_name: maintainability cleanup and operational hardening
 current_plan: 3
 status: verifying
-stopped_at: Phase 11 context gathered
-last_updated: "2026-03-09T21:57:53.386Z"
-last_activity: 2026-03-09
+stopped_at: Completed 11-03-PLAN.md
+last_updated: "2026-03-10T11:10:55.400Z"
+last_activity: 2026-03-10
 progress:
   total_phases: 12
   completed_phases: 12
-  total_plans: 57
-  completed_plans: 57
-  percent: 100
+  total_plans: 61
+  completed_plans: 58
+  percent: 95
 ---
 
 # Project State
@@ -34,9 +34,9 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Plan:** 3
 **Total Plans in Phase:** 3
 **Status:** Phase complete — ready for verification
-**Last Activity:** 2026-03-09
+**Last Activity:** 2026-03-10
 **Last Activity Description:** Completed 10-01 typed seam cleanup and moved to plan 10-02
-**Progress:** [██████████] 100%
+**Progress:** [██████████] 95%
 
 ## Performance Metrics
 
@@ -78,6 +78,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 10-maintainability-cleanup-and-operational-hardening P10-01 | 16min | 3 tasks | 28 files |
 | Phase 10-maintainability-cleanup-and-operational-hardening P10-02 | 15 min | 3 tasks | 16 files |
 | Phase 10-maintainability-cleanup-and-operational-hardening P10-03 | 5 min | 3 tasks | 11 files |
+| Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu P11-03 | 3 min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -225,6 +226,8 @@ Recent decisions affecting current work:
 - [Phase 10-maintainability-cleanup-and-operational-hardening]: Kept src/lib/auth/admin-reset.ts service unchanged while hardening only CLI secret input handling.
 - [Phase 10-maintainability-cleanup-and-operational-hardening]: Switched backup/restore to streaming pg_dump|openssl and openssl -d|psql flows while preserving restore guardrails.
 - [Phase 10-maintainability-cleanup-and-operational-hardening]: Applied low-risk Caddy response headers with report-only frame-ancestors policy instead of strict blocking CSP.
+- [Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu]: Ancrer chaque procedure critique sur les scripts infra existants, sans flux parallele manuel.
+- [Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu]: Documenter explicitement l'hypothese de bootstrap du compte smoke faute d'automatisation dediee dans le depot.
 
 ### Roadmap Evolution
 
@@ -246,6 +249,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-09T21:57:53.367Z
-**Stopped At:** Phase 11 context gathered
-**Resume File:** .planning/phases/11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu/11-CONTEXT.md
+**Last Date:** 2026-03-10T11:10:55.397Z
+**Stopped At:** Completed 11-03-PLAN.md
+**Resume File:** None

@@ -184,3 +184,13 @@ Plans:
 
 Plans:
 - [x] TBD (run /gsd:plan-phase 10 to break down) (completed 2026-03-09)
+
+### Phase 11: Documentation complète en français et déploiement VPS Ubuntu
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 10
+**Plans:** 1/4 plans executed
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 11 to break down)
