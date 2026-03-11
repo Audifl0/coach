@@ -96,8 +96,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROF-02 | 2 | Complete |
 | PROF-03 | 2 | Complete |
 | PROF-04 | 2 | Complete |
-| PROG-01 | 3, 12 | Complete |
-| PROG-02 | 3, 12 | Complete |
+| PROG-01 | 3, 12, 15 | Complete |
+| PROG-02 | 3, 12, 15 | Complete |
 | PROG-03 | 3 | Complete |
 | LOG-01 | 4 | Complete |
 | LOG-02 | 4 | Complete |
@@ -107,8 +107,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ADAP-02 | 5, 05.1, 05.2, 08 | Complete |
 | ADAP-03 | 5, 05.1, 08 | Complete |
 | SAFE-01 | 5 | Complete |
-| SAFE-02 | 5, 05.2 | Complete |
-| SAFE-03 | 5, 05.1, 05.2, 08, 12 | Complete |
+| SAFE-02 | 5, 05.2, 15 | Complete |
+| SAFE-03 | 5, 05.1, 05.2, 08, 12, 15 | Complete |
 | DASH-01 | 3, 09 | Complete |
 | DASH-02 | 6, 09 | Complete |
 | DASH-03 | 5 | Complete |
@@ -123,4 +123,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-04*
-*Last updated: 2026-03-11 after Phase 12 planning traceability updates*
+*Last updated: 2026-03-11 after Phase 15 planning traceability updates*

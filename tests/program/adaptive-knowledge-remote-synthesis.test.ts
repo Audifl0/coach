@@ -55,6 +55,19 @@ test('openai corpus synthesis client parses source-synthesis payloads', async ()
       sdk: createSdkReturning({
         lotId: 'lot-guideline',
         recordIds: ['guideline-1'],
+        studyExtractions: [
+          {
+            recordId: 'guideline-1',
+            topicKeys: ['progression'],
+            population: 'recreational lifters',
+            intervention: 'progressive overload',
+            applicationContext: 'hypertrophy block',
+            outcomes: ['strength progression'],
+            evidenceSignals: ['guideline'],
+            limitations: ['context specific'],
+            safetySignals: ['conservative progression'],
+          },
+        ],
         retainedClaims: [
           {
             id: 'p_safe',
@@ -87,6 +100,7 @@ test('openai corpus synthesis client parses source-synthesis payloads', async ()
   });
 
   assert.equal(result.retainedClaims[0]?.id, 'p_safe');
+  assert.equal(result.studyExtractions[0]?.population, 'recreational lifters');
   assert.equal(result.modelRun.provider, 'openai');
 });
 
@@ -167,6 +181,17 @@ test('remote synthesis orchestration runs the two-step lot plus consolidation fl
       synthesizeLot: async (input) => ({
         lotId: input.lotId,
         recordIds: input.records.map((record) => record.id),
+        studyExtractions: input.records.map((record) => ({
+          recordId: record.id,
+          topicKeys: record.tags.slice(0, 1),
+          population: 'general population',
+          intervention: record.title,
+          applicationContext: 'program design',
+          outcomes: ['training adaptation'],
+          evidenceSignals: [record.sourceType],
+          limitations: [],
+          safetySignals: ['conservative progression'],
+        })),
         retainedClaims: [
           {
             id: `claim-${input.lotId}`,
@@ -203,6 +228,7 @@ test('remote synthesis orchestration runs the two-step lot plus consolidation fl
             confidence: 0.88,
           },
         ],
+        studyExtractions: input.batches.flatMap((batch) => batch.studyExtractions),
         rejectedClaims: [],
         coverage: {
           recordCount: input.records.length,
@@ -226,5 +252,6 @@ test('remote synthesis orchestration runs the two-step lot plus consolidation fl
 
   assert.equal(output.principles.length, 1);
   assert.equal(output.validatedSynthesis.coverage.batchCount, 2);
+  assert.equal(output.validatedSynthesis.studyExtractions.length, 2);
   assert.deepEqual(output.validatedSynthesis.modelRun.requestIds, ['req-lot-guideline', 'req-lot-review']);
 });

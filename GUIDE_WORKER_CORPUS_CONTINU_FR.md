@@ -176,6 +176,7 @@ Fallbacks supportes:
 
 - `LLM_OPENAI_API_KEY`
 - `LLM_OPENAI_MODEL`
+- `LLM_PRIMARY_TIMEOUT_MS`
 - `PIPELINE_REQUEST_TIMEOUT_MS`
 
 Recommandation pratique:
@@ -183,6 +184,18 @@ Recommandation pratique:
 - definir explicitement `ADAPTIVE_KNOWLEDGE_OPENAI_API_KEY`;
 - definir explicitement `ADAPTIVE_KNOWLEDGE_OPENAI_MODEL`;
 - garder `ADAPTIVE_KNOWLEDGE_OPENAI_PROMPT_VERSION=corpus-v1` sauf besoin de versionner un prompt.
+
+Detail des variables:
+
+| Variable | Obligatoire | Role | Valeur conseillee | Fallback | Impact si absente |
+| --- | --- | --- | --- | --- | --- |
+| `ADAPTIVE_KNOWLEDGE_OPENAI_API_KEY` | oui en pratique | cle API utilisee par la synthese distante du corpus | cle dediee OpenAI pour le worker | `LLM_OPENAI_API_KEY` | la synthese distante ne peut pas demarrer |
+| `ADAPTIVE_KNOWLEDGE_OPENAI_MODEL` | oui en pratique | modele OpenAI appele pour produire la synthese validee | `gpt-5-mini` | `LLM_OPENAI_MODEL` | la synthese distante ne peut pas demarrer |
+| `ADAPTIVE_KNOWLEDGE_OPENAI_TIMEOUT_MS` | non | timeout dedie aux appels OpenAI du worker | `12000` | `LLM_PRIMARY_TIMEOUT_MS`, puis `PIPELINE_REQUEST_TIMEOUT_MS`, puis `8000` | le worker retombe sur le fallback suivant |
+| `ADAPTIVE_KNOWLEDGE_OPENAI_PROMPT_VERSION` | non | version logique du prompt de synthese pour tracer les snapshots | `corpus-v1` | aucune | la valeur par defaut `corpus-v1` est utilisee |
+| `LLM_OPENAI_API_KEY` | non si variable worker definie | fallback de cle API partagee avec le runtime applicatif | laisser vide si tu utilises la variable worker dediee | aucune | seulement utile si la variable worker dediee manque |
+| `LLM_OPENAI_MODEL` | non si variable worker definie | fallback de modele partage avec le runtime applicatif | laisser vide si tu utilises la variable worker dediee | aucune | seulement utile si la variable worker dediee manque |
+| `LLM_PRIMARY_TIMEOUT_MS` | non | fallback de timeout issu de la stack LLM principale | `12000` | aucune | seulement utile si le timeout worker n'est pas defini |
 
 ### 5.2 Parametres pipeline
 
@@ -202,6 +215,19 @@ Defaults importants:
 - timeout par defaut: `8000`
 - retries pipeline par defaut: `2`
 - cron par defaut dans la config: `0 4 * * 1`
+
+Detail des variables:
+
+| Variable | Obligatoire | Role | Valeur conseillee | Default actuel | Impact si absente |
+| --- | --- | --- | --- | --- | --- |
+| `PIPELINE_ALLOWED_DOMAINS` | non | liste blanche de domaines acceptes par la discovery/ingestion | definir seulement si tu veux restreindre fortement les sources | politique interne par defaut | le pipeline garde sa politique de domaines par defaut |
+| `PIPELINE_FRESHNESS_WINDOW_DAYS` | non | fenetre de fraicheur pour privilegier les publications recentes | selon ta strategie corpus | valeur de code | la fenetre par defaut est utilisee |
+| `PIPELINE_BACKFILL_MAX_DAYS` | non | profondeur max du backfill historique | selon ton volume cible | valeur de code | le backfill reste borne par la valeur par defaut |
+| `PIPELINE_MAX_RETRIES` | non | nombre de tentatives sur les appels pipeline/connecteurs | `2` | `2` | le pipeline garde 2 tentatives |
+| `PIPELINE_REQUEST_TIMEOUT_MS` | non | timeout reseau des connecteurs et fallback final du timeout OpenAI worker | `8000` | `8000` | le pipeline garde 8000 ms |
+| `PIPELINE_MAX_QUERIES_PER_RUN` | non | borne de volume de requetes par run | `6` | valeur de code | le pipeline utilise sa borne par defaut |
+| `PIPELINE_SCHEDULE_CRON` | non | expression cron de cadence souhaitee | `0 3 * * 1` ou `0 4 * * 1` selon ton exploitation | `0 4 * * 1` | utile surtout pour la doc et l'exploitation, pas pour l'execution manuelle |
+| `PIPELINE_SCHEDULE_TIMEZONE` | non | fuseau de reference pour la cadence cron documentee/exploitee | `UTC` | valeur de code/config | le systeme garde son fuseau par defaut |
 
 ## 6. Cycle d'un run
 
@@ -305,6 +331,17 @@ PIPELINE_MAX_RETRIES=2
 PIPELINE_MAX_QUERIES_PER_RUN=6
 PIPELINE_SCHEDULE_TIMEZONE=UTC
 ```
+
+Correspondance rapide:
+
+- `ADAPTIVE_KNOWLEDGE_OPENAI_API_KEY`: cle OpenAI du worker corpus.
+- `ADAPTIVE_KNOWLEDGE_OPENAI_MODEL`: modele de synthese distante.
+- `ADAPTIVE_KNOWLEDGE_OPENAI_TIMEOUT_MS`: timeout des appels OpenAI du worker.
+- `ADAPTIVE_KNOWLEDGE_OPENAI_PROMPT_VERSION`: version du prompt de synthese, utile pour l'audit.
+- `PIPELINE_REQUEST_TIMEOUT_MS`: timeout reseau des connecteurs et fallback final pour OpenAI.
+- `PIPELINE_MAX_RETRIES`: nombre de retries sur les appels pipeline.
+- `PIPELINE_MAX_QUERIES_PER_RUN`: limite de volume par run.
+- `PIPELINE_SCHEDULE_TIMEZONE`: fuseau de reference pour la cadence cron.
 
 ### 9.4 Procedure VPS pas a pas
 

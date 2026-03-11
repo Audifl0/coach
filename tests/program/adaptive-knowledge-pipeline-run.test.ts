@@ -10,19 +10,24 @@ import { runAdaptiveKnowledgePipeline } from '../../scripts/adaptive-knowledge/p
 import { buildValidatedSynthesisFromPrinciples, synthesizeCorpusPrinciples } from '../../scripts/adaptive-knowledge/synthesis';
 
 function buildConnectorSuccess(source: 'pubmed' | 'crossref' | 'openalex'): ConnectorFetchResult {
+  const tagsBySource = {
+    pubmed: ['progression', 'fatigue-readiness'],
+    crossref: ['hypertrophy-dose', 'progression'],
+    openalex: ['limitations-pain', 'exercise-selection'],
+  } as const;
   return {
     source,
     skipped: false,
     records: [
       {
         id: `${source}-1`,
-        sourceType: 'review',
+        sourceType: source === 'pubmed' ? 'guideline' : source === 'crossref' ? 'review' : 'expertise',
         sourceUrl: `https://${source === 'openalex' ? 'openalex.org' : source === 'crossref' ? 'doi.org' : 'pubmed.ncbi.nlm.nih.gov'}/${source}-1`,
         sourceDomain: source === 'openalex' ? 'openalex.org' : source === 'crossref' ? 'doi.org' : 'pubmed.ncbi.nlm.nih.gov',
         publishedAt: '2025-11-02',
         title: `${source} title`,
         summaryEn: `${source} summary`,
-        tags: ['progression'],
+        tags: [...tagsBySource[source]],
         provenanceIds: [`${source}-1`],
       },
     ],
@@ -84,12 +89,29 @@ test('pipeline executes deterministic stage order and writes snapshot artifacts'
   const validated = (await loadJson(path.join(snapshotDir, 'validated-synthesis.json'))) as {
     principles: unknown[];
     modelRun: { provider: string };
+    studyExtractions: unknown[];
+  };
+  const structuredExtractions = (await loadJson(path.join(snapshotDir, 'study-extractions.json'))) as {
+    studyExtractions: unknown[];
   };
   const report = (await loadJson(path.join(snapshotDir, 'run-report.json'))) as {
     stageReports: Array<{ stage: string }>;
   };
   const sourcePayload = (await loadJson(path.join(snapshotDir, 'sources.json'))) as {
-    discoveryPlan: Array<{ query: string }>;
+    discoveryPlan: Array<{ query: string; topicKey: string; subtopicKey: string; queryFamily: string }>;
+    discovery: {
+      targetTopicKeys: string[];
+      coverageGaps: Array<{ topicKey: string; status: string }>;
+    };
+    ranking: {
+      evaluatedRecordCount: number;
+      selectedRecordCount: number;
+      rejectedRecordCount: number;
+      topRecordIds: string[];
+    };
+    selectedRecordIds: string[];
+    rejectedRecordIds: string[];
+    records: Array<{ id: string; ranking?: { compositeScore: number; selected: boolean; reasons: Array<{ code: string }> } }>;
   };
 
   assert.equal(result.candidateDir, path.join(outputRootDir, 'snapshots', 'run-order-test', 'candidate'));
@@ -98,7 +120,18 @@ test('pipeline executes deterministic stage order and writes snapshot artifacts'
   assert.equal(principles.principles.length >= 1, true);
   assert.equal(validated.principles.length >= 1, true);
   assert.equal(validated.modelRun.provider, 'deterministic');
+  assert.equal(Array.isArray(validated.studyExtractions), true);
+  assert.equal(Array.isArray(structuredExtractions.studyExtractions), true);
   assert.equal(sourcePayload.discoveryPlan.length >= 3, true);
+  assert.equal(sourcePayload.discoveryPlan.every((query) => query.topicKey.length > 0), true);
+  assert.equal(sourcePayload.discoveryPlan.every((query) => query.subtopicKey.length > 0), true);
+  assert.equal(sourcePayload.discoveryPlan.every((query) => query.queryFamily.length > 0), true);
+  assert.equal(sourcePayload.discovery.targetTopicKeys.length >= 1, true);
+  assert.equal(sourcePayload.discovery.coverageGaps.length >= 1, true);
+  assert.equal(sourcePayload.ranking.evaluatedRecordCount, 3);
+  assert.equal(sourcePayload.ranking.selectedRecordCount >= 1, true);
+  assert.equal(sourcePayload.selectedRecordIds.length >= 1, true);
+  assert.equal(sourcePayload.records.every((record) => typeof record.ranking?.compositeScore === 'number'), true);
   assert.deepEqual(
     report.stageReports.map((stage) => stage.stage),
     ['discover', 'ingest', 'synthesize', 'validate', 'publish'],
@@ -272,6 +305,30 @@ test('discovery plan stays deterministic for the same date/config input', async 
   });
 
   assert.equal(first.runReport.stageReports[0]?.message, second.runReport.stageReports[0]?.message);
+  assert.deepEqual(first.runReport.discovery, second.runReport.discovery);
+  assert.deepEqual(first.runReport.ranking, second.runReport.ranking);
+});
+
+test('run report exposes discovery topics and coverage gaps for operator telemetry', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+
+  const result = await runPipelineWithDeterministicSynthesis({
+    runId: 'run-discovery-telemetry',
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    outputRootDir,
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  assert.equal((result.runReport.discovery?.targetTopicKeys.length ?? 0) >= 1, true);
+  assert.equal((result.runReport.discovery?.coverageGaps.length ?? 0) >= 1, true);
+  assert.equal(
+    result.runReport.discovery?.coverageGaps.some((gap) => gap.status === 'partial' || gap.status === 'uncovered'),
+    true,
+  );
 });
 
 test('run dedupes duplicate evidence records across discovered topics', async () => {
@@ -294,6 +351,64 @@ test('run dedupes duplicate evidence records across discovered topics', async ()
   const uniqueIds = new Set(result.normalizedRecords.map((record) => record.id));
   assert.equal(result.normalizedRecords.length, uniqueIds.size);
   assert.equal(result.runReport.stageReports[1]?.message?.includes('deduped='), true);
+});
+
+test('ranking telemetry prioritizes higher-quality records before synthesis', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+
+  const result = await runPipelineWithDeterministicSynthesis({
+    runId: 'run-ranking-priority',
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    outputRootDir,
+    connectors: {
+      pubmed: async () => ({
+        ...buildConnectorSuccess('pubmed'),
+        records: [
+          {
+            ...buildConnectorSuccess('pubmed').records[0]!,
+            id: 'guideline-strong',
+            sourceType: 'guideline',
+            title: 'Comprehensive progression guideline',
+            summaryEn: 'Detailed guidance on progression, fatigue management, readiness, and safe adaptation.',
+            tags: ['progression', 'fatigue', 'readiness', 'limitations-pain'],
+          },
+        ],
+      }),
+      crossref: async () => ({
+        ...buildConnectorSuccess('crossref'),
+        records: [
+          {
+            ...buildConnectorSuccess('crossref').records[0]!,
+            id: 'expertise-weak',
+            sourceType: 'expertise',
+            publishedAt: '2020-01-01',
+            summaryEn: 'Short note.',
+            tags: ['progression'],
+          },
+        ],
+      }),
+      openalex: async () => ({
+        ...buildConnectorSuccess('openalex'),
+        records: [
+          {
+            ...buildConnectorSuccess('openalex').records[0]!,
+            id: 'review-mid',
+            sourceType: 'review',
+            tags: ['progression', 'fatigue-readiness'],
+          },
+        ],
+      }),
+    },
+  });
+
+  assert.equal((result.runReport.ranking?.selectedRecordCount ?? 0) >= 1, true);
+  assert.equal(result.normalizedRecords[0]?.ranking?.compositeScore >= result.normalizedRecords[2]?.ranking?.compositeScore!, true);
+  assert.equal(
+    result.normalizedRecords.some((record) =>
+      record.ranking?.reasons.some((reason) => reason.code === 'score_below_selection_threshold'),
+    ),
+    true,
+  );
 });
 
 test('rerun incremental cursor state is persisted and surfaced in run telemetry', async () => {

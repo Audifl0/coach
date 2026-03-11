@@ -12,6 +12,11 @@ import { evaluateCorpusQualityGate } from '../../scripts/adaptive-knowledge/qual
 import { buildValidatedSynthesisFromPrinciples, synthesizeCorpusPrinciples } from '../../scripts/adaptive-knowledge/synthesis';
 
 function buildConnectorSuccess(source: 'pubmed' | 'crossref' | 'openalex'): ConnectorFetchResult {
+  const tagsBySource = {
+    pubmed: ['progression', 'fatigue-readiness'],
+    crossref: ['hypertrophy-dose', 'progression'],
+    openalex: ['limitations-pain', 'exercise-selection'],
+  } as const;
   return {
     source,
     skipped: false,
@@ -24,7 +29,7 @@ function buildConnectorSuccess(source: 'pubmed' | 'crossref' | 'openalex'): Conn
         publishedAt: '2025-11-02',
         title: `${source} title`,
         summaryEn: `${source} summary`,
-        tags: ['progression'],
+        tags: [...tagsBySource[source]],
         provenanceIds: [`${source}-1`],
       },
     ],
@@ -145,6 +150,77 @@ test('quality gate emits deterministic reasons for observability', async () => {
   assert.equal(gate.publishable, false);
   assert.deepEqual(gate.reasons, ['score_below_threshold', 'critical_contradiction']);
   assert.equal(gate.criticalContradictions, 1);
+});
+
+test('quality gate blocks snapshots with insufficient thematic diversity', async () => {
+  const gate = evaluateCorpusQualityGate({
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    threshold: 0.2,
+    records: [
+      {
+        id: 'record-1',
+        sourceType: 'guideline',
+        sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/1/',
+        sourceDomain: 'pubmed.ncbi.nlm.nih.gov',
+        publishedAt: '2026-01-01',
+        title: 'Guideline',
+        summaryEn: 'Detailed guidance.',
+        tags: ['progression'],
+        provenanceIds: ['record-1'],
+      },
+      {
+        id: 'record-2',
+        sourceType: 'review',
+        sourceUrl: 'https://doi.org/2',
+        sourceDomain: 'doi.org',
+        publishedAt: '2026-01-02',
+        title: 'Review',
+        summaryEn: 'Detailed review.',
+        tags: ['progression'],
+        provenanceIds: ['record-2'],
+      },
+    ],
+    validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+      records: [
+        {
+          id: 'record-1',
+          sourceType: 'guideline',
+          sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/1/',
+          sourceDomain: 'pubmed.ncbi.nlm.nih.gov',
+          publishedAt: '2026-01-01',
+          title: 'Guideline',
+          summaryEn: 'Detailed guidance.',
+          tags: ['progression'],
+          provenanceIds: ['record-1'],
+        },
+        {
+          id: 'record-2',
+          sourceType: 'review',
+          sourceUrl: 'https://doi.org/2',
+          sourceDomain: 'doi.org',
+          publishedAt: '2026-01-02',
+          title: 'Review',
+          summaryEn: 'Detailed review.',
+          tags: ['progression'],
+          provenanceIds: ['record-2'],
+        },
+      ],
+      principles: [
+        {
+          id: 'p_safe',
+          title: 'Safe progression',
+          summaryFr: 'Conserver une progression prudente.',
+          guidanceFr: 'Monter progressivement.',
+          provenanceRecordIds: ['record-1', 'record-2'],
+          evidenceLevel: 'review',
+          guardrail: 'SAFE-03',
+        },
+      ],
+    }),
+  });
+
+  assert.equal(gate.publishable, false);
+  assert.equal(gate.reasons.includes('insufficient_topic_diversity'), true);
 });
 
 test('run report includes deterministic publish-block reason codes', async () => {

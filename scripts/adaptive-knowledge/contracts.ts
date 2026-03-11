@@ -6,6 +6,94 @@ const STAGE_STATUS_VALUES = ['succeeded', 'failed', 'skipped'] as const;
 const SYNTHESIS_PROVIDER_VALUES = ['openai', 'deterministic'] as const;
 const CONTRADICTION_SEVERITY_VALUES = ['low', 'medium', 'high', 'critical'] as const;
 const CONTRADICTION_RESOLUTION_VALUES = ['pending', 'retained', 'rejected'] as const;
+const DISCOVERY_GAP_STATUS_VALUES = ['covered', 'partial', 'uncovered'] as const;
+const RANKING_REASON_DIRECTION_VALUES = ['boost', 'penalty', 'reject'] as const;
+
+export const evidenceRankingReasonSchema = z
+  .object({
+    code: z.string().min(1),
+    direction: z.enum(RANKING_REASON_DIRECTION_VALUES),
+    detail: z.string().min(1),
+  })
+  .strict();
+
+export const evidenceScientificRankingSchema = z
+  .object({
+    compositeScore: z.number().min(0).max(1),
+    sourceTypeScore: z.number().min(0).max(1),
+    recencyScore: z.number().min(0).max(1),
+    richnessScore: z.number().min(0).max(1),
+    tagCoverageScore: z.number().min(0).max(1),
+    selected: z.boolean(),
+    reasons: z.array(evidenceRankingReasonSchema),
+  })
+  .strict();
+
+export const structuredStudyExtractionSchema = z
+  .object({
+    recordId: z.string().min(1),
+    topicKeys: z.array(z.string().min(1)).min(1),
+    population: z.string().min(1).optional(),
+    intervention: z.string().min(1).optional(),
+    applicationContext: z.string().min(1).optional(),
+    outcomes: z.array(z.string().min(1)),
+    evidenceSignals: z.array(z.string().min(1)),
+    limitations: z.array(z.string().min(1)),
+    safetySignals: z.array(z.string().min(1)),
+    rejectionReason: z
+      .object({
+        code: z.string().min(1),
+        reason: z.string().min(1),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+export const adaptiveKnowledgeRankingTelemetrySchema = z
+  .object({
+    evaluatedRecordCount: z.number().int().nonnegative(),
+    selectedRecordCount: z.number().int().nonnegative(),
+    rejectedRecordCount: z.number().int().nonnegative(),
+    topRecordIds: z.array(z.string().min(1)),
+    rejectionCodes: z.array(z.string().min(1)),
+  })
+  .strict();
+
+export const adaptiveKnowledgeDiscoveryQuerySchema = z
+  .object({
+    source: z.enum(['pubmed', 'crossref', 'openalex']),
+    query: z.string().min(1),
+    topicKey: z.string().min(1),
+    topicLabel: z.string().min(1),
+    subtopicKey: z.string().min(1),
+    subtopicLabel: z.string().min(1),
+    queryFamily: z.string().min(1),
+    priority: z.number().int().positive(),
+    targetPopulation: z.string().min(1).nullable().optional(),
+  })
+  .strict();
+
+export const adaptiveKnowledgeCoverageGapSchema = z
+  .object({
+    topicKey: z.string().min(1),
+    topicLabel: z.string().min(1),
+    targetQueryCount: z.number().int().nonnegative(),
+    servedQueryCount: z.number().int().nonnegative(),
+    fetchedRecordCount: z.number().int().nonnegative(),
+    normalizedRecordCount: z.number().int().nonnegative(),
+    status: z.enum(DISCOVERY_GAP_STATUS_VALUES),
+  })
+  .strict();
+
+export const adaptiveKnowledgeDiscoveryTelemetrySchema = z
+  .object({
+    targetTopicKeys: z.array(z.string().min(1)).min(1),
+    targetTopicLabels: z.array(z.string().min(1)).min(1),
+    totalQueries: z.number().int().nonnegative(),
+    coverageGaps: z.array(adaptiveKnowledgeCoverageGapSchema),
+  })
+  .strict();
 
 export const normalizedEvidenceRecordSchema = z
   .object({
@@ -18,6 +106,7 @@ export const normalizedEvidenceRecordSchema = z
     summaryEn: z.string().min(1),
     tags: z.array(z.string().min(1)).min(1),
     provenanceIds: z.array(z.string().min(1)).min(1),
+    ranking: evidenceScientificRankingSchema.optional(),
   })
   .strict();
 
@@ -69,6 +158,7 @@ export const sourceSynthesisBatchSchema = z
   .object({
     lotId: z.string().min(1),
     recordIds: z.array(z.string().min(1)).min(1),
+    studyExtractions: z.array(structuredStudyExtractionSchema),
     retainedClaims: z.array(corpusPrincipleSchema),
     rejectedClaims: z.array(rejectedSynthesisClaimSchema),
     coverageTags: z.array(z.string().min(1)),
@@ -80,6 +170,7 @@ export const sourceSynthesisBatchSchema = z
 export const validatedSynthesisSchema = z
   .object({
     principles: z.array(corpusPrincipleSchema),
+    studyExtractions: z.array(structuredStudyExtractionSchema),
     rejectedClaims: z.array(rejectedSynthesisClaimSchema),
     coverage: z
       .object({
@@ -109,6 +200,7 @@ const artifactPointerSchema = z
     principlesPath: z.string().min(1),
     reportPath: z.string().min(1),
     validatedSynthesisPath: z.string().min(1).optional(),
+    studyExtractionsPath: z.string().min(1).optional(),
   })
   .strict();
 
@@ -134,6 +226,8 @@ export const corpusRunReportSchema = z
     completedAt: z.string().datetime(),
     snapshotId: z.string().min(1),
     stageReports: z.array(stageReportSchema).min(1),
+    discovery: adaptiveKnowledgeDiscoveryTelemetrySchema.optional(),
+    ranking: adaptiveKnowledgeRankingTelemetrySchema.optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -164,6 +258,13 @@ export const corpusRunReportSchema = z
   });
 
 export type NormalizedEvidenceRecord = z.infer<typeof normalizedEvidenceRecordSchema>;
+export type AdaptiveKnowledgeDiscoveryQuery = z.infer<typeof adaptiveKnowledgeDiscoveryQuerySchema>;
+export type AdaptiveKnowledgeCoverageGap = z.infer<typeof adaptiveKnowledgeCoverageGapSchema>;
+export type AdaptiveKnowledgeDiscoveryTelemetry = z.infer<typeof adaptiveKnowledgeDiscoveryTelemetrySchema>;
+export type EvidenceRankingReason = z.infer<typeof evidenceRankingReasonSchema>;
+export type EvidenceScientificRanking = z.infer<typeof evidenceScientificRankingSchema>;
+export type StructuredStudyExtraction = z.infer<typeof structuredStudyExtractionSchema>;
+export type AdaptiveKnowledgeRankingTelemetry = z.infer<typeof adaptiveKnowledgeRankingTelemetrySchema>;
 export type CorpusPrinciple = z.infer<typeof corpusPrincipleSchema>;
 export type SynthesisRunMetadata = z.infer<typeof synthesisRunMetadataSchema>;
 export type RejectedSynthesisClaim = z.infer<typeof rejectedSynthesisClaimSchema>;
@@ -175,6 +276,26 @@ export type CorpusSnapshotManifest = z.infer<typeof corpusSnapshotManifestSchema
 
 export function parseNormalizedEvidenceRecord(input: unknown): NormalizedEvidenceRecord {
   return normalizedEvidenceRecordSchema.parse(input);
+}
+
+export function parseAdaptiveKnowledgeDiscoveryQuery(input: unknown): AdaptiveKnowledgeDiscoveryQuery {
+  return adaptiveKnowledgeDiscoveryQuerySchema.parse(input);
+}
+
+export function parseAdaptiveKnowledgeCoverageGap(input: unknown): AdaptiveKnowledgeCoverageGap {
+  return adaptiveKnowledgeCoverageGapSchema.parse(input);
+}
+
+export function parseAdaptiveKnowledgeDiscoveryTelemetry(input: unknown): AdaptiveKnowledgeDiscoveryTelemetry {
+  return adaptiveKnowledgeDiscoveryTelemetrySchema.parse(input);
+}
+
+export function parseEvidenceScientificRanking(input: unknown): EvidenceScientificRanking {
+  return evidenceScientificRankingSchema.parse(input);
+}
+
+export function parseAdaptiveKnowledgeRankingTelemetry(input: unknown): AdaptiveKnowledgeRankingTelemetry {
+  return adaptiveKnowledgeRankingTelemetrySchema.parse(input);
 }
 
 export function parseCorpusPrinciple(input: unknown): CorpusPrinciple {

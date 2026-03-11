@@ -251,3 +251,22 @@ Plans:
 - Le dashboard expose le dernier run, les stages, les compteurs d'ingestion, les motifs d'echec et l'etat du snapshot actif.
 - Les deltas entre snapshots et la freshness de la knowledge bible sont consultables depuis le web.
 - Les degradations critiques du worker sont visibles rapidement et distinguent clairement fallback, echec et succes partiel.
+
+### Phase 15: Qualite scientifique du worker corpus
+
+**Goal:** Renforcer fortement la qualite scientifique du worker corpus en ameliorant la discovery, le ranking des evidences, l'extraction structuree par etude et les quality gates de couverture/diversite avant publication.
+**Requirements**: PROG-01, PROG-02, SAFE-02, SAFE-03
+**Depends on:** Phase 14
+**Plans:** 4/4 plans complete
+
+Plans:
+- [x] 15-01-PLAN.md - Discovery taxonomique bornee, coverage targets et telemetry de gaps
+- [x] 15-02-PLAN.md - Ranking scientifique explicable, priorisation des records et motifs de declassement
+- [x] 15-03-PLAN.md - Extraction structuree par etude, artefact intermediaire et consolidation enrichie
+- [x] 15-04-PLAN.md - Quality gates couverture/diversite/solidite, publish blocking et reverification runtime
+
+**Success Criteria (observable):**
+- Le worker couvre plus largement et plus finement les themes sport/musculation pertinents sans se limiter a quelques seeds fixes.
+- Les snapshots publies privilegient des evidences mieux classees, mieux contextualisees et mieux reliees aux principes retenus.
+- La synthese s'appuie sur une extraction structuree par etude ou lot avant consolidation finale, avec traces d'exclusion explicites.
+- Un snapshot scientifiquement pauvre, peu diversifie ou insuffisamment couvert ne peut pas etre promu vers la bible active.

@@ -5,6 +5,8 @@ export type QualityGateReason =
   | 'critical_contradiction'
   | 'insufficient_provenance'
   | 'insufficient_coverage'
+  | 'insufficient_topic_diversity'
+  | 'insufficient_source_diversity'
   | 'unresolved_contradiction';
 
 export type QualityGateContradiction = {
@@ -128,6 +130,24 @@ function hasInsufficientCoverage(records: NormalizedEvidenceRecord[], validatedS
   return validatedSynthesis.principles.length < 1;
 }
 
+function hasInsufficientTopicDiversity(records: NormalizedEvidenceRecord[], validatedSynthesis: ValidatedSynthesis | undefined): boolean {
+  if (!validatedSynthesis || records.length < 2) {
+    return false;
+  }
+
+  return new Set(validatedSynthesis.coverage.coveredTags).size < 2;
+}
+
+function hasInsufficientSourceDiversity(records: NormalizedEvidenceRecord[], validatedSynthesis: ValidatedSynthesis | undefined): boolean {
+  if (!validatedSynthesis || records.length < 3) {
+    return false;
+  }
+
+  const sourceTypeCount = new Set(records.map((record) => record.sourceType)).size;
+  const sourceDomainCount = new Set(validatedSynthesis.coverage.sourceDomains).size;
+  return sourceTypeCount < 2 || sourceDomainCount < 2;
+}
+
 function countCriticalContradictions(
   inputCritical: QualityGateContradiction[] | undefined,
   validatedSynthesis: ValidatedSynthesis | undefined,
@@ -162,6 +182,12 @@ export function evaluateCorpusQualityGate(input: EvaluateCorpusQualityGateInput)
   }
   if (hasInsufficientCoverage(input.records, input.validatedSynthesis)) {
     reasons.push('insufficient_coverage');
+  }
+  if (hasInsufficientTopicDiversity(input.records, input.validatedSynthesis)) {
+    reasons.push('insufficient_topic_diversity');
+  }
+  if (hasInsufficientSourceDiversity(input.records, input.validatedSynthesis)) {
+    reasons.push('insufficient_source_diversity');
   }
   if (hasMissingProvenance(input.records, input.validatedSynthesis)) {
     reasons.push('insufficient_provenance');

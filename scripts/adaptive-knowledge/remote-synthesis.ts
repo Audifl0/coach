@@ -177,13 +177,57 @@ function buildSourceSynthesisSchema() {
   return {
     type: 'object',
     additionalProperties: false,
-    required: ['lotId', 'recordIds', 'retainedClaims', 'rejectedClaims', 'coverageTags', 'contradictions', 'modelRun'],
+    required: ['lotId', 'recordIds', 'studyExtractions', 'retainedClaims', 'rejectedClaims', 'coverageTags', 'contradictions', 'modelRun'],
     properties: {
       lotId: { type: 'string', minLength: 1 },
       recordIds: {
         type: 'array',
         minItems: 1,
         items: { type: 'string', minLength: 1 },
+      },
+      studyExtractions: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['recordId', 'topicKeys', 'outcomes', 'evidenceSignals', 'limitations', 'safetySignals'],
+          properties: {
+            recordId: { type: 'string', minLength: 1 },
+            topicKeys: {
+              type: 'array',
+              minItems: 1,
+              items: { type: 'string', minLength: 1 },
+            },
+            population: { type: 'string' },
+            intervention: { type: 'string' },
+            applicationContext: { type: 'string' },
+            outcomes: {
+              type: 'array',
+              items: { type: 'string', minLength: 1 },
+            },
+            evidenceSignals: {
+              type: 'array',
+              items: { type: 'string', minLength: 1 },
+            },
+            limitations: {
+              type: 'array',
+              items: { type: 'string', minLength: 1 },
+            },
+            safetySignals: {
+              type: 'array',
+              items: { type: 'string', minLength: 1 },
+            },
+            rejectionReason: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['code', 'reason'],
+              properties: {
+                code: { type: 'string', minLength: 1 },
+                reason: { type: 'string', minLength: 1 },
+              },
+            },
+          },
+        },
       },
       retainedClaims: {
         type: 'array',
@@ -264,9 +308,10 @@ function buildValidatedSynthesisSchema() {
   return {
     type: 'object',
     additionalProperties: false,
-    required: ['principles', 'rejectedClaims', 'coverage', 'contradictions', 'modelRun'],
+    required: ['principles', 'studyExtractions', 'rejectedClaims', 'coverage', 'contradictions', 'modelRun'],
     properties: {
       principles: buildSourceSynthesisSchema().properties.retainedClaims,
+      studyExtractions: buildSourceSynthesisSchema().properties.studyExtractions,
       rejectedClaims: buildSourceSynthesisSchema().properties.rejectedClaims,
       coverage: {
         type: 'object',
@@ -406,11 +451,11 @@ export function createOpenAiCorpusSynthesisClient(
         schema: buildSourceSynthesisSchema(),
         parse: parseSourceSynthesisBatch,
         systemPrompt:
-          'You synthesize sports-science evidence into conservative, auditable JSON. Keep claims compact, traceable, and safety-first.',
+          'You extract structured sports-science evidence and compact safety-first claims into auditable JSON. Keep outputs traceable and conservative.',
         userPrompt:
           `Prompt version: ${promptVersion}\n` +
           `Lot id: ${input.lotId}\n` +
-          'Return French runtime claims grounded only in the provided records. Reject unsupported or redundant material.\n' +
+          'First extract per-study structure (population, intervention, outcomes, safety signals, limitations), then return French runtime claims grounded only in the provided records. Reject unsupported or redundant material.\n' +
           `Records:\n${buildLotPayload(input.records)}`,
       });
     },
@@ -423,11 +468,12 @@ export function createOpenAiCorpusSynthesisClient(
         schema: buildValidatedSynthesisSchema(),
         parse: parseValidatedSynthesis,
         systemPrompt:
-          'You consolidate previously synthesized sports-science claims into a compact, conservative, auditable JSON artifact for a training-program knowledge bible.',
+          'You consolidate previously extracted sports-science evidence into a compact, conservative, auditable JSON artifact for a training-program knowledge bible.',
         userPrompt:
           `Prompt version: ${promptVersion}\n` +
           `Run id: ${input.runId}\n` +
           `Source records: ${input.records.length}\n` +
+          'Use the structured study extractions as the primary source of truth for retained principles and rejected material.\n' +
           `Batches:\n${JSON.stringify(input.batches, null, 2)}`,
       });
     },

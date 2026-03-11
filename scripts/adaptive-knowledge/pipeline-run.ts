@@ -3,9 +3,16 @@ import path from 'node:path';
 
 import { parseAdaptiveKnowledgePipelineConfig } from './config';
 import {
+  parseAdaptiveKnowledgeRankingTelemetry,
+  parseAdaptiveKnowledgeCoverageGap,
+  parseAdaptiveKnowledgeDiscoveryTelemetry,
   parseCorpusPrinciple,
   parseCorpusRunReport,
   parseCorpusSnapshotManifest,
+  type AdaptiveKnowledgeCoverageGap,
+  type AdaptiveKnowledgeDiscoveryQuery,
+  type AdaptiveKnowledgeDiscoveryTelemetry,
+  type AdaptiveKnowledgeRankingTelemetry,
   type CorpusSnapshotManifest,
   type CorpusPrinciple,
   type CorpusRunReport,
@@ -32,6 +39,7 @@ import { curateAdaptiveKnowledgeBible } from './curation';
 import { createConfiguredOpenAiCorpusSynthesisClient, CorpusRemoteSynthesisError } from './remote-synthesis';
 import {
   buildValidatedSynthesisFromPrinciples,
+  rankEvidenceRecords,
   synthesizeCorpusPrinciples,
   synthesizeCorpusWithRemoteModel,
   type CorpusSynthesisOutput,
@@ -118,6 +126,57 @@ function deterministicRunId(now: Date): string {
   return now.toISOString().replace(/[:.]/g, '-');
 }
 
+function buildDiscoveryTelemetry(input: {
+  discoveryPlan: AdaptiveKnowledgeDiscoveryQuery[];
+  sourceResults: ConnectorFetchResult[];
+  normalizedRecords: NormalizedEvidenceRecord[];
+}): AdaptiveKnowledgeDiscoveryTelemetry {
+  const fetchedByTopic = new Map<string, number>();
+  const normalizedByTopic = new Map<string, number>();
+  const groupedQueries = new Map<string, AdaptiveKnowledgeDiscoveryQuery[]>();
+
+  input.discoveryPlan.forEach((query, index) => {
+    const fetched = input.sourceResults[index]?.records.length ?? 0;
+    fetchedByTopic.set(query.topicKey, (fetchedByTopic.get(query.topicKey) ?? 0) + fetched);
+    const existing = groupedQueries.get(query.topicKey);
+    if (existing) {
+      existing.push(query);
+    } else {
+      groupedQueries.set(query.topicKey, [query]);
+    }
+  });
+
+  for (const record of input.normalizedRecords) {
+    for (const tag of record.tags) {
+      normalizedByTopic.set(tag, (normalizedByTopic.get(tag) ?? 0) + 1);
+    }
+  }
+
+  const coverageGaps: AdaptiveKnowledgeCoverageGap[] = [...groupedQueries.entries()].map(([topicKey, queries]) => {
+    const normalizedRecordCount = normalizedByTopic.get(topicKey) ?? 0;
+    const fetchedRecordCount = fetchedByTopic.get(topicKey) ?? 0;
+    const status: AdaptiveKnowledgeCoverageGap['status'] =
+      normalizedRecordCount >= queries.length ? 'covered' : normalizedRecordCount > 0 || fetchedRecordCount > 0 ? 'partial' : 'uncovered';
+
+    return parseAdaptiveKnowledgeCoverageGap({
+      topicKey,
+      topicLabel: queries[0]?.topicLabel ?? topicKey,
+      targetQueryCount: queries.length,
+      servedQueryCount: queries.length,
+      fetchedRecordCount,
+      normalizedRecordCount,
+      status,
+    });
+  });
+
+  return parseAdaptiveKnowledgeDiscoveryTelemetry({
+    targetTopicKeys: [...new Set(input.discoveryPlan.map((query) => query.topicKey))],
+    targetTopicLabels: [...new Set(input.discoveryPlan.map((query) => query.topicLabel))],
+    totalQueries: input.discoveryPlan.length,
+    coverageGaps: coverageGaps.sort((left, right) => left.topicKey.localeCompare(right.topicKey)),
+  });
+}
+
 async function loadCursorState(outputRootDir: string): Promise<{ seenRecordIds: string[] }> {
   try {
     const raw = await readFile(path.join(outputRootDir, 'connector-state.json'), 'utf8');
@@ -187,12 +246,6 @@ export async function runAdaptiveKnowledgePipeline(
 
   const stageReports: PipelineStage[] = [];
 
-  stageReports.push({
-    stage: 'discover',
-    status: 'succeeded',
-    message: `discovered=${discoveryPlan.length}; maxQueries=${config.maxQueriesPerRun}`,
-  });
-
   const sourceResults = await Promise.all(
     discoveryPlan.map(async (source) => {
       const connector = connectors[source.source];
@@ -214,16 +267,35 @@ export async function runAdaptiveKnowledgePipeline(
     (record) => !cursorState.seenRecordIds.includes(record.id),
   );
   const normalizedRecords = dedupeNormalizedEvidenceRecords(incrementalFilteredRecords);
+  const discoveryTelemetry = buildDiscoveryTelemetry({
+    discoveryPlan,
+    sourceResults,
+    normalizedRecords,
+  });
+  const rankingSelection = rankEvidenceRecords(normalizedRecords, now);
+  const rankedRecords = rankingSelection.scoredRecords;
+  const recordsForSynthesis = rankingSelection.selectedRecords.length > 0 ? rankingSelection.selectedRecords : rankedRecords;
+  const rankingTelemetry: AdaptiveKnowledgeRankingTelemetry = parseAdaptiveKnowledgeRankingTelemetry(
+    rankingSelection.telemetry,
+  );
   const dedupedRecords = incrementalFilteredRecords.length - normalizedRecords.length;
   const incrementalSkipped = rawNormalizedRecords.length - incrementalFilteredRecords.length;
   const fetchedRecords = sourceResults.reduce((total, source) => total + source.recordsFetched, 0);
   const skippedRecords = sourceResults.reduce((total, source) => total + source.recordsSkipped, 0);
   stageReports.push({
+    stage: 'discover',
+    status: 'succeeded',
+    message:
+      `discovered=${discoveryPlan.length}; maxQueries=${config.maxQueriesPerRun}; ` +
+      `topics=${discoveryTelemetry.targetTopicKeys.join(',')}; ` +
+      `gaps=${discoveryTelemetry.coverageGaps.filter((gap) => gap.status !== 'covered').length}`,
+  });
+  stageReports.push({
     stage: 'ingest',
     status: 'succeeded',
     message:
       `sources=${sourceResults.length}; skippedSources=${skippedSources}; ` +
-      `fetched=${fetchedRecords}; incrementalSkipped=${incrementalSkipped}; deduped=${dedupedRecords}; skipped=${skippedRecords}; normalized=${normalizedRecords.length}`,
+      `fetched=${fetchedRecords}; incrementalSkipped=${incrementalSkipped}; deduped=${dedupedRecords}; skipped=${skippedRecords}; normalized=${normalizedRecords.length}; selected=${rankingTelemetry.selectedRecordCount}; rejected=${rankingTelemetry.rejectedRecordCount}`,
   });
 
   let principles: CorpusPrinciple[] = [];
@@ -241,7 +313,7 @@ export async function runAdaptiveKnowledgePipeline(
     criticalContradictions: input.qualityGateOverrides?.criticalContradictions,
   });
   try {
-    const synthesisResult = normalizeSynthesisResult(normalizedRecords, await Promise.resolve(synthesize(normalizedRecords)));
+    const synthesisResult = normalizeSynthesisResult(recordsForSynthesis, await Promise.resolve(synthesize(recordsForSynthesis)));
     principles = synthesisResult.principles;
     validatedSynthesis = synthesisResult.validatedSynthesis;
     stageReports.push({
@@ -303,6 +375,8 @@ export async function runAdaptiveKnowledgePipeline(
     completedAt: new Date(now.getTime() + 1_000).toISOString(),
     snapshotId: runId,
     stageReports,
+    discovery: discoveryTelemetry,
+    ranking: rankingTelemetry,
   });
 
   manifest = parseCorpusSnapshotManifest({
@@ -320,6 +394,7 @@ export async function runAdaptiveKnowledgePipeline(
       principlesPath: path.join('snapshots', runId, 'candidate', 'principles.json'),
       reportPath: path.join('snapshots', runId, 'candidate', 'run-report.json'),
       validatedSynthesisPath: path.join('snapshots', runId, 'candidate', 'validated-synthesis.json'),
+      studyExtractionsPath: path.join('snapshots', runId, 'candidate', 'study-extractions.json'),
     },
   });
   const previousManifest = await loadPreviousManifest(outputRootDir);
@@ -341,8 +416,25 @@ export async function runAdaptiveKnowledgePipeline(
         runId,
         generatedAt: now.toISOString(),
         discoveryPlan,
+        discovery: discoveryTelemetry,
+        ranking: rankingTelemetry,
+        selectedRecordIds: recordsForSynthesis.map((record) => record.id),
+        rejectedRecordIds: rankingSelection.rejectedRecords.map((record) => record.id),
         sources: sourceResults,
-        records: normalizedRecords,
+        records: rankedRecords,
+      },
+      null,
+      2,
+    ) + '\n',
+    'utf8',
+  );
+  await writeFile(
+    path.join(candidateDir, 'study-extractions.json'),
+    JSON.stringify(
+      {
+        runId,
+        generatedAt: now.toISOString(),
+        studyExtractions: validatedSynthesis.studyExtractions,
       },
       null,
       2,
@@ -439,7 +531,7 @@ export async function runAdaptiveKnowledgePipeline(
     runId,
     candidateDir,
     sources: sourceResults,
-    normalizedRecords,
+    normalizedRecords: rankedRecords,
     principles,
     validatedSynthesis,
     runReport,
