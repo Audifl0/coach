@@ -369,6 +369,7 @@ test('today workout card keeps business empty state separate from loader error s
   const errorHtml = renderToStaticMarkup(React.createElement(TodayWorkoutCard, { loadState: 'error' }));
 
   assert.match(emptyHtml, /Aucune seance planifiee pour le moment\./);
+  assert.match(emptyHtml, /Generer mon programme/);
   assert.doesNotMatch(emptyHtml, /Impossible de charger la seance du jour\./);
   assert.match(errorHtml, /Impossible de charger la seance du jour\./);
   assert.doesNotMatch(errorHtml, /Aucune seance planifiee pour le moment\./);

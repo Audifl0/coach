@@ -14,7 +14,7 @@ type ProfileFormMode = 'onboarding' | 'edit';
 type ProfileFormProps = {
   mode: ProfileFormMode;
   initialValue: ProfileInput;
-  onSuccess?: (profile: ProfileInput) => void;
+  onSuccess?: (profile: ProfileInput) => void | Promise<void>;
 };
 
 type FormState = {
@@ -70,8 +70,18 @@ export function ProfileForm({ mode, initialValue, onSuccess }: ProfileFormProps)
         return;
       }
 
+      try {
+        await onSuccess?.(body.profile);
+      } catch (error) {
+        setState({
+          pending: false,
+          error: error instanceof Error ? error.message : 'Follow-up action failed.',
+          success: null,
+        });
+        return;
+      }
+
       setState({ pending: false, error: null, success: 'Profile saved.' });
-      onSuccess?.(body.profile);
     } catch {
       setState({ pending: false, error: 'Network error. Please retry.', success: null });
     }

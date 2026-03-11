@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 
 import { ProfileForm } from '@/components/profile/profile-form';
 import type { ProfileInput } from '@/lib/profile/contracts';
+import { requestProgramGeneration } from '@/lib/program/generation-client';
 
 const defaultProfile: ProfileInput = {
   goal: 'hypertrophy',
@@ -64,7 +65,17 @@ export default function OnboardingPage() {
         key={JSON.stringify(profile)}
         mode="onboarding"
         initialValue={profile}
-        onSuccess={() => {
+        onSuccess={async () => {
+          try {
+            await requestProgramGeneration();
+          } catch (error) {
+            throw new Error(
+              error instanceof Error
+                ? `Profile saved, but initial program generation failed: ${error.message}`
+                : 'Profile saved, but initial program generation failed.',
+            );
+          }
+
           router.replace('/dashboard');
           router.refresh();
         }}

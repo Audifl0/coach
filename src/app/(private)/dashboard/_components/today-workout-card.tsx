@@ -8,6 +8,7 @@ import {
   type ProgramSessionSummary,
   type ProgramTodayResponse,
 } from '@/lib/program/contracts';
+import { requestProgramGeneration } from '@/lib/program/generation-client';
 import { SessionLogger } from './session-logger';
 
 type TodayWorkoutCardProps =
@@ -67,15 +68,34 @@ export function TodayWorkoutCard(props: TodayWorkoutCardProps) {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [detailSession, setDetailSession] = useState<ProgramSessionDetailResponse['session'] | null>(null);
+  const [generationPending, setGenerationPending] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   const { session, mode } = resolveDisplayedSession(data);
   const actionLabel = getPrimaryActionLabel(data.primaryAction);
 
   if (!session) {
+    async function handleGenerateProgram() {
+      try {
+        setGenerationPending(true);
+        setGenerationError(null);
+        await requestProgramGeneration();
+        window.location.reload();
+      } catch (error) {
+        setGenerationError(error instanceof Error ? error.message : 'Impossible de generer le programme.');
+      } finally {
+        setGenerationPending(false);
+      }
+    }
+
     return (
       <section aria-label="today-workout-card">
         <h2>Seance du jour</h2>
         <p>Aucune seance planifiee pour le moment.</p>
+        <button type="button" onClick={handleGenerateProgram} disabled={generationPending}>
+          {generationPending ? 'Generation du programme...' : 'Generer mon programme'}
+        </button>
+        {generationError ? <p role="alert">{generationError}</p> : null}
       </section>
     );
   }
