@@ -10,6 +10,16 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      ADAPTIVE_KNOWLEDGE_OPENAI_API_KEY: ${ADAPTIVE_KNOWLEDGE_OPENAI_API_KEY:-}
+      ADAPTIVE_KNOWLEDGE_OPENAI_MODEL: ${ADAPTIVE_KNOWLEDGE_OPENAI_MODEL:-}
+      ADAPTIVE_KNOWLEDGE_OPENAI_TIMEOUT_MS: ${ADAPTIVE_KNOWLEDGE_OPENAI_TIMEOUT_MS:-}
+      ADAPTIVE_KNOWLEDGE_OPENAI_PROMPT_VERSION: ${ADAPTIVE_KNOWLEDGE_OPENAI_PROMPT_VERSION:-}
+      PIPELINE_ALLOWED_DOMAINS: ${PIPELINE_ALLOWED_DOMAINS:-}
+      PIPELINE_FRESHNESS_WINDOW_DAYS: ${PIPELINE_FRESHNESS_WINDOW_DAYS:-}
+      PIPELINE_BACKFILL_MAX_DAYS: ${PIPELINE_BACKFILL_MAX_DAYS:-}
+      PIPELINE_MAX_RETRIES: ${PIPELINE_MAX_RETRIES:-}
+      PIPELINE_REQUEST_TIMEOUT_MS: ${PIPELINE_REQUEST_TIMEOUT_MS:-}
+      PIPELINE_MAX_QUERIES_PER_RUN: ${PIPELINE_MAX_QUERIES_PER_RUN:-}
     depends_on:
       db:
         condition: service_healthy
@@ -29,6 +39,32 @@ services:
       - backend
     ports:
       - "${APP_HOST_BIND:-127.0.0.1}:${APP_HOST_PORT:-3002}:3000"
+    volumes:
+      - adaptive_knowledge_data:/app/.planning/knowledge/adaptive-coaching
+
+  worker:
+    profiles:
+      - worker
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: "no"
+    environment:
+      NODE_ENV: production
+      ADAPTIVE_KNOWLEDGE_OPENAI_API_KEY: ${ADAPTIVE_KNOWLEDGE_OPENAI_API_KEY:-}
+      ADAPTIVE_KNOWLEDGE_OPENAI_MODEL: ${ADAPTIVE_KNOWLEDGE_OPENAI_MODEL:-}
+      ADAPTIVE_KNOWLEDGE_OPENAI_TIMEOUT_MS: ${ADAPTIVE_KNOWLEDGE_OPENAI_TIMEOUT_MS:-}
+      ADAPTIVE_KNOWLEDGE_OPENAI_PROMPT_VERSION: ${ADAPTIVE_KNOWLEDGE_OPENAI_PROMPT_VERSION:-}
+      PIPELINE_ALLOWED_DOMAINS: ${PIPELINE_ALLOWED_DOMAINS:-}
+      PIPELINE_FRESHNESS_WINDOW_DAYS: ${PIPELINE_FRESHNESS_WINDOW_DAYS:-}
+      PIPELINE_BACKFILL_MAX_DAYS: ${PIPELINE_BACKFILL_MAX_DAYS:-}
+      PIPELINE_MAX_RETRIES: ${PIPELINE_MAX_RETRIES:-}
+      PIPELINE_REQUEST_TIMEOUT_MS: ${PIPELINE_REQUEST_TIMEOUT_MS:-}
+      PIPELINE_MAX_QUERIES_PER_RUN: ${PIPELINE_MAX_QUERIES_PER_RUN:-}
+    entrypoint: ["pnpm", "tsx", "scripts/adaptive-knowledge/refresh-corpus.ts"]
+    command: ["--worker"]
+    volumes:
+      - adaptive_knowledge_data:/app/.planning/knowledge/adaptive-coaching
 
   db:
     image: postgres:18-alpine
@@ -71,6 +107,7 @@ volumes:
   postgres_data:
   caddy_data:
   caddy_config:
+  adaptive_knowledge_data:
 
 networks:
   backend:
