@@ -26,6 +26,7 @@ fi
 echo "Deploying stack with env: $ENV_FILE"
 "${COMPOSE_CMD[@]}" --env-file "$ENV_FILE" pull
 "${COMPOSE_CMD[@]}" --env-file "$ENV_FILE" build --pull
+"${COMPOSE_CMD[@]}" --env-file "$ENV_FILE" run --rm app sh -lc 'pnpm prisma migrate deploy'
 "${COMPOSE_CMD[@]}" --env-file "$ENV_FILE" up -d --remove-orphans
 
 if [[ -n "${APP_DOMAIN:-}" ]]; then
