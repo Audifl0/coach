@@ -1,6 +1,11 @@
-import type { NormalizedEvidenceRecord } from './contracts';
+import type { NormalizedEvidenceRecord, ValidatedSynthesis } from './contracts';
 
-export type QualityGateReason = 'score_below_threshold' | 'critical_contradiction';
+export type QualityGateReason =
+  | 'score_below_threshold'
+  | 'critical_contradiction'
+  | 'insufficient_provenance'
+  | 'insufficient_coverage'
+  | 'unresolved_contradiction';
 
 export type QualityGateContradiction = {
   code: string;
@@ -10,6 +15,7 @@ export type QualityGateContradiction = {
 export type EvaluateCorpusQualityGateInput = {
   now: Date;
   records: NormalizedEvidenceRecord[];
+  validatedSynthesis?: ValidatedSynthesis;
   threshold?: number;
   criticalContradictions?: QualityGateContradiction[];
 };
@@ -89,6 +95,58 @@ function computeCompletenessScore(records: NormalizedEvidenceRecord[]): number {
   return total / records.length;
 }
 
+function hasMissingProvenance(records: NormalizedEvidenceRecord[], validatedSynthesis: ValidatedSynthesis | undefined): boolean {
+  if (!validatedSynthesis) {
+    return false;
+  }
+
+  const validRecordIds = new Set(records.map((record) => record.id));
+  return validatedSynthesis.principles.some(
+    (principle) =>
+      principle.provenanceRecordIds.length === 0 ||
+      principle.provenanceRecordIds.some((provenanceId) => !validRecordIds.has(provenanceId)),
+  );
+}
+
+function hasInsufficientCoverage(records: NormalizedEvidenceRecord[], validatedSynthesis: ValidatedSynthesis | undefined): boolean {
+  if (!validatedSynthesis) {
+    return false;
+  }
+
+  if (records.length === 0) {
+    return false;
+  }
+
+  if (validatedSynthesis.coverage.recordCount < records.length) {
+    return true;
+  }
+
+  if (validatedSynthesis.coverage.batchCount < 1) {
+    return true;
+  }
+
+  return validatedSynthesis.principles.length < 1;
+}
+
+function countCriticalContradictions(
+  inputCritical: QualityGateContradiction[] | undefined,
+  validatedSynthesis: ValidatedSynthesis | undefined,
+): number {
+  const explicit = (inputCritical ?? []).filter((item) => item.severity === 'critical').length;
+  const synthesis = (validatedSynthesis?.contradictions ?? []).filter((item) => item.severity === 'critical').length;
+  return explicit + synthesis;
+}
+
+function hasUnresolvedContradiction(validatedSynthesis: ValidatedSynthesis | undefined): boolean {
+  if (!validatedSynthesis) {
+    return false;
+  }
+
+  return validatedSynthesis.contradictions.some(
+    (item) => item.severity === 'critical' || item.resolution === 'pending',
+  );
+}
+
 export function evaluateCorpusQualityGate(input: EvaluateCorpusQualityGateInput): CorpusQualityGateResult {
   const threshold = input.threshold ?? DEFAULT_THRESHOLD;
   const sourceClassScore = computeSourceClassScore(input.records);
@@ -96,21 +154,28 @@ export function evaluateCorpusQualityGate(input: EvaluateCorpusQualityGateInput)
   const completenessScore = computeCompletenessScore(input.records);
 
   const compositeScore = round3(sourceClassScore * 0.45 + recencyScore * 0.35 + completenessScore * 0.2);
-  const criticalContradictions = (input.criticalContradictions ?? []).filter(
-    (item) => item.severity === 'critical',
-  ).length;
+  const criticalContradictions = countCriticalContradictions(input.criticalContradictions, input.validatedSynthesis);
 
   const reasons: QualityGateReason[] = [];
   if (compositeScore < threshold) {
     reasons.push('score_below_threshold');
   }
+  if (hasInsufficientCoverage(input.records, input.validatedSynthesis)) {
+    reasons.push('insufficient_coverage');
+  }
+  if (hasMissingProvenance(input.records, input.validatedSynthesis)) {
+    reasons.push('insufficient_provenance');
+  }
   if (criticalContradictions > 0) {
     reasons.push('critical_contradiction');
+  }
+  if (hasUnresolvedContradiction(input.validatedSynthesis)) {
+    reasons.push('unresolved_contradiction');
   }
 
   return {
     publishable: reasons.length === 0,
-    reasons,
+    reasons: [...new Set(reasons)],
     compositeScore,
     threshold,
     criticalContradictions,

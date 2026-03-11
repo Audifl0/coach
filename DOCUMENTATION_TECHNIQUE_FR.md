@@ -128,6 +128,17 @@ Les scenarios ci-dessous decrivent le fonctionnement reel en reliant points d'en
 6. En cas de rejet, un fallback conservateur est applique et trace dans `AdaptiveRecommendationDecision`.
 7. Si `LLM_REAL_PROVIDER_ENABLED=true`, la chaine provider utilise `src/server/llm/*` (OpenAI primaire, Anthropic fallback) selon `src/server/llm/config.ts`.
 
+### Scenario 5.1 - Worker corpus continu et knowledge bible
+
+1. Le point d'entree operateur est `scripts/adaptive-knowledge/refresh-corpus.ts`.
+2. Le worker acquire un lease et persiste son etat dans `scripts/adaptive-knowledge/worker-state.ts`.
+3. `scripts/adaptive-knowledge/pipeline-run.ts` orchestre `discover -> ingest -> synthesize -> validate -> publish`.
+4. La discovery (`scripts/adaptive-knowledge/discovery.ts`) construit un plan de requetes borne; les connecteurs `scripts/adaptive-knowledge/connectors/*` collectent et normalisent les evidences.
+5. La synthese + curation (`scripts/adaptive-knowledge/synthesis.ts`, `scripts/adaptive-knowledge/curation.ts`) produisent `principles.json` puis `knowledge-bible.json`.
+6. La publication (`scripts/adaptive-knowledge/publish.ts`) promeut seulement les snapshots valides et maintient `active.json` / `rollback.json`.
+7. Le runtime lit la bible via `src/lib/coach/knowledge-bible.ts`, puis la generation hybride l'injecte dans `src/server/services/program-generation-hybrid.ts`.
+8. Le service `src/server/services/program-generation.ts` expose ensuite `meta.mode` et `knowledgeSnapshotId`, ce qui rend visible la voie knowledge-enabled vs fallback baseline.
+
 ### Scenario 6 - Tendances et dashboard
 
 1. Le dashboard charge les tendances via `src/app/(private)/dashboard/loaders/trends-summary.ts`.
@@ -156,3 +167,4 @@ Les scenarios ci-dessous decrivent le fonctionnement reel en reliant points d'en
 - Ce document ne remplace pas les runbooks detaillees (`docs/operations/*`) pour les procedures pas-a-pas.
 - Certaines decisions d'exploitation sont contextualisees par des variables d'environnement et par l'etat des donnees (ex: compte de smoke authentifie ops).
 - La preuve "en production" d'un chemin reel deploiement n'est pas encodee dans le depot; la documentation s'appuie sur les artefacts versionnes disponibles.
+- Pour le detail du worker corpus continu (artefacts, lancement, verification, limites), ouvrir `GUIDE_WORKER_CORPUS_CONTINU_FR.md`.

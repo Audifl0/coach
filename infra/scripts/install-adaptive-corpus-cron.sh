@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCHEDULE="${1:-0 3 * * 1}"
 TAG="# adaptive-corpus-refresh"
-COMMAND="cd $(pwd) && corepack pnpm tsx scripts/adaptive-knowledge/refresh-corpus.ts"
+COMMAND="cd $(pwd) && corepack pnpm tsx scripts/adaptive-knowledge/refresh-corpus.ts --worker"
 ENTRY="${SCHEDULE} ${COMMAND} ${TAG}"
 
 CURRENT_CRON="$(crontab -l 2>/dev/null || true)"
@@ -16,4 +16,4 @@ FILTERED_CRON="$(printf '%s\n' "${CURRENT_CRON}" | grep -v "${TAG}" || true)"
   printf '%s\n' "${ENTRY}"
 } | crontab -
 
-printf 'Installed weekly adaptive corpus refresh cron job:\n%s\n' "${ENTRY}"
+printf 'Installed weekly adaptive corpus worker cron job:\n%s\n' "${ENTRY}"

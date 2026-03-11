@@ -196,6 +196,177 @@ export const historyQueryInputSchema = z
     }
   });
 
+export const workerCorpusSeverityValues = ['healthy', 'degraded', 'critical'] as const;
+export const workerCorpusLiveStateValues = [
+  'idle',
+  'started',
+  'heartbeat',
+  'completed',
+  'failed',
+  'blocked-by-lease',
+  'stale',
+] as const;
+export const workerCorpusOutcomeValues = ['succeeded', 'failed', 'blocked', 'running'] as const;
+export const workerCorpusArtifactStateValues = ['candidate', 'validated'] as const;
+export const workerCorpusStageValues = ['discover', 'ingest', 'synthesize', 'validate', 'publish'] as const;
+export const workerCorpusStageStatusValues = ['succeeded', 'failed', 'skipped'] as const;
+export const workerCorpusModeValues = ['refresh', 'check'] as const;
+
+export const workerCorpusStageReportSchema = z.object({
+  stage: z.enum(workerCorpusStageValues),
+  status: z.enum(workerCorpusStageStatusValues),
+  message: z.string().trim().min(1).nullable().default(null),
+});
+
+export const workerCorpusRunRowSchema = z.object({
+  runId: z.string().trim().min(1),
+  snapshotId: z.string().trim().min(1),
+  mode: z.enum(workerCorpusModeValues),
+  startedAt: z.iso.datetime(),
+  completedAt: z.iso.datetime(),
+  artifactState: z.enum(workerCorpusArtifactStateValues),
+  outcome: z.enum(workerCorpusOutcomeValues),
+  severity: z.enum(workerCorpusSeverityValues),
+  finalStage: z.enum(workerCorpusStageValues),
+  finalMessage: z.string().trim().min(1).nullable(),
+  evidenceRecordCount: z.number().int().nonnegative().nullable(),
+  principleCount: z.number().int().nonnegative().nullable(),
+  sourceDomains: z.array(z.string().trim().min(1)).default([]),
+  qualityGateReasons: z.array(z.string().trim().min(1)).default([]),
+  isActiveSnapshot: z.boolean(),
+  isRollbackSnapshot: z.boolean(),
+});
+
+export const workerCorpusRunDetailSchema = workerCorpusRunRowSchema.extend({
+  generatedAt: z.iso.datetime().nullable(),
+  stageReports: z.array(workerCorpusStageReportSchema).min(1),
+  modelRun: z
+    .object({
+      provider: z.string().trim().min(1),
+      model: z.string().trim().min(1),
+      requestId: z.string().trim().min(1).nullable(),
+      latencyMs: z.number().int().nonnegative().nullable(),
+    })
+    .nullable(),
+  contradictionCount: z.number().int().nonnegative(),
+  coverageRecordCount: z.number().int().nonnegative().nullable(),
+});
+
+export const workerCorpusSnapshotDetailSchema = z.object({
+  snapshotId: z.string().trim().min(1),
+  artifactState: z.enum(workerCorpusArtifactStateValues),
+  generatedAt: z.iso.datetime().nullable(),
+  promotedAt: z.iso.datetime().nullable(),
+  severity: z.enum(workerCorpusSeverityValues),
+  isActiveSnapshot: z.boolean(),
+  isRollbackSnapshot: z.boolean(),
+  snapshotAgeHours: z.number().nonnegative().nullable(),
+  evidenceRecordCount: z.number().int().nonnegative().nullable(),
+  principleCount: z.number().int().nonnegative().nullable(),
+  sourceDomains: z.array(z.string().trim().min(1)).default([]),
+  diff: z
+    .object({
+      previousSnapshotId: z.string().trim().min(1).nullable(),
+      currentSnapshotId: z.string().trim().min(1),
+      evidenceRecordDelta: z.number().int(),
+      principleDelta: z.number().int(),
+    })
+    .nullable(),
+  qualityGateReasons: z.array(z.string().trim().min(1)).default([]),
+  modelRun: z
+    .object({
+      provider: z.string().trim().min(1),
+      model: z.string().trim().min(1),
+      requestId: z.string().trim().min(1).nullable(),
+      latencyMs: z.number().int().nonnegative().nullable(),
+    })
+    .nullable(),
+  contradictionCount: z.number().int().nonnegative(),
+  coverageRecordCount: z.number().int().nonnegative().nullable(),
+});
+
+export const workerCorpusOverviewResponseSchema = z.object({
+  generatedAt: z.iso.datetime(),
+  live: z.object({
+    state: z.enum(workerCorpusLiveStateValues),
+    severity: z.enum(workerCorpusSeverityValues),
+    runId: z.string().trim().min(1).nullable(),
+    mode: z.enum(workerCorpusModeValues).nullable(),
+    startedAt: z.iso.datetime().nullable(),
+    heartbeatAt: z.iso.datetime().nullable(),
+    leaseExpiresAt: z.iso.datetime().nullable(),
+    message: z.string().trim().min(1).nullable(),
+    isHeartbeatStale: z.boolean(),
+  }),
+  publication: z.object({
+    severity: z.enum(workerCorpusSeverityValues),
+    activeSnapshotId: z.string().trim().min(1).nullable(),
+    activeSnapshotDir: z.string().trim().min(1).nullable(),
+    promotedAt: z.iso.datetime().nullable(),
+    rollbackSnapshotId: z.string().trim().min(1).nullable(),
+    rollbackSnapshotDir: z.string().trim().min(1).nullable(),
+    rollbackAvailable: z.boolean(),
+    snapshotAgeHours: z.number().nonnegative().nullable(),
+    evidenceRecordCount: z.number().int().nonnegative().nullable(),
+    principleCount: z.number().int().nonnegative().nullable(),
+    sourceDomains: z.array(z.string().trim().min(1)).default([]),
+    qualityGateReasons: z.array(z.string().trim().min(1)).default([]),
+    lastRunAgeHours: z.number().nonnegative().nullable(),
+  }),
+  recentRuns: z.array(workerCorpusRunRowSchema).default([]),
+});
+
+export const workerCorpusOverviewSchema = workerCorpusOverviewResponseSchema;
+export const workerCorpusOverviewSectionSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('ready'),
+    data: workerCorpusOverviewSchema,
+  }),
+  z.object({
+    status: z.literal('empty'),
+  }),
+  z.object({
+    status: z.literal('error'),
+  }),
+]);
+
+export const workerCorpusStatusResponseSchema = workerCorpusOverviewResponseSchema.pick({
+  generatedAt: true,
+  live: true,
+  publication: true,
+});
+
+export const workerCorpusRunsResponseSchema = z.object({
+  generatedAt: z.iso.datetime(),
+  runs: z.array(workerCorpusRunRowSchema).default([]),
+});
+
+export const workerCorpusRunDetailSectionSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('ready'),
+    data: workerCorpusRunDetailSchema,
+  }),
+  z.object({
+    status: z.literal('empty'),
+  }),
+  z.object({
+    status: z.literal('error'),
+  }),
+]);
+
+export const workerCorpusSnapshotDetailSectionSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('ready'),
+    data: workerCorpusSnapshotDetailSchema,
+  }),
+  z.object({
+    status: z.literal('empty'),
+  }),
+  z.object({
+    status: z.literal('error'),
+  }),
+]);
+
 export type ProgramGenerateInput = z.infer<typeof programGenerateInputSchema>;
 export type ProgramPlannedExercise = z.infer<typeof programPlannedExerciseSchema>;
 export type ProgramSessionSummary = z.infer<typeof programSessionSummarySchema>;
@@ -219,6 +390,17 @@ export type SessionNoteInput = z.infer<typeof sessionNoteInputSchema>;
 export type SessionCompleteInput = z.infer<typeof sessionCompleteInputSchema>;
 export type SessionDurationCorrectionInput = z.infer<typeof sessionDurationCorrectionInputSchema>;
 export type HistoryQueryInput = z.infer<typeof historyQueryInputSchema>;
+export type WorkerCorpusStageReport = z.infer<typeof workerCorpusStageReportSchema>;
+export type WorkerCorpusOverview = z.infer<typeof workerCorpusOverviewSchema>;
+export type WorkerCorpusRunRow = z.infer<typeof workerCorpusRunRowSchema>;
+export type WorkerCorpusRunDetail = z.infer<typeof workerCorpusRunDetailSchema>;
+export type WorkerCorpusSnapshotDetail = z.infer<typeof workerCorpusSnapshotDetailSchema>;
+export type WorkerCorpusOverviewResponse = z.infer<typeof workerCorpusOverviewResponseSchema>;
+export type WorkerCorpusOverviewSection = z.infer<typeof workerCorpusOverviewSectionSchema>;
+export type WorkerCorpusStatusResponse = z.infer<typeof workerCorpusStatusResponseSchema>;
+export type WorkerCorpusRunsResponse = z.infer<typeof workerCorpusRunsResponseSchema>;
+export type WorkerCorpusRunDetailSection = z.infer<typeof workerCorpusRunDetailSectionSchema>;
+export type WorkerCorpusSnapshotDetailSection = z.infer<typeof workerCorpusSnapshotDetailSectionSchema>;
 
 export function parseProgramGenerateInput(input: unknown): ProgramGenerateInput {
   return programGenerateInputSchema.parse(input);
@@ -266,6 +448,38 @@ export function parseSessionDurationCorrectionInput(input: unknown): SessionDura
 
 export function parseHistoryQueryInput(input: unknown): HistoryQueryInput {
   return historyQueryInputSchema.parse(input);
+}
+
+export function parseWorkerCorpusOverviewResponse(input: unknown): WorkerCorpusOverviewResponse {
+  return workerCorpusOverviewResponseSchema.parse(input);
+}
+
+export function parseWorkerCorpusOverviewSection(input: unknown): WorkerCorpusOverviewSection {
+  return workerCorpusOverviewSectionSchema.parse(input);
+}
+
+export function parseWorkerCorpusRunDetail(input: unknown): WorkerCorpusRunDetail {
+  return workerCorpusRunDetailSchema.parse(input);
+}
+
+export function parseWorkerCorpusRunDetailSection(input: unknown): WorkerCorpusRunDetailSection {
+  return workerCorpusRunDetailSectionSchema.parse(input);
+}
+
+export function parseWorkerCorpusSnapshotDetail(input: unknown): WorkerCorpusSnapshotDetail {
+  return workerCorpusSnapshotDetailSchema.parse(input);
+}
+
+export function parseWorkerCorpusSnapshotDetailSection(input: unknown): WorkerCorpusSnapshotDetailSection {
+  return workerCorpusSnapshotDetailSectionSchema.parse(input);
+}
+
+export function parseWorkerCorpusStatusResponse(input: unknown): WorkerCorpusStatusResponse {
+  return workerCorpusStatusResponseSchema.parse(input);
+}
+
+export function parseWorkerCorpusRunsResponse(input: unknown): WorkerCorpusRunsResponse {
+  return workerCorpusRunsResponseSchema.parse(input);
 }
 
 export {

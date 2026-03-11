@@ -16,6 +16,9 @@ type PubmedApiResponse = {
     summary: string;
     tags?: string[];
   }>;
+  esearchresult?: {
+    idlist?: string[];
+  };
 };
 
 const PUBMED_ENDPOINT = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi';
@@ -50,7 +53,18 @@ export async function fetchPubmedEvidenceBatch(input: ConnectorFetchInput): Prom
       throw new Error(`PubMed request failed with status ${response.status}`);
     }
     const payload = (await response.json()) as PubmedApiResponse;
-    return payload.results ?? [];
+    if (Array.isArray(payload.results)) {
+      return payload.results;
+    }
+    return (payload.esearchresult?.idlist ?? []).map((id) => ({
+      id,
+      sourceType: 'review' as const,
+      title: `PubMed record ${id}`,
+      url: `https://pubmed.ncbi.nlm.nih.gov/${id}`,
+      publishedAt: (input.now ?? new Date()).toISOString().slice(0, 10),
+      summary: `PubMed result for ${input.query}`,
+      tags: ['progression'],
+    }));
   }, config.maxRetries);
 
   if (!result.ok) {
@@ -70,7 +84,7 @@ export async function fetchPubmedEvidenceBatch(input: ConnectorFetchInput): Prom
     };
   }
 
-  const normalized = normalizeConnectorRecords('pubmed', result.value, config, input.now ?? new Date());
+  const normalized = normalizeConnectorRecords('pubmed', result.value, config, input.now ?? new Date(), input.cursorState);
   return {
     source: 'pubmed',
     skipped: false,
@@ -79,6 +93,7 @@ export async function fetchPubmedEvidenceBatch(input: ConnectorFetchInput): Prom
     recordsSkipped: normalized.skipped,
     telemetry: {
       attempts: result.attempts,
+      nextCursor: result.value.at(-1)?.id,
     },
   };
 }

@@ -9,6 +9,7 @@ import type { ConnectorFetchResult } from '../../scripts/adaptive-knowledge/conn
 import { runAdaptiveKnowledgePipeline } from '../../scripts/adaptive-knowledge/pipeline-run';
 import { rollbackCorpusSnapshot } from '../../scripts/adaptive-knowledge/publish';
 import { evaluateCorpusQualityGate } from '../../scripts/adaptive-knowledge/quality-gates';
+import { buildValidatedSynthesisFromPrinciples, synthesizeCorpusPrinciples } from '../../scripts/adaptive-knowledge/synthesis';
 
 function buildConnectorSuccess(source: 'pubmed' | 'crossref' | 'openalex'): ConnectorFetchResult {
   return {
@@ -35,16 +36,52 @@ function buildConnectorSuccess(source: 'pubmed' | 'crossref' | 'openalex'): Conn
   };
 }
 
+function withRecordSuffix(result: ConnectorFetchResult, suffix: string): ConnectorFetchResult {
+  return {
+    ...result,
+    records: result.records.map((record) => ({
+      ...record,
+      id: `${record.id}-${suffix}`,
+      sourceUrl: record.sourceUrl.replace(/\/([^/]+)\/?$/, `/$1-${suffix}`),
+      title: `${record.title} ${suffix}`,
+      provenanceIds: record.provenanceIds.map((provenanceId) => `${provenanceId}-${suffix}`),
+    })),
+  };
+}
+
 async function loadJson(filePath: string): Promise<unknown> {
   const raw = await readFile(filePath, 'utf8');
   return JSON.parse(raw) as unknown;
+}
+
+async function runPipelineWithDeterministicSynthesis(
+  input: Parameters<typeof runAdaptiveKnowledgePipeline>[0],
+) {
+  return runAdaptiveKnowledgePipeline({
+    ...input,
+    synthesizeImpl: async (records) => {
+      const principles = synthesizeCorpusPrinciples(records);
+      return {
+        principles,
+        validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+          records,
+          principles,
+          modelRun: {
+            provider: 'deterministic',
+            model: 'test-remote-synthesis',
+            promptVersion: 'test-v1',
+          },
+        }),
+      };
+    },
+  });
 }
 
 test('candidate with score below threshold is not publishable and active pointer remains unchanged', async () => {
   const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-publish-'));
   const activePointerPath = path.join(outputRootDir, 'active.json');
 
-  const result = await runAdaptiveKnowledgePipeline({
+  const result = await runPipelineWithDeterministicSynthesis({
     runId: 'run-quality-score-blocked',
     now: new Date('2026-03-05T00:00:00.000Z'),
     outputRootDir,
@@ -66,7 +103,7 @@ test('candidate with score below threshold is not publishable and active pointer
 test('critical contradiction blocks publish even when quality score is high', async () => {
   const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-publish-'));
 
-  const result = await runAdaptiveKnowledgePipeline({
+  const result = await runPipelineWithDeterministicSynthesis({
     runId: 'run-contradiction-blocked',
     now: new Date('2026-03-05T00:00:00.000Z'),
     outputRootDir,
@@ -113,7 +150,7 @@ test('quality gate emits deterministic reasons for observability', async () => {
 test('run report includes deterministic publish-block reason codes', async () => {
   const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-publish-'));
 
-  await runAdaptiveKnowledgePipeline({
+  await runPipelineWithDeterministicSynthesis({
     runId: 'run-publish-reason-codes',
     now: new Date('2026-03-05T00:00:00.000Z'),
     outputRootDir,
@@ -143,7 +180,7 @@ test('successful publish atomically swaps active pointer and persists previous a
   const activePointerPath = path.join(outputRootDir, 'active.json');
   const rollbackPointerPath = path.join(outputRootDir, 'rollback.json');
 
-  await runAdaptiveKnowledgePipeline({
+  await runPipelineWithDeterministicSynthesis({
     runId: 'run-publish-baseline',
     now: new Date('2026-03-05T00:00:00.000Z'),
     outputRootDir,
@@ -161,7 +198,7 @@ test('successful publish atomically swaps active pointer and persists previous a
   assert.equal(baselinePointer.snapshotId, 'run-publish-baseline');
   await assert.rejects(() => access(rollbackPointerPath, constants.F_OK));
 
-  await runAdaptiveKnowledgePipeline({
+  await runPipelineWithDeterministicSynthesis({
     runId: 'run-publish-next',
     now: new Date('2026-03-06T00:00:00.000Z'),
     outputRootDir,
@@ -169,9 +206,9 @@ test('successful publish atomically swaps active pointer and persists previous a
       threshold: 0.2,
     },
     connectors: {
-      pubmed: async () => buildConnectorSuccess('pubmed'),
-      crossref: async () => buildConnectorSuccess('crossref'),
-      openalex: async () => buildConnectorSuccess('openalex'),
+      pubmed: async () => withRecordSuffix(buildConnectorSuccess('pubmed'), 'next'),
+      crossref: async () => withRecordSuffix(buildConnectorSuccess('crossref'), 'next'),
+      openalex: async () => withRecordSuffix(buildConnectorSuccess('openalex'), 'next'),
     },
   });
 
@@ -185,7 +222,7 @@ test('rollback restores previous active pointer atomically and writes run-report
   const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-publish-'));
   const reportPath = path.join(outputRootDir, 'run-report.json');
 
-  await runAdaptiveKnowledgePipeline({
+  await runPipelineWithDeterministicSynthesis({
     runId: 'run-rollback-baseline',
     now: new Date('2026-03-05T00:00:00.000Z'),
     outputRootDir,
@@ -199,7 +236,7 @@ test('rollback restores previous active pointer atomically and writes run-report
     },
   });
 
-  await runAdaptiveKnowledgePipeline({
+  await runPipelineWithDeterministicSynthesis({
     runId: 'run-rollback-current',
     now: new Date('2026-03-06T00:00:00.000Z'),
     outputRootDir,
@@ -207,9 +244,9 @@ test('rollback restores previous active pointer atomically and writes run-report
       threshold: 0.2,
     },
     connectors: {
-      pubmed: async () => buildConnectorSuccess('pubmed'),
-      crossref: async () => buildConnectorSuccess('crossref'),
-      openalex: async () => buildConnectorSuccess('openalex'),
+      pubmed: async () => withRecordSuffix(buildConnectorSuccess('pubmed'), 'current'),
+      crossref: async () => withRecordSuffix(buildConnectorSuccess('crossref'), 'current'),
+      openalex: async () => withRecordSuffix(buildConnectorSuccess('openalex'), 'current'),
     },
   });
 
@@ -226,4 +263,28 @@ test('rollback restores previous active pointer atomically and writes run-report
 
   const rollbackReport = (await loadJson(reportPath)) as { events: Array<{ type: string; snapshotId: string }> };
   assert.equal(rollbackReport.events.some((event) => event.type === 'rollback' && event.snapshotId === 'run-rollback-baseline'), true);
+});
+
+test('publish writes manifest, diff, and knowledge bible artifacts into the promoted snapshot', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-publish-'));
+
+  await runPipelineWithDeterministicSynthesis({
+    runId: 'run-manifest-artifacts',
+    now: new Date('2026-03-08T00:00:00.000Z'),
+    outputRootDir,
+    qualityGateOverrides: {
+      threshold: 0.2,
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const activePointer = (await loadJson(path.join(outputRootDir, 'active.json'))) as { snapshotDir: string };
+  await access(path.join(activePointer.snapshotDir, 'manifest.json'), constants.F_OK);
+  await access(path.join(activePointer.snapshotDir, 'diff.json'), constants.F_OK);
+  await access(path.join(activePointer.snapshotDir, 'validated-synthesis.json'), constants.F_OK);
+  await access(path.join(activePointer.snapshotDir, 'knowledge-bible.json'), constants.F_OK);
 });

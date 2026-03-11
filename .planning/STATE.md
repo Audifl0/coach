@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 10
-current_phase_name: maintainability cleanup and operational hardening
-current_plan: 3
-status: verifying
-stopped_at: Completed 11-04-PLAN.md
-last_updated: "2026-03-10T11:17:24.167Z"
-last_activity: 2026-03-10
+current_phase: 14
+current_phase_name: dashboard web de suivi temps r el du worker corpus
+current_plan: Completed
+status: completed
+stopped_at: Completed 14-04-PLAN.md
+last_updated: "2026-03-11T18:49:35.263Z"
+last_activity: 2026-03-11
 progress:
-  total_phases: 12
-  completed_phases: 13
-  total_plans: 61
-  completed_plans: 61
+  total_phases: 14
+  completed_phases: 14
+  total_plans: 73
+  completed_plans: 73
   percent: 100
 ---
 
@@ -24,18 +24,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Fournir un coaching musculation personnalisé, sûr et adaptatif au quotidien, sans perdre la simplicité d'usage.
-**Current focus:** Phase 10 - Maintainability cleanup and operational hardening
+**Current focus:** Phase 14 complete - Dashboard web de suivi temps reel du worker corpus
 
 ## Current Position
 
-**Current Phase:** 10
-**Current Phase Name:** maintainability cleanup and operational hardening
-**Total Phases:** 12
-**Current Plan:** 3
-**Total Plans in Phase:** 3
-**Status:** Phase complete — ready for verification
-**Last Activity:** 2026-03-10
-**Last Activity Description:** Completed 10-01 typed seam cleanup and moved to plan 10-02
+**Current Phase:** 14
+**Current Phase Name:** dashboard web de suivi temps r el du worker corpus
+**Total Phases:** 14
+**Current Plan:** Completed
+**Total Plans in Phase:** 4
+**Status:** Completed
+**Last Activity:** 2026-03-11
+**Last Activity Description:** Phase 14 complete
 **Progress:** [██████████] 100%
 
 ## Performance Metrics
@@ -90,6 +90,10 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 12-worker-corpus-continu]: refresh-corpus now runs behind an explicit worker lease/heartbeat state and `--check` never promotes a new active snapshot.
+- [Phase 12-worker-corpus-continu]: Pipeline discovery is now bounded but richer than the original 3 hardcoded queries, with dedup and incremental cursor telemetry.
+- [Phase 12-worker-corpus-continu]: Published snapshots now include `knowledge-bible.json`, `manifest.json`, and `diff.json` alongside source/principle artifacts.
+- [Phase 12-worker-corpus-continu]: Program generation validates hybrid evidence IDs against the loaded knowledge bible and exposes `meta.mode` plus `knowledgeSnapshotId` for observability.
 - [Phase 08-release-blockers-and-regression-restoration]: Shared dashboard/today-route session types now remain centralized in src/lib/program/contracts.ts instead of route-local unions.
 - [Phase 08-release-blockers-and-regression-restoration]: isProfileComplete now accepts unknown input and performs explicit object checks so callers do not need cast-based suppressions.
 - [Phase 08-release-blockers-and-regression-restoration]: Provider adapters normalize SDK request-id, payload-shape, and mutable-schema quirks before adaptive services consume fallback metadata.
@@ -248,6 +252,9 @@ Recent decisions affecting current work:
 - Phase 9 added: Security, runtime, and release-proof stabilization
 - Phase 10 added: Maintainability cleanup and operational hardening
 - Phase 11 added: Documentation complète en français et déploiement VPS Ubuntu
+- Phase 12 added: Worker corpus continu
+- Phase 13 added: Moteur de synthese IA distant du corpus scientifique
+- Phase 14 added: Dashboard web de suivi temps reel du worker corpus
 
 ### Pending Todos
 
@@ -260,5 +267,5 @@ None.
 ## Session
 
 **Last Date:** 2026-03-10T11:17:24.163Z
-**Stopped At:** Completed 11-04-PLAN.md
+**Stopped At:** Completed 13-04-PLAN.md
 **Resume File:** None

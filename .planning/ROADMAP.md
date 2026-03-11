@@ -194,3 +194,60 @@ Plans:
 
 Plans:
 - [x] TBD (run /gsd:plan-phase 11 to break down) (completed 2026-03-10)
+
+### Phase 12: Worker corpus continu
+
+**Goal:** Construire un worker IA continu qui recherche, agrege, synthese et publie un corpus scientifique sport/musculation afin d'alimenter automatiquement la knowledge bible consommee par la generation hybride de programmes.
+**Requirements**: PROG-01, PROG-02, SAFE-03
+**Depends on:** Phase 11
+**Plans:** 4/4 plans complete
+
+Plans:
+- [x] 12-01-PLAN.md - Worker runtime continu, lease/heartbeat et orchestration idempotente
+- [x] 12-02-PLAN.md - Decouverte borne, ingestion incremental et dedup du corpus scientifique
+- [x] 12-03-PLAN.md - Curation IA, bible publiee, manifest/diff et gouvernance de promotion
+- [x] 12-04-PLAN.md - Integration aval, observabilite hybride et verification des fallbacks
+
+**Success Criteria (observable):**
+- Un worker peut executer un cycle de recherche/synthese/publication sans corrompre le snapshot actif du corpus.
+- La knowledge bible publiee expose principes et sources exploitables par le generateur hybride de programmes.
+- La generation hybride peut consommer le corpus publie avec provenance explicite des principes/sources retenus.
+- En cas de corpus indisponible, incomplet ou invalide, le flux degrade proprement vers un comportement prudent et deterministic.
+
+### Phase 13: Moteur de synthese IA distant du corpus scientifique
+
+**Goal:** Remplacer la synthese templatee du worker corpus par un vrai moteur de synthese base sur un modele distant, avec extraction structuree, provenance explicite, quality gates stricts et fallback deterministic si le provider est indisponible ou la sortie invalide.
+**Requirements**: PROG-01, PROG-02, SAFE-03
+**Depends on:** Phase 12
+**Plans:** 4/4 plans complete
+
+Plans:
+- [x] 13-01-PLAN.md - Socle de synthese distante OpenAI-only, schemas stricts et erreurs deterministes
+- [x] 13-02-PLAN.md - Synthese en deux temps, artefact intermediaire valide et consolidation thematique
+- [x] 13-03-PLAN.md - Quality gates enrichis, strict publish blocking et run-report operateur
+- [x] 13-04-PLAN.md - Curation finale, compatibilite runtime et verification PROG-01/PROG-02/SAFE-03
+
+**Success Criteria (observable):**
+- Le worker produit des principes et justifications issus d'une synthese par modele distant plutot que de blueprints statiques.
+- Chaque principe publie reste relie a des sources et extraits traceables exploitables pour audit.
+- Une sortie modele invalide, incomplete ou contradictoire ne peut pas promouvoir un snapshot actif.
+- En cas d'indisponibilite fournisseur ou de depassement budget/timeout, le pipeline degrade sans casser la generation hybride.
+
+### Phase 14: Dashboard web de suivi temps reel du worker corpus
+
+**Goal:** Construire un dashboard web d'observabilite du worker corpus pour suivre en temps reel les runs, leases, snapshots, deltas, erreurs, freshness et etat de publication de la knowledge bible.
+**Requirements**: DASH-02, PLAT-02, SAFE-03
+**Depends on:** Phase 13
+**Plans:** 4/4 plans complete
+
+Plans:
+- [x] 14-01-PLAN.md - Socle serveur de lecture des artefacts worker, projections dashboard et contrats partages
+- [x] 14-02-PLAN.md - Overview SSR authentifiee avec cartes de statut, publication active et runs recents
+- [x] 14-03-PLAN.md - Drilldowns runs/snapshots, routes detail authifiees et inspection diff/publication
+- [x] 14-04-PLAN.md - Polling borne, regressions auth/degraded paths et documentation operateur du dashboard
+
+**Success Criteria (observable):**
+- Un operateur peut visualiser l'etat courant du worker, du lease et du dernier heartbeat sans lire les fichiers bruts.
+- Le dashboard expose le dernier run, les stages, les compteurs d'ingestion, les motifs d'echec et l'etat du snapshot actif.
+- Les deltas entre snapshots et la freshness de la knowledge bible sont consultables depuis le web.
+- Les degradations critiques du worker sont visibles rapidement et distinguent clairement fallback, echec et succes partiel.

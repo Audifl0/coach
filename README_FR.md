@@ -37,6 +37,7 @@ Coach est une application web de coaching musculation personnalise qui couvre:
 | Besoin | Ouvrir |
 | --- | --- |
 | Comprendre architecture, flux et modules | `DOCUMENTATION_TECHNIQUE_FR.md` |
+| Comprendre le worker corpus continu | `GUIDE_WORKER_CORPUS_CONTINU_FR.md` |
 | Explorer la structure du depot | `ARBORESCENCE_COMMENTEE_FR.md` |
 | Installer/deployer sur VPS Ubuntu | `GUIDE_INSTALLATION_VPS_UBUNTU_FR.md` |
 | Exploiter, maintenir, diagnostiquer | `GUIDE_EXPLOITATION_MAINTENANCE_FR.md` |
@@ -52,11 +53,12 @@ Terminologie harmonisee de la phase 11:
 
 1. `README_FR.md` (ce portail)
 2. `DOCUMENTATION_TECHNIQUE_FR.md`
-3. `CONFIGURATION_ENVIRONNEMENT_FR.md`
-4. `GUIDE_INSTALLATION_VPS_UBUNTU_FR.md`
-5. `DEPLOIEMENT_CHECKLIST_FR.md`
-6. `GUIDE_EXPLOITATION_MAINTENANCE_FR.md`
-7. `ARBORESCENCE_COMMENTEE_FR.md` (navigation code)
+3. `GUIDE_WORKER_CORPUS_CONTINU_FR.md`
+4. `CONFIGURATION_ENVIRONNEMENT_FR.md`
+5. `GUIDE_INSTALLATION_VPS_UBUNTU_FR.md`
+6. `DEPLOIEMENT_CHECKLIST_FR.md`
+7. `GUIDE_EXPLOITATION_MAINTENANCE_FR.md`
+8. `ARBORESCENCE_COMMENTEE_FR.md` (navigation code)
 
 ## Rappels importants
 

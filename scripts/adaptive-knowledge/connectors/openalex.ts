@@ -49,7 +49,27 @@ export async function fetchOpenAlexEvidenceBatch(input: ConnectorFetchInput): Pr
       throw new Error(`OpenAlex request failed with status ${response.status}`);
     }
     const payload = (await response.json()) as OpenAlexApiResponse;
-    return payload.results ?? [];
+    return (payload.results ?? []).map((item, index) => {
+      if ('summary' in item) {
+        return item;
+      }
+
+      const native = item as unknown as {
+        id?: string;
+        display_name?: string;
+        publication_date?: string;
+        primary_location?: { landing_page_url?: string | null };
+      };
+      return {
+        id: native.id ?? `openalex-${index}`,
+        sourceType: 'review' as const,
+        title: native.display_name ?? `OpenAlex record ${index + 1}`,
+        url: native.primary_location?.landing_page_url ?? native.id ?? `https://openalex.org/W${index + 1}`,
+        publishedAt: native.publication_date ?? (input.now ?? new Date()).toISOString().slice(0, 10),
+        summary: `OpenAlex result for ${input.query}`,
+        tags: ['fatigue'],
+      };
+    });
   }, config.maxRetries);
 
   if (!result.ok) {
@@ -69,7 +89,7 @@ export async function fetchOpenAlexEvidenceBatch(input: ConnectorFetchInput): Pr
     };
   }
 
-  const normalized = normalizeConnectorRecords('openalex', result.value, config, input.now ?? new Date());
+  const normalized = normalizeConnectorRecords('openalex', result.value, config, input.now ?? new Date(), input.cursorState);
   return {
     source: 'openalex',
     skipped: false,
@@ -78,6 +98,7 @@ export async function fetchOpenAlexEvidenceBatch(input: ConnectorFetchInput): Pr
     recordsSkipped: normalized.skipped,
     telemetry: {
       attempts: result.attempts,
+      nextCursor: result.value.at(-1)?.id,
     },
   };
 }

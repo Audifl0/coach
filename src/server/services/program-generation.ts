@@ -1,13 +1,25 @@
+import type { CoachKnowledgeBible } from '@/lib/coach/knowledge-bible';
 import { isProfileComplete } from '@/lib/profile/completeness';
 import type { ProgramGenerateInput, ProgramSessionSummary } from '@/lib/program/contracts';
 import { buildWeeklyProgramPlan } from '@/lib/program/planner';
 import { validateProfileInput } from '@/lib/profile/contracts';
 import { createProgramDal, type ReplaceActivePlanInput } from '@/server/dal/program';
 import { createProfileDal } from '@/server/dal/profile';
+import {
+  buildDefaultHybridProgramDraftBuilder,
+  buildHybridProgramPlan,
+  validateHybridDraftEvidenceIds,
+} from '@/server/services/program-generation-hybrid';
 
 type ProgramGenerationServiceDeps = {
   getProfile: (userId: string) => Promise<unknown | null>;
   replaceActivePlan: (userId: string, input: ReplaceActivePlanInput) => Promise<unknown>;
+  getKnowledgeBible?: (profile: ReturnType<typeof validateProfileInput>) => CoachKnowledgeBible;
+  createHybridDraft?: (input: {
+    profile: ReturnType<typeof validateProfileInput>;
+    baselinePlan: ReturnType<typeof buildWeeklyProgramPlan>;
+    knowledgeBible: CoachKnowledgeBible;
+  }) => Promise<unknown>;
 };
 
 export class ProgramGenerationError extends Error {
@@ -24,6 +36,10 @@ type ProgramGenerationResult = {
   startDate: string;
   endDate: string;
   sessions: ProgramSessionSummary[];
+  meta: {
+    mode: 'baseline' | 'hybrid' | 'fallback_baseline';
+    knowledgeSnapshotId: string | null;
+  };
 };
 
 function toDateStart(isoDate: string): Date {
@@ -52,10 +68,41 @@ export function createProgramGenerationService(deps: ProgramGenerationServiceDep
         throw new ProgramGenerationError('Profile is incomplete', 400);
       }
 
-      const plan = buildWeeklyProgramPlan({
+      const baselinePlan = buildWeeklyProgramPlan({
         profile,
         anchorDate: input.anchorDate,
       });
+      let plan = baselinePlan;
+      let generationMode: ProgramGenerationResult['meta']['mode'] = 'baseline';
+      let knowledgeSnapshotId: string | null = null;
+
+      if (deps.getKnowledgeBible && deps.createHybridDraft) {
+        try {
+          const knowledgeBible = deps.getKnowledgeBible(profile);
+          knowledgeSnapshotId = knowledgeBible.snapshotId;
+          const hybridDraft = await deps.createHybridDraft({
+            profile,
+            baselinePlan,
+            knowledgeBible,
+          });
+
+          if (hybridDraft) {
+            validateHybridDraftEvidenceIds({
+              draft: hybridDraft,
+              knowledgeBible,
+            });
+            plan = buildHybridProgramPlan({
+              profile,
+              baselinePlan,
+              draft: hybridDraft,
+            });
+            generationMode = 'hybrid';
+          }
+        } catch {
+          plan = baselinePlan;
+          generationMode = 'fallback_baseline';
+        }
+      }
 
       try {
         await deps.replaceActivePlan(userId, {
@@ -91,6 +138,10 @@ export function createProgramGenerationService(deps: ProgramGenerationServiceDep
         startDate: plan.startDate,
         endDate: plan.endDate,
         sessions: plan.sessions,
+        meta: {
+          mode: generationMode,
+          knowledgeSnapshotId,
+        },
       };
     },
   };
@@ -99,6 +150,7 @@ export function createProgramGenerationService(deps: ProgramGenerationServiceDep
 export async function buildDefaultProgramGenerationService() {
   const { prisma } = await import('@/lib/db/prisma');
   const profileDal = createProfileDal(prisma as never);
+  const hybridBuilder = buildDefaultHybridProgramDraftBuilder();
 
   return createProgramGenerationService({
     getProfile: (userId) => profileDal.getProfileByUserId(userId),
@@ -106,5 +158,7 @@ export async function buildDefaultProgramGenerationService() {
       const programDal = createProgramDal(prisma as never, { userId });
       return programDal.replaceActivePlan(input);
     },
+    getKnowledgeBible: hybridBuilder?.getKnowledgeBible,
+    createHybridDraft: hybridBuilder?.createDraft,
   });
 }

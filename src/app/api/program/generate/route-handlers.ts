@@ -7,6 +7,10 @@ export type ProgramGenerateRouteDeps = {
     startDate: string;
     endDate: string;
     sessions: unknown[];
+    meta?: {
+      mode: string;
+      knowledgeSnapshotId: string | null;
+    };
   }>;
 };
 
@@ -44,6 +48,7 @@ export function createProgramGeneratePostHandler(deps: ProgramGenerateRouteDeps)
             endDate: plan.endDate,
           },
           sessions: plan.sessions,
+          ...(plan.meta ? { meta: plan.meta } : {}),
         },
         200,
       );

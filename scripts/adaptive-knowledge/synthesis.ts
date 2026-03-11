@@ -1,4 +1,13 @@
-import { parseCorpusPrinciple, type CorpusPrinciple, type NormalizedEvidenceRecord } from './contracts';
+import {
+  parseCorpusPrinciple,
+  parseValidatedSynthesis,
+  type CorpusPrinciple,
+  type NormalizedEvidenceRecord,
+  type SourceSynthesisBatch,
+  type SynthesisRunMetadata,
+  type ValidatedSynthesis,
+} from './contracts';
+import type { CorpusRemoteSynthesisClient } from './remote-synthesis';
 
 type PrincipleBlueprint = {
   id: string;
@@ -70,4 +79,110 @@ export function synthesizeCorpusPrinciples(records: NormalizedEvidenceRecord[]):
   }
 
   return principles.sort((left, right) => left.id.localeCompare(right.id));
+}
+
+export type CorpusSynthesisOutput = {
+  principles: CorpusPrinciple[];
+  validatedSynthesis: ValidatedSynthesis;
+};
+
+type SynthesisLot = {
+  lotId: string;
+  records: NormalizedEvidenceRecord[];
+};
+
+function uniqueSorted(values: readonly string[]): string[] {
+  return [...new Set(values)].sort();
+}
+
+function buildCoverageTags(records: readonly NormalizedEvidenceRecord[]): string[] {
+  return uniqueSorted(records.flatMap((record) => record.tags));
+}
+
+export function buildValidatedSynthesisFromPrinciples(input: {
+  records: NormalizedEvidenceRecord[];
+  principles: CorpusPrinciple[];
+  modelRun?: Partial<SynthesisRunMetadata>;
+  rejectedClaims?: Array<{ recordId: string; code: string; reason: string }>;
+  contradictions?: Array<{
+    code: string;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    recordIds: string[];
+    resolution: 'pending' | 'retained' | 'rejected';
+  }>;
+}): ValidatedSynthesis {
+  return parseValidatedSynthesis({
+    principles: input.principles,
+    rejectedClaims: input.rejectedClaims ?? [],
+    coverage: {
+      recordCount: input.records.length,
+      batchCount: input.records.length > 0 ? 1 : 0,
+      retainedClaimCount: input.principles.length,
+      sourceDomains:
+        uniqueSorted(input.records.map((record) => record.sourceDomain)).length > 0
+          ? uniqueSorted(input.records.map((record) => record.sourceDomain))
+          : ['unavailable'],
+      coveredTags: buildCoverageTags(input.records),
+    },
+    contradictions: input.contradictions ?? [],
+    modelRun: {
+      provider: input.modelRun?.provider ?? 'deterministic',
+      model: input.modelRun?.model ?? 'deterministic-blueprint',
+      promptVersion: input.modelRun?.promptVersion ?? 'deterministic-v1',
+      requestId: input.modelRun?.requestId ?? null,
+      requestIds: input.modelRun?.requestIds ?? [],
+      totalLatencyMs: input.modelRun?.totalLatencyMs ?? input.modelRun?.latencyMs ?? 0,
+    },
+  });
+}
+
+export function createSynthesisLots(records: NormalizedEvidenceRecord[]): SynthesisLot[] {
+  const groups = new Map<NormalizedEvidenceRecord['sourceType'], NormalizedEvidenceRecord[]>();
+
+  for (const record of records) {
+    const existing = groups.get(record.sourceType);
+    if (existing) {
+      existing.push(record);
+      continue;
+    }
+    groups.set(record.sourceType, [record]);
+  }
+
+  return [...groups.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([sourceType, sourceRecords]) => ({
+      lotId: `lot-${sourceType}`,
+      records: [...sourceRecords].sort((left, right) => left.id.localeCompare(right.id)),
+    }));
+}
+
+export async function synthesizeCorpusWithRemoteModel(input: {
+  records: NormalizedEvidenceRecord[];
+  client: CorpusRemoteSynthesisClient;
+  runId: string;
+}): Promise<CorpusSynthesisOutput> {
+  const lots = createSynthesisLots(input.records);
+  const batchSyntheses: SourceSynthesisBatch[] = [];
+
+  for (const lot of lots) {
+    batchSyntheses.push(
+      await input.client.synthesizeLot({
+        lotId: lot.lotId,
+        records: lot.records,
+      }),
+    );
+  }
+
+  const validated = await input.client.consolidate({
+    runId: input.runId,
+    records: input.records,
+    batches: batchSyntheses,
+  });
+
+  return {
+    principles: validated.principles
+      .map((principle) => parseCorpusPrinciple(principle))
+      .sort((left, right) => left.id.localeCompare(right.id)),
+    validatedSynthesis: validated,
+  };
 }

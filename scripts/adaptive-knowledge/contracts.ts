@@ -3,6 +3,9 @@ import { z } from 'zod';
 const SOURCE_TYPE_VALUES = ['guideline', 'review', 'expertise'] as const;
 const STAGE_VALUES = ['discover', 'ingest', 'synthesize', 'validate', 'publish'] as const;
 const STAGE_STATUS_VALUES = ['succeeded', 'failed', 'skipped'] as const;
+const SYNTHESIS_PROVIDER_VALUES = ['openai', 'deterministic'] as const;
+const CONTRADICTION_SEVERITY_VALUES = ['low', 'medium', 'high', 'critical'] as const;
+const CONTRADICTION_RESOLUTION_VALUES = ['pending', 'retained', 'rejected'] as const;
 
 export const normalizedEvidenceRecordSchema = z
   .object({
@@ -27,6 +30,68 @@ export const corpusPrincipleSchema = z
     provenanceRecordIds: z.array(z.string().min(1)).min(1),
     evidenceLevel: z.string().min(1),
     guardrail: z.enum(['SAFE-01', 'SAFE-02', 'SAFE-03']),
+    targetPopulation: z.string().min(1).optional(),
+    applicationContext: z.string().min(1).optional(),
+    confidence: z.number().min(0).max(1).optional(),
+  })
+  .strict();
+
+export const synthesisRunMetadataSchema = z
+  .object({
+    provider: z.enum(SYNTHESIS_PROVIDER_VALUES),
+    model: z.string().min(1),
+    promptVersion: z.string().min(1),
+    requestId: z.string().min(1).nullable(),
+    requestIds: z.array(z.string().min(1)).optional(),
+    latencyMs: z.number().int().nonnegative().optional(),
+    totalLatencyMs: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+
+export const rejectedSynthesisClaimSchema = z
+  .object({
+    recordId: z.string().min(1),
+    code: z.string().min(1),
+    reason: z.string().min(1),
+  })
+  .strict();
+
+export const synthesisContradictionSchema = z
+  .object({
+    code: z.string().min(1),
+    severity: z.enum(CONTRADICTION_SEVERITY_VALUES),
+    recordIds: z.array(z.string().min(1)).min(1),
+    resolution: z.enum(CONTRADICTION_RESOLUTION_VALUES),
+  })
+  .strict();
+
+export const sourceSynthesisBatchSchema = z
+  .object({
+    lotId: z.string().min(1),
+    recordIds: z.array(z.string().min(1)).min(1),
+    retainedClaims: z.array(corpusPrincipleSchema),
+    rejectedClaims: z.array(rejectedSynthesisClaimSchema),
+    coverageTags: z.array(z.string().min(1)),
+    contradictions: z.array(synthesisContradictionSchema),
+    modelRun: synthesisRunMetadataSchema,
+  })
+  .strict();
+
+export const validatedSynthesisSchema = z
+  .object({
+    principles: z.array(corpusPrincipleSchema),
+    rejectedClaims: z.array(rejectedSynthesisClaimSchema),
+    coverage: z
+      .object({
+        recordCount: z.number().int().nonnegative(),
+        batchCount: z.number().int().nonnegative(),
+        retainedClaimCount: z.number().int().nonnegative(),
+        sourceDomains: z.array(z.string().min(1)).min(1),
+        coveredTags: z.array(z.string().min(1)),
+      })
+      .strict(),
+    contradictions: z.array(synthesisContradictionSchema),
+    modelRun: synthesisRunMetadataSchema,
   })
   .strict();
 
@@ -43,6 +108,7 @@ const artifactPointerSchema = z
     indexPath: z.string().min(1),
     principlesPath: z.string().min(1),
     reportPath: z.string().min(1),
+    validatedSynthesisPath: z.string().min(1).optional(),
   })
   .strict();
 
@@ -99,6 +165,11 @@ export const corpusRunReportSchema = z
 
 export type NormalizedEvidenceRecord = z.infer<typeof normalizedEvidenceRecordSchema>;
 export type CorpusPrinciple = z.infer<typeof corpusPrincipleSchema>;
+export type SynthesisRunMetadata = z.infer<typeof synthesisRunMetadataSchema>;
+export type RejectedSynthesisClaim = z.infer<typeof rejectedSynthesisClaimSchema>;
+export type SynthesisContradiction = z.infer<typeof synthesisContradictionSchema>;
+export type SourceSynthesisBatch = z.infer<typeof sourceSynthesisBatchSchema>;
+export type ValidatedSynthesis = z.infer<typeof validatedSynthesisSchema>;
 export type CorpusRunReport = z.infer<typeof corpusRunReportSchema>;
 export type CorpusSnapshotManifest = z.infer<typeof corpusSnapshotManifestSchema>;
 
@@ -108,6 +179,14 @@ export function parseNormalizedEvidenceRecord(input: unknown): NormalizedEvidenc
 
 export function parseCorpusPrinciple(input: unknown): CorpusPrinciple {
   return corpusPrincipleSchema.parse(input);
+}
+
+export function parseSourceSynthesisBatch(input: unknown): SourceSynthesisBatch {
+  return sourceSynthesisBatchSchema.parse(input);
+}
+
+export function parseValidatedSynthesis(input: unknown): ValidatedSynthesis {
+  return validatedSynthesisSchema.parse(input);
 }
 
 export function parseCorpusRunReport(input: unknown): CorpusRunReport {

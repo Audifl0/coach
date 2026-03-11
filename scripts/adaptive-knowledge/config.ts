@@ -22,6 +22,7 @@ export type AdaptiveKnowledgePipelineConfig = {
   readonly backfillMaxDays: number;
   readonly maxRetries: number;
   readonly requestTimeoutMs: number;
+  readonly maxQueriesPerRun: number;
   readonly schedule: {
     readonly cron: string;
     readonly timezone: string;
@@ -38,6 +39,7 @@ type OverridesInput = Partial<{
   maxRetries: number;
   timeoutMs: number;
   requestTimeoutMs: number;
+  maxQueriesPerRun: number;
   scheduleCron: string;
   scheduleTimezone: string;
 }>;
@@ -129,6 +131,8 @@ function parseFromEnv(env: EnvInput): AdaptiveKnowledgePipelineConfig {
 
   const requestTimeoutMs =
     parseMaybeInteger(env.PIPELINE_REQUEST_TIMEOUT_MS, 'PIPELINE_REQUEST_TIMEOUT_MS') ?? DEFAULT_PIPELINE_TIMEOUT_MS;
+  const maxQueriesPerRun =
+    parseMaybeInteger(env.PIPELINE_MAX_QUERIES_PER_RUN, 'PIPELINE_MAX_QUERIES_PER_RUN') ?? 6;
 
   if (backfillMaxDays < freshnessWindowDays) {
     throw new Error('PIPELINE_BACKFILL_MAX_DAYS must be greater than or equal to PIPELINE_FRESHNESS_WINDOW_DAYS');
@@ -143,6 +147,7 @@ function parseFromEnv(env: EnvInput): AdaptiveKnowledgePipelineConfig {
     backfillMaxDays,
     maxRetries,
     requestTimeoutMs,
+    maxQueriesPerRun,
     schedule: Object.freeze({
       cron,
       timezone,
@@ -174,6 +179,10 @@ function parseFromOverrides(overrides: OverridesInput = {}): AdaptiveKnowledgePi
   if (!Number.isInteger(requestTimeoutMs) || requestTimeoutMs <= 0) {
     throw new Error('requestTimeoutMs must be a positive integer');
   }
+  const maxQueriesPerRun = overrides.maxQueriesPerRun ?? 6;
+  if (!Number.isInteger(maxQueriesPerRun) || maxQueriesPerRun <= 0) {
+    throw new Error('maxQueriesPerRun must be a positive integer');
+  }
 
   if (backfillMaxDays < freshnessWindowDays) {
     throw new Error('backfillMaxDays must be greater than or equal to freshnessWindowDays');
@@ -185,6 +194,7 @@ function parseFromOverrides(overrides: OverridesInput = {}): AdaptiveKnowledgePi
     backfillMaxDays,
     maxRetries: retries,
     requestTimeoutMs,
+    maxQueriesPerRun,
     schedule: Object.freeze({
       cron: overrides.scheduleCron?.trim() || DEFAULT_PIPELINE_SCHEDULE_CRON,
       timezone: overrides.scheduleTimezone?.trim() || DEFAULT_PIPELINE_SCHEDULE_TIMEZONE,

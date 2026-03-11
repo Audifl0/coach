@@ -111,6 +111,21 @@ Elle est alignee avec les frontieres de `DOCUMENTATION_TECHNIQUE_FR.md`.
 - `docs/operations/auth-recovery.md`
   - Recuperation acces admin.
 
+## scripts - scripts operateur et sous-systemes offline
+
+- `scripts/adaptive-knowledge/refresh-corpus.ts`
+  - Point d'entree du worker corpus continu.
+- `scripts/adaptive-knowledge/worker-state.ts`
+  - Lease, heartbeat, stale recovery et etat du worker.
+- `scripts/adaptive-knowledge/pipeline-run.ts`
+  - Orchestration des etapes discovery/ingestion/synthese/validation/publication.
+- `scripts/adaptive-knowledge/connectors/*`
+  - Connecteurs de collecte scientifique (PubMed, Crossref, OpenAlex).
+- `scripts/adaptive-knowledge/curation.ts`
+  - Production de la knowledge bible compacte pour le runtime.
+- `scripts/adaptive-knowledge/publish.ts`
+  - Promotion atomique des snapshots et rollback.
+
 ## tests - preuve de comportement
 
 - `tests/auth/*`
@@ -119,6 +134,7 @@ Elle est alignee avec les frontieres de `DOCUMENTATION_TECHNIQUE_FR.md`.
   - Gate onboarding et contrat profil.
 - `tests/program/*`
   - Generation, substitutions, logging, adaptation, tendances, surfaces dashboard.
+  - Inclut aussi les suites `adaptive-knowledge-*`, `coach-knowledge-bible*` et `program-hybrid-generation*` qui verrouillent le worker corpus et ses consommateurs runtime.
 - `tests/ops/*`
   - Contrats deploiement/release-proof, restore drill, headers Caddy, smoke dashboard authentifie.
 - `tests/security/*`
@@ -129,4 +145,3 @@ Elle est alignee avec les frontieres de `DOCUMENTATION_TECHNIQUE_FR.md`.
 - `node_modules/`, `.next/`: exclus (artefacts d'installation/build, non structurants pour la comprehension).
 - `scripts/`: perimetre heterogene; a documenter au cas par cas selon besoin operateur specifique.
 - Inventaire complet fichier-par-fichier: non vise dans ce document, pour garder un guide de navigation maintenable.
-

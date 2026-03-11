@@ -3,6 +3,10 @@ import { parseAdaptiveKnowledgePipelineConfig, type AdaptiveKnowledgePipelineCon
 
 export type ConnectorSource = 'pubmed' | 'crossref' | 'openalex';
 
+export type ConnectorCursorState = {
+  seenRecordIds: string[];
+};
+
 export type ConnectorFetchInput = {
   query: string;
   allowedDomains?: string[];
@@ -10,6 +14,7 @@ export type ConnectorFetchInput = {
   retryCount?: number;
   timeoutMs?: number;
   now?: Date;
+  cursorState?: ConnectorCursorState;
   fetchImpl?: (url: string) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
 };
 
@@ -35,6 +40,8 @@ export type ConnectorFetchResult = {
   recordsSkipped: number;
   telemetry: {
     attempts: number;
+    nextCursor?: string;
+    incrementalSkipped?: number;
   };
   error?: {
     message: string;
@@ -122,9 +129,11 @@ export function normalizeConnectorRecords(
   rawRecords: RawRecord[],
   config: AdaptiveKnowledgePipelineConfig,
   now: Date,
+  cursorState?: ConnectorCursorState,
 ): { records: NormalizedEvidenceRecord[]; skipped: number } {
   const accepted: NormalizedEvidenceRecord[] = [];
   let skipped = 0;
+  const seenIds = new Set(cursorState?.seenRecordIds ?? []);
 
   for (const raw of rawRecords) {
     if (!isAllowedDomain(raw.url, config.allowedDomains)) {
@@ -135,6 +144,10 @@ export function normalizeConnectorRecords(
       skipped += 1;
       continue;
     }
+    if (seenIds.has(raw.id)) {
+      skipped += 1;
+      continue;
+    }
     accepted.push(normalizeRecord(raw));
   }
 
@@ -142,4 +155,34 @@ export function normalizeConnectorRecords(
     records: accepted,
     skipped,
   };
+}
+
+export function parseConnectorCursorState(input: unknown): ConnectorCursorState {
+  if (!input || typeof input !== 'object') {
+    return {
+      seenRecordIds: [],
+    };
+  }
+
+  const record = input as { seenRecordIds?: unknown };
+  return {
+    seenRecordIds: Array.isArray(record.seenRecordIds)
+      ? record.seenRecordIds.filter((value): value is string => typeof value === 'string' && value.length > 0)
+      : [],
+  };
+}
+
+export function dedupeNormalizedEvidenceRecords(records: NormalizedEvidenceRecord[]): NormalizedEvidenceRecord[] {
+  const seen = new Set<string>();
+  const deduped: NormalizedEvidenceRecord[] = [];
+
+  for (const record of records) {
+    if (seen.has(record.id)) {
+      continue;
+    }
+    seen.add(record.id);
+    deduped.push(record);
+  }
+
+  return deduped;
 }

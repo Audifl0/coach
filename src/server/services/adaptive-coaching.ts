@@ -1,4 +1,5 @@
 import { validateProfileInput } from '@/lib/profile/contracts';
+import { loadCoachKnowledgeBible, renderCoachKnowledgeBibleForPrompt } from '@/lib/coach/knowledge-bible';
 import { generateAdaptiveRecommendation } from '@/lib/adaptive-coaching/orchestrator';
 import { parseAdaptiveRecommendation } from '@/lib/adaptive-coaching/contracts';
 import type { AdaptiveRecommendation as PolicyRecommendation } from '@/lib/adaptive-coaching/policy';
@@ -174,6 +175,7 @@ function buildProviderPrompts(input: {
   plannedSessionId: string;
   profile: ReturnType<typeof validateProfileInput>;
   historyCount: number;
+  knowledgeBiblePrompt: string;
 }) {
   const limitationSummary =
     input.profile.limitations.length > 0
@@ -192,6 +194,7 @@ function buildProviderPrompts(input: {
       `weekly_session_target=${input.profile.weeklySessionTarget}`,
       `session_duration=${input.profile.sessionDuration}`,
       `limitations=${limitationSummary}`,
+      input.knowledgeBiblePrompt,
     ].join('\n'),
   };
 }
@@ -649,7 +652,24 @@ export async function buildDefaultAdaptiveCoachingService() {
           profile: ReturnType<typeof validateProfileInput>;
           historyCount: number;
         }) => {
-          const prompts = buildProviderPrompts(input);
+          const knowledgeBible = loadCoachKnowledgeBible({
+            queryTags: [
+              input.profile.goal,
+              'fatigue',
+              'adherence',
+              'readiness',
+              ...(input.profile.limitationsDeclared ? ['limitations', 'pain', 'substitution'] : []),
+            ],
+            principleLimit: 4,
+            sourceLimit: 4,
+          });
+          const prompts = buildProviderPrompts({
+            ...input,
+            knowledgeBiblePrompt: renderCoachKnowledgeBibleForPrompt({
+              bible: knowledgeBible,
+              heading: 'Scientific coach bible',
+            }),
+          });
           const result = await client.generate({
             systemPrompt: prompts.systemPrompt,
             userPrompt: prompts.userPrompt,

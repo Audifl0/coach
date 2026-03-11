@@ -16,6 +16,16 @@ type CrossrefApiResponse = {
     summary: string;
     tags?: string[];
   }>;
+  message?: {
+    items?: Array<{
+      DOI?: string;
+      title?: string[];
+      abstract?: string;
+      created?: {
+        'date-parts'?: number[][] | undefined;
+      };
+    }>;
+  };
 };
 
 const CROSSREF_ENDPOINT = 'https://api.crossref.org/works';
@@ -51,7 +61,27 @@ export async function fetchCrossrefEvidenceBatch(input: ConnectorFetchInput): Pr
       throw new Error(`Crossref request failed with status ${response.status}`);
     }
     const payload = (await response.json()) as CrossrefApiResponse;
-    return payload.results ?? [];
+    if (Array.isArray(payload.results)) {
+      return payload.results;
+    }
+    return (payload.message?.items ?? []).map((item, index) => {
+      const publishedParts = item.created?.['date-parts']?.[0] ?? [];
+      const publishedAt = [
+        publishedParts[0] ?? (input.now ?? new Date()).getUTCFullYear(),
+        String(publishedParts[1] ?? 1).padStart(2, '0'),
+        String(publishedParts[2] ?? 1).padStart(2, '0'),
+      ].join('-');
+
+      return {
+        id: item.DOI ?? `crossref-${index}`,
+        sourceType: 'review' as const,
+        title: item.title?.[0] ?? `Crossref record ${index + 1}`,
+        url: `https://doi.org/${item.DOI ?? `crossref-${index}`}`,
+        publishedAt,
+        summary: item.abstract ?? `Crossref result for ${input.query}`,
+        tags: ['hypertrophy'],
+      };
+    });
   }, config.maxRetries);
 
   if (!result.ok) {
@@ -71,7 +101,7 @@ export async function fetchCrossrefEvidenceBatch(input: ConnectorFetchInput): Pr
     };
   }
 
-  const normalized = normalizeConnectorRecords('crossref', result.value, config, input.now ?? new Date());
+  const normalized = normalizeConnectorRecords('crossref', result.value, config, input.now ?? new Date(), input.cursorState);
   return {
     source: 'crossref',
     skipped: false,
@@ -80,6 +110,7 @@ export async function fetchCrossrefEvidenceBatch(input: ConnectorFetchInput): Pr
     recordsSkipped: normalized.skipped,
     telemetry: {
       attempts: result.attempts,
+      nextCursor: result.value.at(-1)?.id,
     },
   };
 }

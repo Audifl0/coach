@@ -53,6 +53,9 @@ async function readJsonIfPresent<T>(filePath: string): Promise<T | null> {
 async function ensureCandidateArtifactsExist(candidateDir: string): Promise<void> {
   await access(path.join(candidateDir, 'sources.json'));
   await access(path.join(candidateDir, 'principles.json'));
+  await access(path.join(candidateDir, 'validated-synthesis.json'));
+  await access(path.join(candidateDir, 'knowledge-bible.json'));
+  await access(path.join(candidateDir, 'manifest.json'));
   await access(path.join(candidateDir, 'run-report.json'));
 }
 

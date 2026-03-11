@@ -100,3 +100,55 @@ test('retry exhaustion returns source-level skip outcome instead of throwing', a
   assert.equal(result.telemetry.attempts, 3);
   assert.match(result.error?.message ?? '', /crossref unavailable/i);
 });
+
+test('crossref connector parses representative native response items', async () => {
+  const result = await fetchCrossrefEvidenceBatch({
+    query: 'hypertrophy review',
+    allowedDomains: ['doi.org'],
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    fetchImpl: async () =>
+      buildJsonResponse({
+        message: {
+          items: [
+            {
+              DOI: '10.1000/test',
+              title: ['Crossref native title'],
+              abstract: 'crossref abstract',
+              created: { 'date-parts': [[2025, 11, 2]] },
+            },
+          ],
+        },
+      }),
+  });
+
+  assert.equal(result.records.length, 1);
+  assert.equal(result.records[0]?.id, '10.1000/test');
+  assert.equal(result.telemetry.nextCursor, '10.1000/test');
+});
+
+test('cursor state excludes already seen records before final normalization', async () => {
+  const result = await fetchPubmedEvidenceBatch({
+    query: 'progressive overload',
+    allowedDomains: ['pubmed.ncbi.nlm.nih.gov'],
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    cursorState: {
+      seenRecordIds: ['pm-1'],
+    },
+    fetchImpl: async () =>
+      buildJsonResponse({
+        results: [
+          {
+            id: 'pm-1',
+            title: 'Guideline A',
+            url: 'https://pubmed.ncbi.nlm.nih.gov/pm-1',
+            publishedAt: '2025-01-10',
+            sourceType: 'guideline',
+            summary: 'x',
+          },
+        ],
+      }),
+  });
+
+  assert.equal(result.records.length, 0);
+  assert.equal(result.recordsSkipped, 1);
+});
