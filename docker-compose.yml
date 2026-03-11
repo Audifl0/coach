@@ -27,6 +27,8 @@ services:
       start_period: 45s
     networks:
       - backend
+    ports:
+      - "${APP_HOST_BIND:-127.0.0.1}:${APP_HOST_PORT:-3002}:3000"
 
   db:
     image: postgres:18-alpine
@@ -46,6 +48,8 @@ services:
       - backend
 
   caddy:
+    profiles:
+      - caddy
     image: caddy:2.10-alpine
     restart: unless-stopped
     depends_on:
