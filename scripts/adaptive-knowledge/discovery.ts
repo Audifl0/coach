@@ -153,6 +153,7 @@ export function buildAdaptiveKnowledgeDiscoveryPlan(input?: {
               label: seed,
               queryFamily: 'seed',
               query: seed,
+              targetPopulation: undefined,
             },
           ],
         }))
