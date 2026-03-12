@@ -1,7 +1,7 @@
 # Phase 16: Bootstrap profond du worker corpus pour bâtir une bibliothèque scientifique large depuis zéro - Research
 
 **Researched:** 2026-03-12
-**Domain:** transformation du worker corpus en moteur de bootstrap scientifique large, reprenable et publiable progressivement
+**Domain:** transformation du worker corpus incremental actuel en systeme de bootstrap scientifique large, reprisable et exploitable en production
 **Confidence:** HIGH
 
 ## User Constraints
@@ -9,330 +9,207 @@
 ## Implementation Decisions
 
 ### Scope de phase
-- La phase 16 ne doit pas optimiser le refresh incrémental existant uniquement; elle doit ajouter un vrai mode de bootstrap capable de travailler sur des heures, jours ou semaines.
-- Le refresh rapide actuel doit être conservé, mais séparé explicitement du bootstrap afin d'éviter qu'un run profond ne dégrade le flux opérateur courant.
-- Le résultat attendu n'est pas un unique run géant, mais un système de constitution progressive d'une bibliothèque scientifique large, sûre à reprendre et observable.
+- La phase doit permettre au worker de construire une bibliotheque scientifique large depuis zero sur plusieurs runs, pas seulement d'ameliorer un refresh ponctuel.
+- Le systeme final doit distinguer deux modes:
+  - `bootstrap`: mode long, profond, reprisable, capable de backfill multi-pages et de construire un backlog de travail;
+  - `refresh`: mode court, borne, optimise pour entretenir un corpus deja bootstrape.
+- La phase doit etendre le pipeline existant dans `scripts/adaptive-knowledge/` plutot que creer un deuxieme systeme parallele sans gouvernance partagee.
 
-### Réalité du code actuel
-- `scripts/adaptive-knowledge/pipeline-run.ts` orchestre encore un run court `discover -> ingest -> synthesize -> validate -> publish`.
-- `scripts/adaptive-knowledge/discovery.ts` produit un petit plan borné de queries seedées; il n'existe ni pagination profonde, ni file d'attente durable, ni plan de backfill.
-- `scripts/adaptive-knowledge/connectors/shared.ts` filtre immédiatement les résultats par fraîcheur, domaine et `alreadySeen`, puis ne conserve qu'un lot normalisé très réduit.
-- `connector-state.json` ne stocke qu'une petite mémoire `seenRecordIds`, insuffisante pour un bootstrap massif.
-- Les connecteurs `pubmed`, `crossref` et `openalex` sont aujourd'hui utilisés comme fetchers de lots légers, pas comme collecteurs profonds.
-- Le dashboard et le contrôle opérateur existent déjà, ce qui donne une bonne base pour exposer jobs, files d'attente, checkpoints et publications progressives.
+### Ce que le code actuel permet deja
+- `pipeline-run.ts` orchestre deja `discover -> ingest -> synthesize -> validate -> publish`.
+- `publish.ts` fournit deja une frontiere de promotion atomique utile a conserver.
+- Le dashboard worker existe deja et peut devenir la surface operateur du bootstrap long.
+- Les connecteurs PubMed/Crossref/OpenAlex sont deja integres, mais restent limites a:
+  - quelques seeds par run;
+  - un faible budget de pages;
+  - un filtre de fraicheur/seenIds pense pour refresh, pas pour backfill profond.
 
-### Conclusion structurante
-- Le worker actuel est un rafraîchisseur incrémental.
-- Le worker cible doit devenir une plate-forme de traitement en plusieurs couches:
-  - planification de collecte;
-  - acquisition brute paginée;
-  - normalisation/identité/déduplication;
-  - triage/ranking;
-  - acquisition full-text/abstract enrichie;
-  - extraction structurée;
-  - consolidation/synthèse;
-  - quality gates;
-  - publication progressive.
+### Limitations structurelles a corriger
+- Le worker raisonne aujourd'hui en "petit lot candidat a publier immediatement", pas en "campagne de constitution de bibliotheque".
+- `connector-state.json` ne stocke qu'une liste de `seenRecordIds`; c'est insuffisant pour reprendre un bootstrap multi-sources et multi-pages sur des semaines.
+- Les connecteurs produisent directement des `NormalizedEvidenceRecord`; il manque un niveau intermediaire pour stocker:
+  - metadata brutes;
+  - statut d'acquisition;
+  - statut d'extraction;
+  - motifs de rejet ou d'attente.
+- Le pipeline n'a ni file de travail persistante, ni notion de budgets inter-etapes, ni progression partielle publiable.
+- Le dashboard montre des snapshots et runs, mais pas une campagne de bootstrap, sa profondeur, ni son etat de reprise.
+
+### Architecture cible recommandee
+- Introduire une separation explicite entre:
+  - `search backlog`: requetes, curseurs, domaines, priorites, progression;
+  - `raw evidence store`: metadata brutes et identites source-stables;
+  - `document staging`: abstract/full-text/disponibilite documentaire;
+  - `structured extraction store`: artefacts intermediaires par etude/document;
+  - `publication snapshots`: vue compacte, gatee et runtime-safe.
+- Garder `knowledge-bible.json` comme frontiere aval stable, mais ne plus forcer tout le bootstrap a converger en un seul run.
+- Considerer le snapshot publie comme "vue active resumee" d'une bibliotheque en croissance, et non comme representation exhaustive du backlog.
+
+### Mode split bootstrap versus refresh
+- `bootstrap` doit:
+  - elargir le budget de requetes et de pagination;
+  - ignorer le filtre de fraicheur en tant que gate principal;
+  - persister sa progression finement;
+  - accepter des runs longs et reprises frequentes;
+  - publier par increments scientifiquement utiles sans exiger que tout le backfill soit fini.
+- `refresh` doit:
+  - reutiliser la meme infrastructure;
+  - cibler les updates recentes et les trous detectes;
+  - rester borne, rapide et economique.
+
+### Strategie de backfill et pagination
+- Chaque connecteur doit exposer un state persistant plus riche qu'un simple curseur global:
+  - `queryFamily`
+  - `topicKey`
+  - `cursor`
+  - `pageBudgetConsumed`
+  - `lastAttemptAt`
+  - `lastSuccessAt`
+  - `exhausted`
+- Le moteur de collecte doit travailler sur une file priorisee de jobs de collecte plutot que recalculer tout a chaque run.
+- La priorisation doit combiner:
+  - couverture thematique manquante;
+  - valeur scientifique attendue;
+  - profondeur restante;
+  - cout estime par source.
+
+### Acquisition documentaire
+- La bibliotheque large ne doit pas dependre uniquement de titres/metadata.
+- Il faut distinguer:
+  - documents avec metadata seules;
+  - documents avec abstract fiable;
+  - documents avec full-text accessible/licite;
+  - documents non extractibles mais gardes comme references.
+- Le pipeline doit persister explicitement cette profondeur documentaire, sinon la qualite scientifique restera limitee.
+
+### Extraction et synthese a grande echelle
+- Les LLM ne doivent pas etre appeles sur tout le backlog brut.
+- Il faut inserer un triage deterministe avant toute extraction couteuse:
+  - ranking scientifique record-level;
+  - regroupement thematique;
+  - budget par lot;
+  - retry state et motifs de blocage.
+- La synthese finale runtime doit consommer des extractions deja structurees, pas des metadata brutes.
+
+### Publication et quality gates
+- Le gate de publication ne doit pas exiger la completion du bootstrap entier.
+- Il doit verifier qu'un sous-ensemble de bibliotheque est:
+  - suffisamment couvert sur les themes critiques;
+  - assez diversifie en sources/types d'evidence;
+  - auditable jusqu'aux extractions et documents sources;
+  - compatible avec `knowledge-bible`.
+- Il faut donc des gates progressifs:
+  - gates de staging;
+  - gates d'extraction;
+  - gates de publication runtime.
+
+### Ops et dashboard
+- Le dashboard doit evoluer d'une vision "dernier run / dernier snapshot" a une vision de campagne:
+  - progression bootstrap globale;
+  - queue depth;
+  - jobs actifs/bloques;
+  - curseurs par source/query family;
+  - throughput;
+  - budgets temps/couts;
+  - deltas verses vers le snapshot actif.
+- L'operateur doit pouvoir:
+  - lancer un bootstrap;
+  - le mettre en pause;
+  - le reprendre;
+  - relancer seulement certaines families ou sources;
+  - reinitialiser proprement un backlog si necessaire.
 
 ## Summary
 
-Le dépôt a déjà les bonnes briques pour la fin de chaîne: lease, artefacts de run, publication atomique, dashboard et synthèse distante structurée. Ce qui manque n'est pas un meilleur prompt, mais un socle de bootstrap durable en amont. Tant que le pipeline travaille sur six requêtes et des petits lots éphémères, il ne peut pas bâtir une bibliothèque scientifique large depuis zéro.
+Le worker actuel n'est pas "faux"; il est simplement concu comme un refresh incrémental borne, pas comme un moteur de constitution de bibliotheque scientifique a grande echelle. Sa vitesse actuelle vient de cette hypothese: peu de requetes, peu de pages, filtrage agressif, publication immediate. Pour atteindre l'objectif utilisateur, il faut changer l'unite de travail.
 
-Le changement de phase 16 doit donc être architectural. Il faut découpler la constitution du corpus de la synthèse finale, introduire des files d'attente et des checkpoints persistants, accepter que la bibliothèque se construise par accumulation progressive, puis rendre la promotion du snapshot active indépendante de la vitesse d'acquisition.
+La bonne unite de travail n'est plus "un snapshot candidat par run" mais "une campagne de bootstrap persistante composee de jobs de collecte, de staging, d'extraction et de publication partielle". La bibliotheque doit donc avoir un etat propre au-dela du snapshot runtime: backlog, curseurs, artefacts documentaires, extractions structurees, statuts de traitement et budgets.
 
-**Primary recommendation:** découper la phase en cinq plans: séparation bootstrap/refresh et état durable, acquisition profonde paginée, identité/déduplication/triage, extraction structurée budgétée, puis publication progressive et contrôle opérateur.
+La recommandation centrale est de conserver les frontieres de confiance deja valides du systeme existant, en particulier `publish.ts`, `knowledge-bible.json` et le dashboard operateur, tout en intercalant un vrai moteur de backfill reprisables en amont. Autrement dit: ne pas jeter le pipeline, mais l'elever d'un worker de refresh a une plateforme de bootstrap continue.
 
-## What The Current Worker Is Missing
+**Primary recommendation:** decomposer la phase en cinq plans: fondations etat/contrats, backfill/pagination, staging documentaire et extraction, publication progressive et quality gates, puis dashboard/verification operateur.
 
-### 1. Distinction bootstrap vs refresh
-- Le mode `refresh` est aujourd'hui le seul vrai mode opératoire.
-- Un bootstrap sérieux doit avoir:
-  - sa propre cadence;
-  - ses propres checkpoints;
-  - ses propres budgets;
-  - sa propre politique de publication;
-  - la possibilité de s'arrêter et reprendre.
+## Reuse Opportunities
 
-### 2. Backfill profond
-- Les connecteurs doivent pouvoir itérer des milliers de résultats, pas seulement un premier lot.
-- Les curseurs doivent être persistés par source, par query family, par topic, et par job.
-- La fraîcheur ne peut plus être le premier filtre global pour le bootstrap; il faut distinguer:
-  - `bootstrap lookback` large;
-  - `refresh freshness window` courte.
+### Runtime et orchestration
+- Reutiliser `refresh-corpus.ts` et `worker-state.ts` pour introduire de nouveaux modes d'execution, au lieu de creer un daemon parallele.
+- Reutiliser le contrat `run-report.json` comme base, mais l'etendre avec des dimensions campagne/bootstrap.
 
-### 3. Entrepôt intermédiaire
-- Les records ne doivent plus passer directement de l'API source à `NormalizedEvidenceRecord[]` en mémoire.
-- Il faut trois couches de stockage distinctes:
-  - `raw-records`: réponse brute/compactée des fournisseurs et métadonnées source;
-  - `normalized-records`: représentation typée, dédupliquée et enrichie;
-  - `content-artifacts`: abstracts enrichis, full-text, extractions structurées, diagnostics.
+### Connecteurs
+- Conserver les connecteurs PubMed/Crossref/OpenAlex, mais les faire travailler via une file de jobs et des curseurs persistants par requete.
+- Reutiliser la normalisation et les domaines allowlistes, tout en deplacant les decisions de triage plus loin dans la chaine.
 
-### 4. Déduplication à l'échelle
-- `seenRecordIds` sur 500 items n'est pas un mécanisme de bibliothèque.
-- Il faut des identités stables et multi-clés:
-  - DOI canonique;
-  - PMID/PMCID;
-  - OpenAlex ID;
-  - URL canonique;
-  - hash titre+auteur+année en fallback.
-- La déduplication doit distinguer:
-  - même oeuvre référencée par plusieurs sources;
-  - même source revue dans plusieurs runs;
-  - version enrichie du même record.
+### Publication runtime
+- Garder `manifest.json`, `knowledge-bible.json`, `diff.json`, `active.json` et la promotion atomique comme frontiere stable.
+- Produire en plus des artefacts amont non runtime-safe, mais auditables.
 
-### 5. Triage avant coût LLM
-- Tout ne doit pas partir en extraction distante.
-- Il faut une étape de scoring/triage peu coûteuse pour sélectionner:
-  - records à garder en bibliothèque brute;
-  - records à enrichir via abstract/full-text;
-  - records à extraire via LLM;
-  - records à exclure du snapshot publiable.
+## Risks and Regressions
 
-### 6. Publication progressive
-- Un bootstrap long ne doit pas retenir tout le système jusqu'à la fin.
-- Il faut au moins trois notions:
-  - état de bibliothèque accumulée;
-  - snapshot candidat de travail;
-  - snapshot actif publié pour le runtime.
-- La promotion doit rester atomique et prudente, mais ne pas dépendre de l'achèvement total du bootstrap historique.
+### Risque 1: explosion de volume disque
+- Un bootstrap large va accumuler metadata, documents et extractions.
+- Mitigation: separer stores, politiques de retention et compression; ne pas tout copier dans chaque snapshot publie.
 
-## Recommended Target Architecture
+### Risque 2: cout LLM ingouvernable
+- Si l'extraction distante voit trop de records trop tot, la phase devient non viable.
+- Mitigation: ranking/triage deterministe, budgets de lots, caps journaliers, files de retry.
 
-### A. Split explicite des modes
-- `refresh`: petit lot récent, SLA court, publication opportuniste.
-- `bootstrap`: exploration large, plusieurs jobs, reprise durable, budgets explicites.
-- `check`: diagnostic sans promotion.
+### Risque 3: confusion entre bibliotheque et snapshot actif
+- Si les artefacts bootstrap et runtime sont melanges, le systeme devient illisible.
+- Mitigation: garder des zones de stockage et des contrats distincts.
 
-### B. Persistent job model
-- Introduire des jobs persistés en JSON/artefacts locaux dans `.planning/knowledge/adaptive-coaching/` tant que le projet reste file-based.
-- Chaque job de bootstrap doit porter:
-  - `jobId`
-  - `mode`
-  - `scope`
-  - `topic/query families`
-  - `source cursors`
-  - `queue counts`
-  - `budget`
-  - `status`
-  - `lastCheckpointAt`
-  - `operator notes`
+### Risque 4: reprise bancale apres crash
+- Sans checkpointing fin, un bootstrap long sera inutilisable en prod.
+- Mitigation: persister l'avancement par job/source/stage, pas seulement par run global.
 
-### C. Queueing and resumability
-- Créer des files logiques séparées:
-  - `discovery-queue`
-  - `fetch-queue`
-  - `normalize-queue`
-  - `enrichment-queue`
-  - `extract-queue`
-  - `synthesis-queue`
-- Un run worker ne doit plus finir forcément tout le pipeline; il doit consommer un budget de travail puis checkpoint/reprendre.
-- Les jobs doivent être idempotents: si un worker redémarre, la même unité de travail ne doit pas corrompre l'état.
-
-### D. Storage layout
-- Conserver le répertoire racine actuel, mais ajouter des sous-répertoires stables:
-  - `jobs/`
-  - `queues/`
-  - `warehouse/raw/`
-  - `warehouse/normalized/`
-  - `warehouse/content/`
-  - `snapshots/`
-  - `state/`
-  - `logs/`
-- Tant que le projet reste sans nouvelle base dédiée pour le corpus, ce layout permet déjà une forte amélioration sans casser le runtime existant.
-
-## Connector-Specific Research Notes
-
-### PubMed
-- C'est la meilleure source primaire actuelle du système pour le domaine biomédical/sport.
-- Il faut supporter:
-  - pagination profonde par `retstart`/history equivalent côté connector;
-  - seeds thématiques et historiques;
-  - lookback large en bootstrap;
-  - persistance des PMIDs déjà rencontrés.
-- Le bootstrap peut commencer par PubMed car la qualité moyenne y est meilleure pour le domaine.
-
-### Crossref
-- Utile pour élargir la couverture DOI et capter du contenu hors PubMed.
-- Bruit plus fort: beaucoup de résultats hors sujet.
-- Nécessite un triage plus agressif en amont et une normalisation canonique DOI plus solide.
-
-### OpenAlex
-- Bon pour enrichir les graphes de références et compléter les métadonnées.
-- Doit probablement servir davantage comme source de liaison/enrichissement que comme source principale de publication brute.
-- Les curseurs et identifiants OpenAlex doivent être reliés à DOI/PMID lorsqu'ils existent.
-
-## Raw vs Normalized vs Extracted
-
-### Raw records
-- Conserver le payload minimal nécessaire à l'audit et à la reprise.
-- Ne pas republier ces blobs dans les snapshots actifs runtime.
-- Objectif: reproductibilité, debugging et réingestion sans rappeler systématiquement les API.
-
-### Normalized records
-- Étendre `NormalizedEvidenceRecord` ou créer un record warehouse voisin pour porter:
-  - identités canoniques;
-  - provenance multi-source;
-  - classification thématique;
-  - score de triage;
-  - statut d'enrichissement;
-  - flags d'éligibilité à extraction/publication.
-
-### Extracted content artifacts
-- Distinguer:
-  - `abstract-only enrichment`
-  - `full-text availability`
-  - `structured study extraction`
-  - `final principle synthesis`
-- Les artefacts d'extraction doivent être traçables au record canonique.
-
-## Full-Text and Legal Constraints
-
-### Practical constraints
-- Le projet ne doit pas supposer un accès universel aux PDFs payants.
-- La stratégie raisonnable est:
-  - abstract et métadonnées par défaut;
-  - full-text seulement si URL explicitement accessible et domaine approuvé;
-  - capture du statut `fullTextAvailable` sans bloquer la bibliothèque quand absent.
-
-### Legal/ops constraints
-- Respecter la whitelist de domaines approuvés.
-- Ne pas ajouter de scraping opportuniste de domaines non approuvés sans décision explicite.
-- Garder une séparation claire entre métadonnées indexées et contenu textuel extrait pour limiter les risques de stockage inapproprié.
-
-## Cost and Time Budgeting
-
-### Principle
-- Le coût LLM doit être déclenché tard, après triage.
-- L'extraction distante est chère; la synthèse finale l'est encore plus si elle porte trop de contenu.
-
-### Recommended control knobs
-- budget par job:
-  - max fetched records
-  - max normalized records
-  - max enriched abstracts/full texts
-  - max extraction batches
-  - max synthesis batches
-  - max runtime minutes
-- arrêt propre avec checkpoint quand le budget est atteint.
-
-### Suggested policy
-- bootstrap:
-  - budgets larges mais bornés;
-  - priorisation par topic gaps et quality targets;
-  - publication possible par tranches.
-- refresh:
-  - budgets faibles;
-  - recent-only;
-  - exploitation de la bibliothèque existante.
-
-## Quality Gates For A From-Zero Bootstrap
-
-### Candidate library gates
-- Le bootstrap ne doit pas attendre une bibliothèque parfaite pour produire de la valeur.
-- Introduire des gates à deux niveaux:
-  - `library accumulation gates`: qualité minimale pour retenir des records dans la bibliothèque de travail;
-  - `publication gates`: qualité plus stricte pour promotion vers snapshot actif.
-
-### Publication gates to add
-- couverture minimale par thèmes critiques;
-- diversité minimale des domaines/types de preuves;
-- densité minimale de provenance pour les principes publiés;
-- ratio maximal de records trop faibles ou trop incomplets;
-- absence de contradictions critiques non résolues;
-- fraîcheur ou justification explicite quand la preuve est ancienne mais encore pertinente.
-
-## Operator Controls and Dashboard Implications
-
-### New dashboard needs
-- Vue distincte bootstrap vs refresh.
-- Création, reprise, pause et annulation de jobs bootstrap.
-- Queue depths et throughput par étape.
-- Cursors par source/query family.
-- Budget consommé vs budget restant.
-- Warehouse growth: raw / normalized / extracted / published.
-- Diagnostics d'éligibilité à publication.
-- Vue des records canonisés et raisons de rejet.
-
-### Controls to add
-- `Start bootstrap`
-- `Resume bootstrap`
-- `Pause bootstrap`
-- `Promote candidate if gates pass`
-- `Reset specific cursor scope`
-- `Requeue failed extraction batches`
-
-## Failure Modes To Plan For
-
-### Technical
-- timeouts API source;
-- rate limiting fournisseur;
-- crash process pendant un lot;
-- corruption d'un cursor ou checkpoint;
-- explosion du volume disque;
-- temps de synthèse/extraction dépassant les budgets.
-
-### Product-quality
-- bibliothèque large mais bruitée;
-- records majoritairement anciens ou hors sujet;
-- duplication massive multi-sources;
-- trop peu de full-text exploitables;
-- principes actifs trop pauvres malgré une bibliothèque grossissante.
-
-### Mitigations
-- états de job idempotents;
-- checkpoints fréquents;
-- budgets d'étape;
-- warehouse auditable;
-- gates de publication indépendants de l'accumulation brute;
-- rollback conservant le snapshot actif précédent.
+### Risque 5: dashboard trompeur
+- Une simple vue "completed/failed" n'est pas suffisante pour un bootstrap sur plusieurs jours.
+- Mitigation: introduire progression, queue depth, throughput et blocages structurés.
 
 ## Recommended 5-Plan Decomposition
 
-### Plan 1: Bootstrap architecture, mode split, and persistent job state
-- Introduire un vrai mode `bootstrap` séparé de `refresh/check`.
-- Poser le modèle de job, les checkpoints durables et le layout de stockage.
-- Étendre le contrôle worker et l'état opérateur à cette nouvelle mécanique.
+### Plan 1: Contrats bootstrap, etat persistant, mode split
+- Introduire les contrats et stores du bootstrap.
+- Definir `bootstrap` versus `refresh`.
+- Persister file de jobs, curseurs et progression.
 
-### Plan 2: Deep source acquisition, pagination, and raw warehouse
-- Refaire les connecteurs pour supporter pagination profonde, backfill historique et curseurs persistants.
-- Stocker les réponses brutes compactes et les métadonnées d'acquisition.
-- Alimenter des files de travail plutôt qu'un seul tableau mémoire.
+### Plan 2: Backfill profond et pagination
+- Remplacer la collecte par run statique par un moteur de jobs pagines.
+- Prioriser queries/families/sources selon couverture et profondeur.
+- Rendre la collecte reprisable et budgetee.
 
-### Plan 3: Canonical identity, deduplication, and triage
-- Introduire l'identité canonique multi-source et la déduplication à l'échelle.
-- Construire la couche normalized warehouse et le scoring/triage peu coûteux.
-- Préparer les lots d'enrichissement/extraction à partir des records les plus prometteurs.
+### Plan 3: Staging documentaire et extraction structuree
+- Ajouter le niveau metadata -> abstract/full-text -> extraction.
+- Persister les artefacts documentaires et les motifs de rejet.
+- Decoupler collecte et extraction LLM.
 
-### Plan 4: Enrichment, structured extraction, and cost-governed synthesis
-- Ajouter acquisition abstract/full-text quand disponible.
-- Structurer l'extraction par étude/lot avec budgets et reprise.
-- Réduire la synthèse finale à un consommateur d'extractions déjà qualifiées.
+### Plan 4: Publication progressive et quality gates
+- Construire une vue publiable depuis la bibliotheque accumulee.
+- Gate progressifs et publication incrementale sure.
+- Compatibilite stricte runtime.
 
-### Plan 5: Progressive publication, dashboard operations, and end-to-end verification
-- Permettre la publication progressive depuis une bibliothèque en croissance.
-- Exposer jobs, queues, budgets, warehouse et publications dans le dashboard.
-- Vérifier le comportement de reprise, de blocage qualité et de compatibilité runtime.
+### Plan 5: Dashboard et verification longue duree
+- Faire du dashboard une vraie surface d'operations bootstrap.
+- Ajouter controles pause/reprise/reset scope.
+- Verifier le comportement end-to-end sur bootstrap long, reprise, blocage et promotion.
 
 ## Verification Implications
 
-### Tests à prévoir
-- tests unitaires sur curseurs/job states/queues;
-- tests connecteurs paginés avec curseurs et backfill;
-- tests identity/dedup multi-source;
-- tests pipeline bootstrap sur reprise après interruption;
-- tests quality gates publication vs accumulation;
-- tests dashboard sur statuts de jobs bootstrap et compteurs de warehouse;
-- tests runtime pour prouver qu'un snapshot actif partiel mais valide reste consommable.
+### Tests a prevoir
+- Tests de contrats/stores pour les nouvelles structures persistantes bootstrap.
+- Tests de collecteurs pagines et reprise de curseurs.
+- Tests de staging documentaire et d'extraction partielle avec budgets.
+- Tests de publication progressive garantissant la compatibilite runtime.
+- Tests dashboard/API sur queue depth, progression, pause/reprise et erreur de campagne.
 
-### Verification functional goals
-- Démarrer un bootstrap from scratch sans publication immédiate obligatoire.
-- Reprendre un bootstrap interrompu sans reprocesser massivement les mêmes unités.
-- Construire progressivement une bibliothèque nettement plus large que le pipeline actuel.
-- Promouvoir un snapshot actif seulement quand les gates de publication sont satisfaits.
+### Verifications fonctionnelles
+- Simuler un bootstrap a froid sur plusieurs ticks sans perte d'etat.
+- Verifier qu'un redeploiement ou timeout ne force pas de repart a zero.
+- Verifier qu'un sous-ensemble utile peut etre publie avant la fin du bootstrap complet.
+- Verifier que `refresh` continue de fonctionner rapidement une fois la bibliotheque amorcee.
 
 ## Planning Notes
 
-- Ne pas essayer de livrer "la bibliothèque parfaite" en un seul plan; commencer par le mode bootstrap et la persistance.
-- Garder la publication active et le runtime hybrides comme frontière de confiance inchangée.
-- Préserver l'ergonomie opérateur: un long bootstrap doit rester visible, contrôlable et explicable depuis le dashboard.
-- Préférer des artefacts intermédiaires explicitement typés à des heuristiques implicites en mémoire.
+- Commencer par les contrats et l'etat persistant; sans cela, tout le reste restera jetable.
+- Ne pas mettre le full-text ou les LLM dans le chemin critique du collecteur brut.
+- Faire de la bibliotheque un store cumulatif et du snapshot actif une projection gatee.
+- Preserver strictement la compatibilite `knowledge-bible` et le fallback deterministic.
