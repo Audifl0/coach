@@ -256,6 +256,7 @@ Recent decisions affecting current work:
 - Phase 13 added: Moteur de synthese IA distant du corpus scientifique
 - Phase 14 added: Dashboard web de suivi temps reel du worker corpus
 - Phase 15 added: Qualite scientifique du worker corpus
+- Phase 16 added: Bootstrap profond du worker corpus pour bâtir une bibliothèque scientifique large depuis zéro
 
 ### Pending Todos
 

@@ -270,3 +270,13 @@ Plans:
 - Les snapshots publies privilegient des evidences mieux classees, mieux contextualisees et mieux reliees aux principes retenus.
 - La synthese s'appuie sur une extraction structuree par etude ou lot avant consolidation finale, avec traces d'exclusion explicites.
 - Un snapshot scientifiquement pauvre, peu diversifie ou insuffisamment couvert ne peut pas etre promu vers la bible active.
+
+### Phase 16: Bootstrap profond du worker corpus pour bâtir une bibliothèque scientifique large depuis zéro
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 15
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 16 to break down)
