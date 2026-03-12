@@ -2,6 +2,9 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type {
+  WorkerCorpusLibraryDetail,
+  WorkerCorpusLibraryEntry,
+  WorkerCorpusLibraryResponse,
   WorkerCorpusOverviewSection,
   WorkerCorpusOverviewResponse,
   WorkerCorpusRunDetail,
@@ -11,6 +14,8 @@ import type {
   WorkerCorpusSnapshotDetail,
 } from '@/lib/program/contracts';
 import {
+  parseWorkerCorpusLibraryDetail,
+  parseWorkerCorpusLibraryResponse,
   parseWorkerCorpusOverviewResponse,
   parseWorkerCorpusOverviewSection,
   parseWorkerCorpusRunDetail,
@@ -19,14 +24,23 @@ import {
   parseWorkerCorpusStatusResponse,
 } from '@/lib/program/contracts';
 import {
+  parseAdaptiveKnowledgeDiscoveryTelemetry,
+  parseAdaptiveKnowledgeRankingTelemetry,
   parseCorpusRunReport,
   parseCorpusSnapshotManifest,
+  parseNormalizedEvidenceRecord,
   parseValidatedSynthesis,
+  type AdaptiveKnowledgeDiscoveryTelemetry,
+  type AdaptiveKnowledgeRankingTelemetry,
   type CorpusRunReport,
   type CorpusSnapshotManifest,
+  type NormalizedEvidenceRecord,
+  type StructuredStudyExtraction,
   type ValidatedSynthesis,
 } from '../../../scripts/adaptive-knowledge/contracts';
+import type { CuratedKnowledgeBible } from '../../../scripts/adaptive-knowledge/curation';
 import { readAdaptiveKnowledgeWorkerState } from '../../../scripts/adaptive-knowledge/worker-state';
+import { readWorkerControlState } from './worker-control';
 
 type Pointer = {
   snapshotId: string;
@@ -51,6 +65,12 @@ type SnapshotArtifacts = {
     evidenceRecordDelta: number;
     principleDelta: number;
   } | null;
+};
+
+type SourcesArtifact = {
+  records: NormalizedEvidenceRecord[];
+  discovery: AdaptiveKnowledgeDiscoveryTelemetry | null;
+  ranking: AdaptiveKnowledgeRankingTelemetry | null;
 };
 
 type WorkerCorpusDashboardInput = {
@@ -200,6 +220,7 @@ async function readValidatedSynthesisArtifact(snapshotDir: string): Promise<Vali
   try {
     return parseValidatedSynthesis({
       principles: raw.principles,
+      studyExtractions: raw.studyExtractions,
       rejectedClaims: raw.rejectedClaims,
       coverage: raw.coverage,
       contradictions: raw.contradictions,
@@ -208,6 +229,54 @@ async function readValidatedSynthesisArtifact(snapshotDir: string): Promise<Vali
   } catch {
     return null;
   }
+}
+
+async function readSourcesArtifact(snapshotDir: string): Promise<SourcesArtifact | null> {
+  const raw = await readJson<Record<string, unknown>>(path.join(snapshotDir, 'sources.json'));
+  if (!raw) {
+    return null;
+  }
+
+  const records = Array.isArray(raw.records)
+    ? raw.records
+        .map((record) => {
+          try {
+            return parseNormalizedEvidenceRecord(record);
+          } catch {
+            return null;
+          }
+        })
+        .filter((record): record is NormalizedEvidenceRecord => record !== null)
+    : [];
+
+  let discovery: AdaptiveKnowledgeDiscoveryTelemetry | null = null;
+  if (raw.discovery) {
+    try {
+      discovery = parseAdaptiveKnowledgeDiscoveryTelemetry(raw.discovery);
+    } catch {
+      discovery = null;
+    }
+  }
+
+  let ranking: AdaptiveKnowledgeRankingTelemetry | null = null;
+  if (raw.ranking) {
+    try {
+      ranking = parseAdaptiveKnowledgeRankingTelemetry(raw.ranking);
+    } catch {
+      ranking = null;
+    }
+  }
+
+  return {
+    records,
+    discovery,
+    ranking,
+  };
+}
+
+async function readKnowledgeBibleArtifact(snapshotDir: string): Promise<CuratedKnowledgeBible | null> {
+  const raw = await readJson<CuratedKnowledgeBible>(path.join(snapshotDir, 'knowledge-bible.json'));
+  return raw ?? null;
 }
 
 async function readSnapshotArtifacts(
@@ -249,6 +318,32 @@ function safeParseManifest(raw: unknown): CorpusSnapshotManifest | null {
   } catch {
     return null;
   }
+}
+
+function buildLibraryEntry(
+  artifact: SnapshotArtifacts,
+  pointers: { active: Pointer | null; rollback: Pointer | null },
+): WorkerCorpusLibraryEntry {
+  return {
+    snapshotId: artifact.snapshotId,
+    runId: artifact.runReport.runId,
+    mode: artifact.runReport.mode,
+    artifactState: artifact.artifactState,
+    outcome: deriveRunOutcome(artifact.runReport),
+    severity: deriveSeverityForRun(artifact.runReport),
+    generatedAt: artifact.manifest?.generatedAt ?? null,
+    promotedAt: pointers.active?.snapshotId === artifact.snapshotId ? pointers.active.promotedAt : null,
+    evidenceRecordCount: artifact.manifest?.evidenceRecordCount ?? artifact.validatedSynthesis?.coverage.recordCount ?? null,
+    principleCount: artifact.manifest?.principleCount ?? artifact.validatedSynthesis?.principles.length ?? null,
+    contradictionCount: artifact.validatedSynthesis?.contradictions.length ?? 0,
+    sourceDomains: artifact.manifest?.sourceDomains ?? artifact.validatedSynthesis?.coverage.sourceDomains ?? [],
+    coveredTags: artifact.validatedSynthesis?.coverage.coveredTags ?? [],
+    qualityGateReasons: parseBlockedReasons(
+      artifact.runReport.stageReports.find((stage) => stage.stage === 'publish')?.message,
+    ),
+    isActiveSnapshot: pointers.active?.snapshotId === artifact.snapshotId,
+    isRollbackSnapshot: pointers.rollback?.snapshotId === artifact.snapshotId,
+  };
 }
 
 async function listSnapshotArtifacts(knowledgeRootDir: string): Promise<SnapshotArtifacts[]> {
@@ -305,7 +400,7 @@ function buildRunRow(
   };
 }
 
-function sortNewestFirst<T extends { startedAt?: string; generatedAt?: string }>(rows: T[]): T[] {
+function sortNewestFirst<T extends { startedAt?: string | null; generatedAt?: string | null }>(rows: T[]): T[] {
   return [...rows].sort((left, right) => {
     const leftTime = Date.parse(left.startedAt ?? left.generatedAt ?? '') || 0;
     const rightTime = Date.parse(right.startedAt ?? right.generatedAt ?? '') || 0;
@@ -347,14 +442,15 @@ export async function loadWorkerCorpusOverview(
   const now = input.now ?? new Date();
 
   try {
-    const [workerState, activePointer, rollbackPointer, snapshotArtifacts] = await Promise.all([
+    const [workerState, controlState, activePointer, rollbackPointer, snapshotArtifacts] = await Promise.all([
       readAdaptiveKnowledgeWorkerState(knowledgeRootDir),
+      readWorkerControlState({ knowledgeRootDir, now }),
       readPointer(path.join(knowledgeRootDir, 'active.json')),
       readPointer(path.join(knowledgeRootDir, 'rollback.json')),
       listSnapshotArtifacts(knowledgeRootDir),
     ]);
 
-    if (!workerState && !activePointer && snapshotArtifacts.length === 0) {
+    if (!workerState && !activePointer && snapshotArtifacts.length === 0 && controlState.state === 'idle') {
       return parseWorkerCorpusOverviewSection({ status: 'empty' });
     }
 
@@ -375,6 +471,7 @@ export async function loadWorkerCorpusOverview(
 
     const overview = parseWorkerCorpusOverviewResponse({
       generatedAt: now.toISOString(),
+      control: controlState,
       live: deriveLiveState(workerState, now),
       publication: {
         severity: derivePublicationSeverity({
@@ -421,6 +518,7 @@ export async function loadWorkerCorpusStatus(
 
   return parseWorkerCorpusStatusResponse({
     generatedAt: section.data.generatedAt,
+    control: section.data.control,
     live: section.data.live,
     publication: section.data.publication,
   });
@@ -523,5 +621,109 @@ export async function getWorkerCorpusSnapshotDetail(
       : null,
     contradictionCount: artifact.validatedSynthesis?.contradictions.length ?? 0,
     coverageRecordCount: artifact.validatedSynthesis?.coverage.recordCount ?? null,
+  });
+}
+
+export async function listWorkerCorpusLibrary(
+  input: WorkerCorpusDashboardInput = {},
+): Promise<WorkerCorpusLibraryResponse> {
+  const knowledgeRootDir = input.knowledgeRootDir ?? DEFAULT_ROOT_DIR;
+  const now = input.now ?? new Date();
+  const [artifacts, activePointer, rollbackPointer] = await Promise.all([
+    listSnapshotArtifacts(knowledgeRootDir),
+    readPointer(path.join(knowledgeRootDir, 'active.json')),
+    readPointer(path.join(knowledgeRootDir, 'rollback.json')),
+  ]);
+
+  return parseWorkerCorpusLibraryResponse({
+    generatedAt: now.toISOString(),
+    entries: sortNewestFirst(
+      artifacts.map((artifact) =>
+        buildLibraryEntry(artifact, {
+          active: activePointer,
+          rollback: rollbackPointer,
+        }),
+      ),
+    ),
+  });
+}
+
+export async function getWorkerCorpusLibraryDetail(
+  snapshotId: string,
+  input: WorkerCorpusDashboardInput = {},
+): Promise<WorkerCorpusLibraryDetail | null> {
+  const knowledgeRootDir = input.knowledgeRootDir ?? DEFAULT_ROOT_DIR;
+  const [artifacts, activePointer, rollbackPointer] = await Promise.all([
+    listSnapshotArtifacts(knowledgeRootDir),
+    readPointer(path.join(knowledgeRootDir, 'active.json')),
+    readPointer(path.join(knowledgeRootDir, 'rollback.json')),
+  ]);
+  const artifact = artifacts.find((item) => item.snapshotId === snapshotId);
+  if (!artifact) {
+    return null;
+  }
+
+  const [sourcesArtifact, knowledgeBible] = await Promise.all([
+    readSourcesArtifact(artifact.snapshotDir),
+    readKnowledgeBibleArtifact(artifact.snapshotDir),
+  ]);
+
+  return parseWorkerCorpusLibraryDetail({
+    entry: buildLibraryEntry(artifact, { active: activePointer, rollback: rollbackPointer }),
+    stageReports: artifact.runReport.stageReports.map((stage) => ({
+      ...stage,
+      message: stage.message ?? null,
+    })),
+    principles:
+      artifact.validatedSynthesis?.principles.map((principle) => ({
+        ...principle,
+        targetPopulation: principle.targetPopulation ?? null,
+        applicationContext: principle.applicationContext ?? null,
+        confidence: principle.confidence ?? null,
+      })) ?? [],
+    sources:
+      sourcesArtifact?.records.map((record) => ({
+        id: record.id,
+        title: record.title,
+        sourceType: record.sourceType,
+        sourceDomain: record.sourceDomain,
+        sourceUrl: record.sourceUrl ?? null,
+        publishedAt: record.publishedAt ?? null,
+        summaryEn: record.summaryEn,
+        tags: record.tags,
+        provenanceIds: record.provenanceIds,
+        ranking: record.ranking
+          ? {
+              compositeScore: record.ranking.compositeScore,
+              selected: record.ranking.selected,
+              reasons: record.ranking.reasons,
+            }
+          : null,
+      })) ?? [],
+    studyExtractions:
+      artifact.validatedSynthesis?.studyExtractions.map((extraction: StructuredStudyExtraction) => ({
+        ...extraction,
+        population: extraction.population ?? null,
+        intervention: extraction.intervention ?? null,
+        applicationContext: extraction.applicationContext ?? null,
+        rejectionReason: extraction.rejectionReason ?? null,
+      })) ?? [],
+    rejectedClaims: artifact.validatedSynthesis?.rejectedClaims ?? [],
+    contradictions: artifact.validatedSynthesis?.contradictions ?? [],
+    discovery: sourcesArtifact?.discovery
+      ? {
+          targetTopicKeys: sourcesArtifact.discovery.targetTopicKeys,
+          totalQueries: sourcesArtifact.discovery.totalQueries,
+          coverageGaps: sourcesArtifact.discovery.coverageGaps.map((gap) => ({
+            topicKey: gap.topicKey,
+            topicLabel: gap.topicLabel,
+            status: gap.status,
+            normalizedRecordCount: gap.normalizedRecordCount,
+            fetchedRecordCount: gap.fetchedRecordCount,
+          })),
+        }
+      : null,
+    ranking: sourcesArtifact?.ranking ?? null,
+    knowledgeBible,
   });
 }

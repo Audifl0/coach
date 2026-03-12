@@ -94,6 +94,7 @@ async function buildWorkerFixture() {
         guardrail: 'SAFE-03',
       },
     ],
+    studyExtractions: [],
     rejectedClaims: [],
     coverage: {
       recordCount: 5,
@@ -149,6 +150,15 @@ async function buildWorkerFixture() {
 test('worker corpus contracts parse overview, run detail and snapshot detail payloads', () => {
   const overview = parseWorkerCorpusOverviewResponse({
     generatedAt: '2026-03-11T10:00:00.000Z',
+    control: {
+      state: 'running',
+      pid: 1234,
+      mode: 'refresh',
+      startedAt: '2026-03-11T09:59:00.000Z',
+      stoppedAt: null,
+      pauseRequestedAt: null,
+      message: 'worker launched from dashboard (refresh)',
+    },
     live: {
       state: 'heartbeat',
       severity: 'healthy',
@@ -223,6 +233,15 @@ test('worker corpus contracts parse overview, run detail and snapshot detail pay
 
   const emptyOverview = parseWorkerCorpusOverviewResponse({
     generatedAt: '2026-03-11T10:00:00.000Z',
+    control: {
+      state: 'idle',
+      pid: null,
+      mode: null,
+      startedAt: null,
+      stoppedAt: null,
+      pauseRequestedAt: null,
+      message: null,
+    },
     live: {
       state: 'idle',
       severity: 'degraded',

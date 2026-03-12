@@ -11,6 +11,15 @@ async function buildDefaultDeps() {
     loadStatus: async () =>
       (await loadWorkerCorpusStatus()) ?? {
         generatedAt: new Date().toISOString(),
+        control: {
+          state: 'idle',
+          pid: null,
+          mode: null,
+          startedAt: null,
+          stoppedAt: null,
+          pauseRequestedAt: null,
+          message: null,
+        },
         live: {
           state: 'idle',
           severity: 'degraded',

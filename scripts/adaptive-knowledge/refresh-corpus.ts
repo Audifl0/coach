@@ -22,7 +22,7 @@ export function resolveMode(argv: string[]): 'refresh' | 'check' {
 }
 
 function resolveOutputRootDir(input?: string): string {
-  return input ?? path.join(process.cwd(), '.planning', 'knowledge', 'adaptive-coaching');
+  return input ?? process.env.ADAPTIVE_KNOWLEDGE_OUTPUT_ROOT_DIR ?? path.join(process.cwd(), '.planning', 'knowledge', 'adaptive-coaching');
 }
 
 export async function runRefreshCorpusCommand(
@@ -57,6 +57,41 @@ export async function runRefreshCorpusCommand(
     };
   }
 
+  let leaseReleased = false;
+  const releaseOnSignal = async (signal: NodeJS.Signals) => {
+    if (leaseReleased) {
+      return;
+    }
+
+    leaseReleased = true;
+    try {
+      await releaseAdaptiveKnowledgeLease({
+        outputRootDir,
+        runId,
+        status: 'failed',
+        now: new Date(),
+        message: `paused-by-signal:${signal}`,
+      });
+    } catch (error) {
+      log.warn(
+        `[WARN] adaptive knowledge worker failed to release lease after ${signal}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+  const handleSigterm = () => {
+    void releaseOnSignal('SIGTERM').finally(() => {
+      process.exit(130);
+    });
+  };
+  const handleSigint = () => {
+    void releaseOnSignal('SIGINT').finally(() => {
+      process.exit(130);
+    });
+  };
+
+  process.once('SIGTERM', handleSigterm);
+  process.once('SIGINT', handleSigint);
+
   try {
     await heartbeatAdaptiveKnowledgeLease({
       outputRootDir,
@@ -77,6 +112,7 @@ export async function runRefreshCorpusCommand(
       now: new Date(now.getTime() + 200),
       message: mode === 'check' ? 'check completed without publishing' : 'refresh completed',
     });
+    leaseReleased = true;
     log.log(`[OK] Adaptive knowledge worker completed (${mode}) - run=${result.runId} candidate=${result.candidateDir}`);
     return {
       status: 'completed',
@@ -84,18 +120,24 @@ export async function runRefreshCorpusCommand(
       result,
     };
   } catch (error) {
-    await releaseAdaptiveKnowledgeLease({
-      outputRootDir,
-      runId,
-      status: 'failed',
-      now: new Date(now.getTime() + 200),
-      message: error instanceof Error ? error.message : String(error),
-    });
+    if (!leaseReleased) {
+      await releaseAdaptiveKnowledgeLease({
+        outputRootDir,
+        runId,
+        status: 'failed',
+        now: new Date(now.getTime() + 200),
+        message: error instanceof Error ? error.message : String(error),
+      });
+      leaseReleased = true;
+    }
     log.error('[ERROR] refresh-corpus failed:', error instanceof Error ? error.message : String(error));
     return {
       status: 'failed',
       exitCode: 1,
     };
+  } finally {
+    process.off('SIGTERM', handleSigterm);
+    process.off('SIGINT', handleSigint);
   }
 }
 

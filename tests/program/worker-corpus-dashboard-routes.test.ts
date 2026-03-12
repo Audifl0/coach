@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { createWorkerCorpusControlGetHandler, createWorkerCorpusControlPostHandler } from '../../src/app/api/worker-corpus/control/route-handlers';
+import { createWorkerCorpusLibraryDetailGetHandler } from '../../src/app/api/worker-corpus/library/[snapshotId]/route-handlers';
+import { createWorkerCorpusLibraryGetHandler } from '../../src/app/api/worker-corpus/library/route-handlers';
 import { createWorkerCorpusRunDetailGetHandler } from '../../src/app/api/worker-corpus/runs/[runId]/route-handlers';
 import { createWorkerCorpusRunsGetHandler } from '../../src/app/api/worker-corpus/runs/route-handlers';
 import { createWorkerCorpusSnapshotDetailGetHandler } from '../../src/app/api/worker-corpus/snapshots/[snapshotId]/route-handlers';
@@ -44,11 +47,137 @@ test('worker corpus routes return 401 when no authenticated session is present',
   );
 });
 
+test('control and library routes validate authenticated worker dashboard workflows', async () => {
+  const getControl = createWorkerCorpusControlGetHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    readControl: async () => ({
+      state: 'idle',
+      pid: null,
+      mode: null,
+      startedAt: null,
+      stoppedAt: null,
+      pauseRequestedAt: null,
+      message: null,
+    }),
+    startWorker: async ({ mode }) => ({
+      state: 'running',
+      pid: 4321,
+      mode,
+      startedAt: '2026-03-11T10:05:00.000Z',
+      stoppedAt: null,
+      pauseRequestedAt: null,
+      message: `worker launched from dashboard (${mode})`,
+    }),
+    pauseWorker: async () => ({
+      state: 'paused',
+      pid: null,
+      mode: 'refresh',
+      startedAt: '2026-03-11T10:05:00.000Z',
+      stoppedAt: '2026-03-11T10:06:00.000Z',
+      pauseRequestedAt: '2026-03-11T10:06:00.000Z',
+      message: 'pause requested from dashboard',
+    }),
+  });
+  const postControl = createWorkerCorpusControlPostHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    readControl: async () => ({}),
+    startWorker: async ({ mode }) => ({
+      state: 'running',
+      pid: 4321,
+      mode,
+      startedAt: '2026-03-11T10:05:00.000Z',
+      stoppedAt: null,
+      pauseRequestedAt: null,
+      message: `worker launched from dashboard (${mode})`,
+    }),
+    pauseWorker: async () => ({
+      state: 'paused',
+      pid: null,
+      mode: 'refresh',
+      startedAt: '2026-03-11T10:05:00.000Z',
+      stoppedAt: '2026-03-11T10:06:00.000Z',
+      pauseRequestedAt: '2026-03-11T10:06:00.000Z',
+      message: 'pause requested from dashboard',
+    }),
+  });
+  const getLibrary = createWorkerCorpusLibraryGetHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    listLibrary: async () => ({
+      generatedAt: '2026-03-11T10:07:00.000Z',
+      entries: [],
+    }),
+  });
+  const getLibraryDetail = createWorkerCorpusLibraryDetailGetHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    getLibraryDetail: async () => ({
+      entry: {
+        snapshotId: 'run-ready',
+        runId: 'run-ready',
+        mode: 'refresh',
+        artifactState: 'validated',
+        outcome: 'succeeded',
+        severity: 'healthy',
+        generatedAt: '2026-03-11T10:01:00.000Z',
+        promotedAt: '2026-03-11T10:02:00.000Z',
+        evidenceRecordCount: 5,
+        principleCount: 2,
+        contradictionCount: 0,
+        sourceDomains: ['doi.org'],
+        coveredTags: ['progression'],
+        qualityGateReasons: [],
+        isActiveSnapshot: true,
+        isRollbackSnapshot: false,
+      },
+      stageReports: [],
+      principles: [],
+      sources: [],
+      studyExtractions: [],
+      rejectedClaims: [],
+      contradictions: [],
+      discovery: null,
+      ranking: null,
+      knowledgeBible: null,
+    }),
+  });
+
+  assert.equal((await getControl()).status, 200);
+  assert.equal(
+    (
+      await postControl(
+        new Request('http://localhost/api/worker-corpus/control', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'start', mode: 'check' }),
+        }),
+      )
+    ).status,
+    200,
+  );
+  assert.equal((await getLibrary()).status, 200);
+  assert.equal(
+    (
+      await getLibraryDetail(new Request('http://localhost/api/worker-corpus/library/run-ready'), {
+        params: Promise.resolve({ snapshotId: 'run-ready' }),
+      })
+    ).status,
+    200,
+  );
+});
+
 test('status and runs routes return parse-validated payloads for authenticated users', async () => {
   const getStatus = createWorkerCorpusStatusGetHandler({
     resolveSession: async () => ({ userId: 'user_1' }),
     loadStatus: async () => ({
       generatedAt: '2026-03-11T10:00:00.000Z',
+      control: {
+        state: 'idle',
+        pid: null,
+        mode: null,
+        startedAt: null,
+        stoppedAt: null,
+        pauseRequestedAt: null,
+        message: null,
+      },
       live: {
         state: 'heartbeat',
         severity: 'healthy',
@@ -108,6 +237,7 @@ test('status and runs routes return parse-validated payloads for authenticated u
   const runsResponse = await getRuns(new Request('http://localhost/api/worker-corpus/runs?limit=1'));
   assert.equal(statusResponse.status, 200);
   assert.equal(runsResponse.status, 200);
+  assert.equal((await statusResponse.clone().json()).control.state, 'idle');
   assert.equal((await statusResponse.json()).live.runId, 'run-live');
   assert.equal((await runsResponse.json()).runs.length, 1);
 });

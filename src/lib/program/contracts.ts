@@ -211,6 +211,8 @@ export const workerCorpusArtifactStateValues = ['candidate', 'validated'] as con
 export const workerCorpusStageValues = ['discover', 'ingest', 'synthesize', 'validate', 'publish'] as const;
 export const workerCorpusStageStatusValues = ['succeeded', 'failed', 'skipped'] as const;
 export const workerCorpusModeValues = ['refresh', 'check'] as const;
+export const workerCorpusControlStateValues = ['idle', 'running', 'paused', 'failed'] as const;
+export const workerCorpusControlActionValues = ['start', 'pause'] as const;
 
 export const workerCorpusStageReportSchema = z.object({
   stage: z.enum(workerCorpusStageValues),
@@ -287,6 +289,15 @@ export const workerCorpusSnapshotDetailSchema = z.object({
 
 export const workerCorpusOverviewResponseSchema = z.object({
   generatedAt: z.iso.datetime(),
+  control: z.object({
+    state: z.enum(workerCorpusControlStateValues),
+    pid: z.number().int().positive().nullable(),
+    mode: z.enum(workerCorpusModeValues).nullable(),
+    startedAt: z.iso.datetime().nullable(),
+    stoppedAt: z.iso.datetime().nullable(),
+    pauseRequestedAt: z.iso.datetime().nullable(),
+    message: z.string().trim().min(1).nullable(),
+  }),
   live: z.object({
     state: z.enum(workerCorpusLiveStateValues),
     severity: z.enum(workerCorpusSeverityValues),
@@ -332,6 +343,7 @@ export const workerCorpusOverviewSectionSchema = z.discriminatedUnion('status', 
 
 export const workerCorpusStatusResponseSchema = workerCorpusOverviewResponseSchema.pick({
   generatedAt: true,
+  control: true,
   live: true,
   publication: true,
 });
@@ -339,6 +351,175 @@ export const workerCorpusStatusResponseSchema = workerCorpusOverviewResponseSche
 export const workerCorpusRunsResponseSchema = z.object({
   generatedAt: z.iso.datetime(),
   runs: z.array(workerCorpusRunRowSchema).default([]),
+});
+
+export const workerCorpusControlCommandSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('start'),
+    mode: z.enum(workerCorpusModeValues).optional().default('refresh'),
+  }),
+  z.object({
+    action: z.literal('pause'),
+  }),
+]);
+
+export const workerCorpusControlResponseSchema = z.object({
+  control: workerCorpusOverviewResponseSchema.shape.control,
+});
+
+export const workerCorpusLibraryEntrySchema = z.object({
+  snapshotId: z.string().trim().min(1),
+  runId: z.string().trim().min(1),
+  mode: z.enum(workerCorpusModeValues),
+  artifactState: z.enum(workerCorpusArtifactStateValues),
+  outcome: z.enum(workerCorpusOutcomeValues),
+  severity: z.enum(workerCorpusSeverityValues),
+  generatedAt: z.iso.datetime().nullable(),
+  promotedAt: z.iso.datetime().nullable(),
+  evidenceRecordCount: z.number().int().nonnegative().nullable(),
+  principleCount: z.number().int().nonnegative().nullable(),
+  contradictionCount: z.number().int().nonnegative(),
+  sourceDomains: z.array(z.string().trim().min(1)).default([]),
+  coveredTags: z.array(z.string().trim().min(1)).default([]),
+  qualityGateReasons: z.array(z.string().trim().min(1)).default([]),
+  isActiveSnapshot: z.boolean(),
+  isRollbackSnapshot: z.boolean(),
+});
+
+export const workerCorpusLibraryResponseSchema = z.object({
+  generatedAt: z.iso.datetime(),
+  entries: z.array(workerCorpusLibraryEntrySchema).default([]),
+});
+
+export const workerCorpusCorpusPrincipleSchema = z.object({
+  id: z.string().trim().min(1),
+  title: z.string().trim().min(1),
+  summaryFr: z.string().trim().min(1),
+  guidanceFr: z.string().trim().min(1),
+  provenanceRecordIds: z.array(z.string().trim().min(1)).default([]),
+  evidenceLevel: z.string().trim().min(1),
+  guardrail: z.string().trim().min(1),
+  targetPopulation: z.string().trim().min(1).nullable().default(null),
+  applicationContext: z.string().trim().min(1).nullable().default(null),
+  confidence: z.number().min(0).max(1).nullable().default(null),
+});
+
+export const workerCorpusCorpusSourceSchema = z.object({
+  id: z.string().trim().min(1),
+  title: z.string().trim().min(1),
+  sourceType: z.string().trim().min(1),
+  sourceDomain: z.string().trim().min(1),
+  sourceUrl: z.string().trim().min(1).nullable().default(null),
+  publishedAt: z.string().trim().min(1).nullable().default(null),
+  summaryEn: z.string().trim().min(1),
+  tags: z.array(z.string().trim().min(1)).default([]),
+  provenanceIds: z.array(z.string().trim().min(1)).default([]),
+  ranking: z
+    .object({
+      compositeScore: z.number().min(0).max(1),
+      selected: z.boolean(),
+      reasons: z.array(
+        z.object({
+          code: z.string().trim().min(1),
+          direction: z.string().trim().min(1),
+          detail: z.string().trim().min(1),
+        }),
+      ).default([]),
+    })
+    .nullable()
+    .default(null),
+});
+
+export const workerCorpusStudyExtractionSchema = z.object({
+  recordId: z.string().trim().min(1),
+  topicKeys: z.array(z.string().trim().min(1)).default([]),
+  population: z.string().trim().min(1).nullable().default(null),
+  intervention: z.string().trim().min(1).nullable().default(null),
+  applicationContext: z.string().trim().min(1).nullable().default(null),
+  outcomes: z.array(z.string().trim().min(1)).default([]),
+  evidenceSignals: z.array(z.string().trim().min(1)).default([]),
+  limitations: z.array(z.string().trim().min(1)).default([]),
+  safetySignals: z.array(z.string().trim().min(1)).default([]),
+  rejectionReason: z
+    .object({
+      code: z.string().trim().min(1),
+      reason: z.string().trim().min(1),
+    })
+    .nullable()
+    .default(null),
+});
+
+export const workerCorpusKnowledgeBibleSchema = z.object({
+  principles: z.array(
+    z.object({
+      id: z.string().trim().min(1),
+      title: z.string().trim().min(1),
+      description: z.string().trim().min(1),
+      guardrail: z.string().trim().min(1),
+      tags: z.array(z.string().trim().min(1)).default([]),
+      provenanceRecordIds: z.array(z.string().trim().min(1)).default([]),
+    }),
+  ).default([]),
+  sources: z.array(
+    z.object({
+      id: z.string().trim().min(1),
+      title: z.string().trim().min(1),
+      summary: z.string().trim().min(1),
+      sourceClass: z.string().trim().min(1),
+      tags: z.array(z.string().trim().min(1)).default([]),
+      provenanceIds: z.array(z.string().trim().min(1)).default([]),
+    }),
+  ).default([]),
+});
+
+export const workerCorpusLibraryDetailSchema = z.object({
+  entry: workerCorpusLibraryEntrySchema,
+  stageReports: z.array(workerCorpusStageReportSchema).default([]),
+  principles: z.array(workerCorpusCorpusPrincipleSchema).default([]),
+  sources: z.array(workerCorpusCorpusSourceSchema).default([]),
+  studyExtractions: z.array(workerCorpusStudyExtractionSchema).default([]),
+  rejectedClaims: z.array(
+    z.object({
+      recordId: z.string().trim().min(1),
+      code: z.string().trim().min(1),
+      reason: z.string().trim().min(1),
+    }),
+  ).default([]),
+  contradictions: z.array(
+    z.object({
+      code: z.string().trim().min(1),
+      severity: z.string().trim().min(1),
+      recordIds: z.array(z.string().trim().min(1)).default([]),
+      resolution: z.string().trim().min(1),
+    }),
+  ).default([]),
+  discovery: z
+    .object({
+      targetTopicKeys: z.array(z.string().trim().min(1)).default([]),
+      totalQueries: z.number().int().nonnegative(),
+      coverageGaps: z.array(
+        z.object({
+          topicKey: z.string().trim().min(1),
+          topicLabel: z.string().trim().min(1),
+          status: z.string().trim().min(1),
+          normalizedRecordCount: z.number().int().nonnegative(),
+          fetchedRecordCount: z.number().int().nonnegative(),
+        }),
+      ).default([]),
+    })
+    .nullable()
+    .default(null),
+  ranking: z
+    .object({
+      evaluatedRecordCount: z.number().int().nonnegative(),
+      selectedRecordCount: z.number().int().nonnegative(),
+      rejectedRecordCount: z.number().int().nonnegative(),
+      topRecordIds: z.array(z.string().trim().min(1)).default([]),
+      rejectionCodes: z.array(z.string().trim().min(1)).default([]),
+    })
+    .nullable()
+    .default(null),
+  knowledgeBible: workerCorpusKnowledgeBibleSchema.nullable().default(null),
 });
 
 export const workerCorpusRunDetailSectionSchema = z.discriminatedUnion('status', [
@@ -392,6 +573,8 @@ export type SessionDurationCorrectionInput = z.infer<typeof sessionDurationCorre
 export type HistoryQueryInput = z.infer<typeof historyQueryInputSchema>;
 export type WorkerCorpusStageReport = z.infer<typeof workerCorpusStageReportSchema>;
 export type WorkerCorpusOverview = z.infer<typeof workerCorpusOverviewSchema>;
+export type WorkerCorpusControlCommand = z.infer<typeof workerCorpusControlCommandSchema>;
+export type WorkerCorpusControlResponse = z.infer<typeof workerCorpusControlResponseSchema>;
 export type WorkerCorpusRunRow = z.infer<typeof workerCorpusRunRowSchema>;
 export type WorkerCorpusRunDetail = z.infer<typeof workerCorpusRunDetailSchema>;
 export type WorkerCorpusSnapshotDetail = z.infer<typeof workerCorpusSnapshotDetailSchema>;
@@ -399,6 +582,9 @@ export type WorkerCorpusOverviewResponse = z.infer<typeof workerCorpusOverviewRe
 export type WorkerCorpusOverviewSection = z.infer<typeof workerCorpusOverviewSectionSchema>;
 export type WorkerCorpusStatusResponse = z.infer<typeof workerCorpusStatusResponseSchema>;
 export type WorkerCorpusRunsResponse = z.infer<typeof workerCorpusRunsResponseSchema>;
+export type WorkerCorpusLibraryEntry = z.infer<typeof workerCorpusLibraryEntrySchema>;
+export type WorkerCorpusLibraryResponse = z.infer<typeof workerCorpusLibraryResponseSchema>;
+export type WorkerCorpusLibraryDetail = z.infer<typeof workerCorpusLibraryDetailSchema>;
 export type WorkerCorpusRunDetailSection = z.infer<typeof workerCorpusRunDetailSectionSchema>;
 export type WorkerCorpusSnapshotDetailSection = z.infer<typeof workerCorpusSnapshotDetailSectionSchema>;
 
@@ -480,6 +666,22 @@ export function parseWorkerCorpusStatusResponse(input: unknown): WorkerCorpusSta
 
 export function parseWorkerCorpusRunsResponse(input: unknown): WorkerCorpusRunsResponse {
   return workerCorpusRunsResponseSchema.parse(input);
+}
+
+export function parseWorkerCorpusControlCommand(input: unknown): WorkerCorpusControlCommand {
+  return workerCorpusControlCommandSchema.parse(input);
+}
+
+export function parseWorkerCorpusControlResponse(input: unknown): WorkerCorpusControlResponse {
+  return workerCorpusControlResponseSchema.parse(input);
+}
+
+export function parseWorkerCorpusLibraryResponse(input: unknown): WorkerCorpusLibraryResponse {
+  return workerCorpusLibraryResponseSchema.parse(input);
+}
+
+export function parseWorkerCorpusLibraryDetail(input: unknown): WorkerCorpusLibraryDetail {
+  return workerCorpusLibraryDetailSchema.parse(input);
 }
 
 export {
