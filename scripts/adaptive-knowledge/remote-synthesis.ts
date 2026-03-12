@@ -82,6 +82,15 @@ export class CorpusRemoteSynthesisError extends Error {
   }
 }
 
+function extractRequestId(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || !('_request_id' in value)) {
+    return null;
+  }
+
+  const requestId = (value as { _request_id?: unknown })._request_id;
+  return typeof requestId === 'string' ? requestId : null;
+}
+
 function extractPayloadText(response: unknown): string {
   const record =
     response && typeof response === 'object'
@@ -108,31 +117,55 @@ function extractPayloadText(response: unknown): string {
 
 function normalizeError(
   error: unknown,
-): { reason: CorpusRemoteSynthesisFailureReason; retryable: boolean } {
+): {
+  reason: CorpusRemoteSynthesisFailureReason;
+  retryable: boolean;
+  message: string;
+  requestId: string | null;
+} {
   if (error && typeof error === 'object') {
     const asRecord = error as Record<string, unknown>;
     const status = typeof asRecord.status === 'number' ? asRecord.status : null;
     const code = typeof asRecord.code === 'string' ? asRecord.code : null;
+    const type = typeof asRecord.type === 'string' ? asRecord.type : null;
     const message = typeof asRecord.message === 'string' ? asRecord.message.toLowerCase() : '';
+    const rawMessage = typeof asRecord.message === 'string' ? asRecord.message : 'unknown';
+    const requestId = extractRequestId(error);
+    const diagnostic = [
+      status !== null ? `status=${status}` : null,
+      code ? `code=${code}` : null,
+      type ? `type=${type}` : null,
+      requestId ? `request_id=${requestId}` : null,
+      `message=${rawMessage}`,
+    ]
+      .filter((part): part is string => part !== null)
+      .join(';');
 
     if (code === 'ETIMEDOUT' || message.includes('timeout') || status === 408) {
-      return { reason: 'timeout', retryable: true };
+      return { reason: 'timeout', retryable: true, message: diagnostic, requestId };
     }
 
     if (status === 429) {
-      return { reason: 'rate_limited', retryable: true };
+      return { reason: 'rate_limited', retryable: true, message: diagnostic, requestId };
     }
 
     if (status && status >= 500) {
-      return { reason: 'provider_error', retryable: true };
+      return { reason: 'provider_error', retryable: true, message: diagnostic, requestId };
     }
 
     if (message.includes('fetch') || message.includes('network')) {
-      return { reason: 'transport_error', retryable: true };
+      return { reason: 'transport_error', retryable: true, message: diagnostic, requestId };
     }
+
+    return { reason: 'unknown', retryable: false, message: diagnostic, requestId };
   }
 
-  return { reason: 'unknown', retryable: false };
+  return {
+    reason: 'unknown',
+    retryable: false,
+    message: error instanceof Error ? error.message : String(error),
+    requestId: null,
+  };
 }
 
 function isPayloadError(error: unknown): boolean {
@@ -405,14 +438,14 @@ async function requestStructuredOutput<T>(input: {
 
     const normalized = normalizeError(error);
     throw new CorpusRemoteSynthesisError({
-      message: normalized.reason,
+      message: normalized.message,
       reason: normalized.reason,
       retryable: normalized.retryable,
       metadata: {
         provider: 'openai',
         model: input.config.model,
         latencyMs,
-        requestId: null,
+        requestId: normalized.requestId,
       },
     });
   }
