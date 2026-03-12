@@ -12,6 +12,7 @@ import {
 } from '../../src/lib/program/contracts';
 import { loadWorkerCorpusOverviewSection } from '../../src/app/(private)/dashboard/worker-corpus/loaders/overview';
 import {
+  getWorkerCorpusLibraryDetail,
   getWorkerCorpusRunDetail,
   getWorkerCorpusSnapshotDetail,
   loadWorkerCorpusOverview,
@@ -112,6 +113,56 @@ async function buildWorkerFixture() {
       latencyMs: 1200,
       totalLatencyMs: 1200,
     },
+  });
+  await writeJson(path.join(snapshotDir, 'sources.json'), {
+    runId: snapshotId,
+    generatedAt: '2026-03-11T10:01:00.000Z',
+    discovery: {
+      targetTopicKeys: ['progression'],
+      targetTopicLabels: ['Progression et surcharge progressive'],
+      totalQueries: 1,
+      coverageGaps: [],
+    },
+    ranking: {
+      evaluatedRecordCount: 5,
+      selectedRecordCount: 1,
+      rejectedRecordCount: 4,
+      topRecordIds: ['record_1'],
+      rejectionCodes: ['stale_publication'],
+    },
+    sources: [
+      {
+        source: 'pubmed',
+        skipped: false,
+        records: [],
+        recordsFetched: 1,
+        recordsSkipped: 19,
+        telemetry: {
+          attempts: 1,
+          rawResults: 20,
+          nextCursor: '12345',
+          skipReasons: {
+            disallowedDomain: 0,
+            stalePublication: 18,
+            alreadySeen: 1,
+            invalidUrl: 0,
+          },
+        },
+      },
+    ],
+    records: [
+      {
+        id: 'record_1',
+        sourceType: 'review',
+        sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/12345',
+        sourceDomain: 'pubmed.ncbi.nlm.nih.gov',
+        publishedAt: '2026-03-10',
+        title: 'Useful review',
+        summaryEn: 'Summary',
+        tags: ['progression'],
+        provenanceIds: ['record_1'],
+      },
+    ],
   });
 
   const blockedSnapshotDir = path.join(rootDir, 'snapshots', 'run-blocked', 'candidate');
@@ -330,4 +381,8 @@ test('worker dashboard drilldowns expose validated run and snapshot details', as
   assert.equal(snapshotDetail?.isActiveSnapshot, true);
   assert.equal(snapshotDetail?.artifactState, 'validated');
   assert.equal(snapshotDetail?.coverageRecordCount, 5);
+
+  const libraryDetail = await getWorkerCorpusLibraryDetail('run-ready', { knowledgeRootDir: rootDir });
+  assert.equal(libraryDetail?.connectorSummaries[0]?.source, 'pubmed');
+  assert.equal(libraryDetail?.connectorSummaries[0]?.skipReasons?.stalePublication, 18);
 });

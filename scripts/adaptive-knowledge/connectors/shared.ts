@@ -41,7 +41,14 @@ export type ConnectorFetchResult = {
   telemetry: {
     attempts: number;
     nextCursor?: string;
+    rawResults?: number;
     incrementalSkipped?: number;
+    skipReasons?: {
+      disallowedDomain: number;
+      stalePublication: number;
+      alreadySeen: number;
+      invalidUrl: number;
+    };
   };
   error?: {
     message: string;
@@ -130,22 +137,49 @@ export function normalizeConnectorRecords(
   config: AdaptiveKnowledgePipelineConfig,
   now: Date,
   cursorState?: ConnectorCursorState,
-): { records: NormalizedEvidenceRecord[]; skipped: number } {
+): {
+  records: NormalizedEvidenceRecord[];
+  skipped: number;
+  skipReasons: {
+    disallowedDomain: number;
+    stalePublication: number;
+    alreadySeen: number;
+    invalidUrl: number;
+  };
+} {
   const accepted: NormalizedEvidenceRecord[] = [];
   let skipped = 0;
+  const skipReasons = {
+    disallowedDomain: 0,
+    stalePublication: 0,
+    alreadySeen: 0,
+    invalidUrl: 0,
+  };
   const seenIds = new Set(cursorState?.seenRecordIds ?? []);
 
   for (const raw of rawRecords) {
-    if (!isAllowedDomain(raw.url, config.allowedDomains)) {
+    let allowedDomain = false;
+    try {
+      allowedDomain = isAllowedDomain(raw.url, config.allowedDomains);
+    } catch {
       skipped += 1;
+      skipReasons.invalidUrl += 1;
+      continue;
+    }
+
+    if (!allowedDomain) {
+      skipped += 1;
+      skipReasons.disallowedDomain += 1;
       continue;
     }
     if (!isWithinFreshnessWindow(raw.publishedAt, now, config.freshnessWindowDays)) {
       skipped += 1;
+      skipReasons.stalePublication += 1;
       continue;
     }
     if (seenIds.has(raw.id)) {
       skipped += 1;
+      skipReasons.alreadySeen += 1;
       continue;
     }
     accepted.push(normalizeRecord(raw));
@@ -154,6 +188,7 @@ export function normalizeConnectorRecords(
   return {
     records: accepted,
     skipped,
+    skipReasons,
   };
 }
 

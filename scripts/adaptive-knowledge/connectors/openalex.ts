@@ -98,7 +98,9 @@ export async function fetchOpenAlexEvidenceBatch(input: ConnectorFetchInput): Pr
     recordsSkipped: normalized.skipped,
     telemetry: {
       attempts: result.attempts,
+      rawResults: result.value.length,
       nextCursor: result.value.at(-1)?.id,
+      skipReasons: normalized.skipReasons,
     },
   };
 }

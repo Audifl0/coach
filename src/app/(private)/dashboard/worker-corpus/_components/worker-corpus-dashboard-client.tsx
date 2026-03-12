@@ -491,6 +491,35 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
 
                 <section className={styles.readerSection}>
                   <div className={styles.readerHead}>
+                    <strong>Connector diagnostics</strong>
+                    <span className={styles.badge}>{libraryDetail.connectorSummaries.length}</span>
+                  </div>
+                  <div className={styles.contentStack}>
+                    {libraryDetail.connectorSummaries.map((summary) => (
+                      <div key={`${summary.source}-${summary.nextCursor ?? 'none'}`} className={styles.stageItem}>
+                        <div className={styles.stageHead}>
+                          <strong>{summary.source}</strong>
+                          <span className={styles.badge}>
+                            raw {formatMaybe(summary.rawResults)} / kept {summary.recordsFetched}
+                          </span>
+                        </div>
+                        <div className={styles.panelText}>
+                          attempts {summary.attempts} · skipped {summary.recordsSkipped} · cursor {formatMaybe(summary.nextCursor)}
+                        </div>
+                        <div className={styles.chips}>
+                          <span className={styles.chip}>domain {summary.skipReasons?.disallowedDomain ?? 0}</span>
+                          <span className={styles.chip}>stale {summary.skipReasons?.stalePublication ?? 0}</span>
+                          <span className={styles.chip}>seen {summary.skipReasons?.alreadySeen ?? 0}</span>
+                          <span className={styles.chip}>invalid-url {summary.skipReasons?.invalidUrl ?? 0}</span>
+                        </div>
+                        {summary.error ? <div className={styles.panelText}>{summary.error.message}</div> : null}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className={styles.readerSection}>
+                  <div className={styles.readerHead}>
                     <strong>Principes retenus</strong>
                     <span className={styles.badge}>{libraryDetail.principles.length}</span>
                   </div>

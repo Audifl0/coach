@@ -71,6 +71,25 @@ type SourcesArtifact = {
   records: NormalizedEvidenceRecord[];
   discovery: AdaptiveKnowledgeDiscoveryTelemetry | null;
   ranking: AdaptiveKnowledgeRankingTelemetry | null;
+  connectorSummaries: Array<{
+    source: string;
+    skipped: boolean;
+    attempts: number;
+    rawResults: number | null;
+    recordsFetched: number;
+    recordsSkipped: number;
+    nextCursor: string | null;
+    skipReasons: {
+      disallowedDomain: number;
+      stalePublication: number;
+      alreadySeen: number;
+      invalidUrl: number;
+    } | null;
+    error: {
+      message: string;
+      attempts: number;
+    } | null;
+  }>;
 };
 
 type WorkerCorpusDashboardInput = {
@@ -271,6 +290,55 @@ async function readSourcesArtifact(snapshotDir: string): Promise<SourcesArtifact
     records,
     discovery,
     ranking,
+    connectorSummaries: Array.isArray(raw.sources)
+      ? raw.sources
+          .map((source) => {
+            if (!source || typeof source !== 'object') {
+              return null;
+            }
+
+            const candidate = source as Record<string, unknown>;
+            const telemetry =
+              candidate.telemetry && typeof candidate.telemetry === 'object'
+                ? (candidate.telemetry as Record<string, unknown>)
+                : {};
+            const skipReasons =
+              telemetry.skipReasons && typeof telemetry.skipReasons === 'object'
+                ? (telemetry.skipReasons as Record<string, unknown>)
+                : null;
+            const error =
+              candidate.error && typeof candidate.error === 'object'
+                ? (candidate.error as Record<string, unknown>)
+                : null;
+
+            return {
+              source: typeof candidate.source === 'string' ? candidate.source : 'unknown',
+              skipped: Boolean(candidate.skipped),
+              attempts: typeof telemetry.attempts === 'number' ? telemetry.attempts : 0,
+              rawResults: typeof telemetry.rawResults === 'number' ? telemetry.rawResults : null,
+              recordsFetched: typeof candidate.recordsFetched === 'number' ? candidate.recordsFetched : 0,
+              recordsSkipped: typeof candidate.recordsSkipped === 'number' ? candidate.recordsSkipped : 0,
+              nextCursor: typeof telemetry.nextCursor === 'string' ? telemetry.nextCursor : null,
+              skipReasons: skipReasons
+                ? {
+                    disallowedDomain:
+                      typeof skipReasons.disallowedDomain === 'number' ? skipReasons.disallowedDomain : 0,
+                    stalePublication:
+                      typeof skipReasons.stalePublication === 'number' ? skipReasons.stalePublication : 0,
+                    alreadySeen: typeof skipReasons.alreadySeen === 'number' ? skipReasons.alreadySeen : 0,
+                    invalidUrl: typeof skipReasons.invalidUrl === 'number' ? skipReasons.invalidUrl : 0,
+                  }
+                : null,
+              error: error
+                ? {
+                    message: typeof error.message === 'string' ? error.message : 'unknown',
+                    attempts: typeof error.attempts === 'number' ? error.attempts : 0,
+                  }
+                : null,
+            };
+          })
+          .filter((summary): summary is SourcesArtifact['connectorSummaries'][number] => summary !== null)
+      : [],
   };
 }
 
@@ -724,6 +792,7 @@ export async function getWorkerCorpusLibraryDetail(
         }
       : null,
     ranking: sourcesArtifact?.ranking ?? null,
+    connectorSummaries: sourcesArtifact?.connectorSummaries ?? [],
     knowledgeBible,
   });
 }

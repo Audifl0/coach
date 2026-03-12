@@ -519,6 +519,33 @@ export const workerCorpusLibraryDetailSchema = z.object({
     })
     .nullable()
     .default(null),
+  connectorSummaries: z.array(
+    z.object({
+      source: z.string().trim().min(1),
+      skipped: z.boolean(),
+      attempts: z.number().int().nonnegative(),
+      rawResults: z.number().int().nonnegative().nullable().default(null),
+      recordsFetched: z.number().int().nonnegative(),
+      recordsSkipped: z.number().int().nonnegative(),
+      nextCursor: z.string().trim().min(1).nullable().default(null),
+      skipReasons: z
+        .object({
+          disallowedDomain: z.number().int().nonnegative(),
+          stalePublication: z.number().int().nonnegative(),
+          alreadySeen: z.number().int().nonnegative(),
+          invalidUrl: z.number().int().nonnegative(),
+        })
+        .nullable()
+        .default(null),
+      error: z
+        .object({
+          message: z.string().trim().min(1),
+          attempts: z.number().int().nonnegative(),
+        })
+        .nullable()
+        .default(null),
+    }),
+  ).default([]),
   knowledgeBible: workerCorpusKnowledgeBibleSchema.nullable().default(null),
 });
 
