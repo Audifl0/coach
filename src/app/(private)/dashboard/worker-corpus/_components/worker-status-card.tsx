@@ -50,7 +50,10 @@ export function WorkerStatusCard(props: WorkerStatusCardProps) {
     );
   }
 
-  const { live } = props;
+  const live = props.loadState === 'ready' ? props.live : null;
+  if (!live) {
+    return null;
+  }
 
   return (
     <section aria-label="worker-status-card">

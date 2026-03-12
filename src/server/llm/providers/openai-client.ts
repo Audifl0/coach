@@ -10,18 +10,7 @@ type OpenAiResponsesApi = {
     options?: {
       timeout?: number;
     },
-  ) => Promise<{
-    output_text?: string;
-    _request_id?: string | null;
-    error?: unknown;
-    status?: string | null;
-    output?: Array<{
-      content?: Array<{
-        type?: string;
-        text?: string;
-      }>;
-    }>;
-  }>;
+  ) => Promise<unknown>;
 };
 
 type OpenAiSdk = {
@@ -61,6 +50,15 @@ function extractPayloadText(response: unknown): string {
   }
 
   return '';
+}
+
+function extractRequestId(response: unknown): string | null {
+  if (!response || typeof response !== 'object' || !('_request_id' in response)) {
+    return null;
+  }
+
+  const requestId = (response as { _request_id?: unknown })._request_id;
+  return typeof requestId === 'string' ? requestId : null;
 }
 
 function normalizeError(
@@ -161,7 +159,7 @@ export function createOpenAiProposalClient(
             provider: 'openai',
             model: config.model,
             latencyMs,
-            requestId: response._request_id ?? null,
+            requestId: extractRequestId(response),
           },
         };
       } catch (error) {

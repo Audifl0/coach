@@ -29,7 +29,10 @@ export function SnapshotDetailPanel(props: SnapshotDetailPanelProps) {
     );
   }
 
-  const { detail } = props;
+  const detail = props.loadState === 'ready' ? props.detail : null;
+  if (!detail) {
+    return null;
+  }
 
   return (
     <section aria-label="snapshot-detail-panel">

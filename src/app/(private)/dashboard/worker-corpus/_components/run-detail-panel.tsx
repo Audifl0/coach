@@ -29,7 +29,10 @@ export function RunDetailPanel(props: RunDetailPanelProps) {
     );
   }
 
-  const { detail } = props;
+  const detail = props.loadState === 'ready' ? props.detail : null;
+  if (!detail) {
+    return null;
+  }
 
   return (
     <section aria-label="run-detail-panel">

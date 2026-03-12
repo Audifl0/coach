@@ -402,7 +402,11 @@ test('ranking telemetry prioritizes higher-quality records before synthesis', as
   });
 
   assert.equal((result.runReport.ranking?.selectedRecordCount ?? 0) >= 1, true);
-  assert.equal(result.normalizedRecords[0]?.ranking?.compositeScore >= result.normalizedRecords[2]?.ranking?.compositeScore!, true);
+  assert.equal(
+    (result.normalizedRecords[0]?.ranking?.compositeScore ?? 0) >=
+      (result.normalizedRecords[2]?.ranking?.compositeScore ?? 0),
+    true,
+  );
   assert.equal(
     result.normalizedRecords.some((record) =>
       record.ranking?.reasons.some((reason) => reason.code === 'score_below_selection_threshold'),

@@ -15,7 +15,7 @@ import { PublicationStatusCard } from './_components/publication-status-card';
 import { RecentRunsCard } from './_components/recent-runs-card';
 import { WorkerStatusCard } from './_components/worker-status-card';
 
-export default async function WorkerCorpusDashboardPage() {
+export default async function WorkerCorpusDashboardPage(_props: PageProps<'/dashboard/worker-corpus'>) {
   const { prisma } = await import('@/lib/db/prisma');
   const profileDal = createProfileDal(createProfileDbClient(prisma));
   const { session, route } = await resolveDashboardAccess({

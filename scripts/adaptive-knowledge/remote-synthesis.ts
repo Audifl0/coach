@@ -14,16 +14,7 @@ type OpenAiResponsesApi = {
     options?: {
       timeout?: number;
     },
-  ) => Promise<{
-    output_text?: string;
-    _request_id?: string | null;
-    output?: Array<{
-      content?: Array<{
-        type?: string;
-        text?: string;
-      }>;
-    }>;
-  }>;
+  ) => Promise<unknown>;
 };
 
 type OpenAiSdk = {

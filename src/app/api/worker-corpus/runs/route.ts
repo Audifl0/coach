@@ -1,3 +1,5 @@
+import type { NextRequest } from 'next/server';
+
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
 import { listWorkerCorpusRuns } from '@/server/dashboard/worker-dashboard';
 import { createWorkerCorpusRunsGetHandler } from './route-handlers';
@@ -10,6 +12,6 @@ async function buildDefaultDeps() {
   };
 }
 
-export async function GET(request: Request): Promise<Response> {
+export async function GET(request: NextRequest, _context: RouteContext<'/api/worker-corpus/runs'>): Promise<Response> {
   return createWorkerCorpusRunsGetHandler(await buildDefaultDeps())(request);
 }

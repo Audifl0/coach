@@ -29,7 +29,10 @@ export function PublicationStatusCard(props: PublicationStatusCardProps) {
     );
   }
 
-  const { publication } = props;
+  const publication = props.loadState === 'ready' ? props.publication : null;
+  if (!publication) {
+    return null;
+  }
 
   return (
     <section aria-label="publication-status-card">

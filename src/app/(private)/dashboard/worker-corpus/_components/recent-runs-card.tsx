@@ -29,11 +29,16 @@ export function RecentRunsCard(props: RecentRunsCardProps) {
     );
   }
 
+  const runs = props.loadState === 'ready' ? props.runs : null;
+  if (!runs) {
+    return null;
+  }
+
   return (
     <section aria-label="recent-runs-card">
       <h2>Recent runs</h2>
       <ul>
-        {props.runs.map((run) => (
+        {runs.map((run) => (
           <li key={run.runId}>
             <strong>{run.runId}</strong> - {run.outcome} - {run.severity} - {run.finalStage}
             <br />
