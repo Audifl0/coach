@@ -1,11 +1,11 @@
 import { redirect } from 'next/navigation';
 
+import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
 import {
   type WorkerCorpusLibraryResponse,
   type WorkerCorpusOverviewSection,
   type WorkerCorpusStatusResponse,
 } from '@/lib/program/contracts';
-import { createProfileDal, createProfileDbClient } from '@/server/dal/profile';
 import {
   getWorkerCorpusLibraryDetail,
   getWorkerCorpusRunDetail,
@@ -15,7 +15,6 @@ import {
 } from '@/server/dashboard/worker-dashboard';
 import { loadWorkerCorpusOverviewSection } from './loaders/overview';
 import { WorkerCorpusDashboardClient } from './_components/worker-corpus-dashboard-client';
-import { resolveDashboardAccess } from '../loaders/dashboard-access';
 
 function buildFallbackStatus(now: Date): WorkerCorpusStatusResponse {
   return {
@@ -66,18 +65,10 @@ function buildFallbackLibrary(now: Date): WorkerCorpusLibraryResponse {
 }
 
 export default async function WorkerCorpusDashboardPage(_props: PageProps<'/dashboard/worker-corpus'>) {
-  const { prisma } = await import('@/lib/db/prisma');
-  const profileDal = createProfileDal(createProfileDbClient(prisma));
-  const { session, route } = await resolveDashboardAccess({
-    getProfileByUserId: async (userId) => profileDal.getProfileByUserId(userId),
-  });
-
-  if (route === 'login' || !session) {
+  const sessionRepository = await buildDefaultSessionGateRepository();
+  const session = await validateSessionFromCookies(sessionRepository);
+  if (!session) {
     redirect('/login?next=/dashboard/worker-corpus');
-  }
-
-  if (route === 'onboarding') {
-    redirect('/onboarding');
   }
 
   const now = new Date();
