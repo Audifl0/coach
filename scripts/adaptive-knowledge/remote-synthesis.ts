@@ -222,9 +222,6 @@ function buildSourceSynthesisSchema() {
               minItems: 1,
               items: { type: 'string', minLength: 1 },
             },
-            population: { type: 'string' },
-            intervention: { type: 'string' },
-            applicationContext: { type: 'string' },
             outcomes: {
               type: 'array',
               items: { type: 'string', minLength: 1 },
@@ -240,15 +237,6 @@ function buildSourceSynthesisSchema() {
             safetySignals: {
               type: 'array',
               items: { type: 'string', minLength: 1 },
-            },
-            rejectionReason: {
-              type: 'object',
-              additionalProperties: false,
-              required: ['code', 'reason'],
-              properties: {
-                code: { type: 'string', minLength: 1 },
-                reason: { type: 'string', minLength: 1 },
-              },
             },
           },
         },
@@ -271,9 +259,6 @@ function buildSourceSynthesisSchema() {
             },
             evidenceLevel: { type: 'string', minLength: 1 },
             guardrail: { type: 'string', enum: ['SAFE-01', 'SAFE-02', 'SAFE-03'] },
-            targetPopulation: { type: 'string' },
-            applicationContext: { type: 'string' },
-            confidence: { type: 'number', minimum: 0, maximum: 1 },
           },
         },
       },
