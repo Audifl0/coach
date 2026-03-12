@@ -342,7 +342,7 @@ export async function runAdaptiveKnowledgePipeline(
     });
   } catch (error) {
     if (error instanceof CorpusRemoteSynthesisError) {
-      synthesisErrorMessage = `${error.reason};provider=openai`;
+      synthesisErrorMessage = error.message;
     } else {
       synthesisErrorMessage = error instanceof Error ? error.message : String(error);
     }
