@@ -312,27 +312,17 @@ export async function runAdaptiveKnowledgePipeline(
     threshold: input.qualityGateOverrides?.threshold,
     criticalContradictions: input.qualityGateOverrides?.criticalContradictions,
   });
-  try {
-    const synthesisResult = normalizeSynthesisResult(recordsForSynthesis, await Promise.resolve(synthesize(recordsForSynthesis)));
-    principles = synthesisResult.principles;
-    validatedSynthesis = synthesisResult.validatedSynthesis;
+  if (recordsForSynthesis.length === 0) {
     stageReports.push({
       stage: 'synthesize',
-      status: 'succeeded',
-      message:
-        `principles=${principles.length}; ` +
-        `coverage=${validatedSynthesis.coverage.recordCount}; ` +
-        `provider=${validatedSynthesis.modelRun.provider}`,
+      status: 'skipped',
+      message: 'no-records-selected-for-synthesis',
     });
-    for (const principle of principles) {
-      parseCorpusPrinciple(principle);
-    }
     stageReports.push({
       stage: 'validate',
-      status: 'succeeded',
-      message: 'contracts=ok',
+      status: 'skipped',
+      message: 'blocked-by-empty-corpus',
     });
-
     qualityGateResult = evaluateCorpusQualityGate({
       now,
       records: normalizedRecords,
@@ -340,22 +330,52 @@ export async function runAdaptiveKnowledgePipeline(
       threshold: input.qualityGateOverrides?.threshold,
       criticalContradictions: input.qualityGateOverrides?.criticalContradictions,
     });
-  } catch (error) {
-    if (error instanceof CorpusRemoteSynthesisError) {
-      synthesisErrorMessage = error.message;
-    } else {
-      synthesisErrorMessage = error instanceof Error ? error.message : String(error);
+  } else {
+    try {
+      const synthesisResult = normalizeSynthesisResult(recordsForSynthesis, await Promise.resolve(synthesize(recordsForSynthesis)));
+      principles = synthesisResult.principles;
+      validatedSynthesis = synthesisResult.validatedSynthesis;
+      stageReports.push({
+        stage: 'synthesize',
+        status: 'succeeded',
+        message:
+          `principles=${principles.length}; ` +
+          `coverage=${validatedSynthesis.coverage.recordCount}; ` +
+          `provider=${validatedSynthesis.modelRun.provider}`,
+      });
+      for (const principle of principles) {
+        parseCorpusPrinciple(principle);
+      }
+      stageReports.push({
+        stage: 'validate',
+        status: 'succeeded',
+        message: 'contracts=ok',
+      });
+
+      qualityGateResult = evaluateCorpusQualityGate({
+        now,
+        records: normalizedRecords,
+        validatedSynthesis,
+        threshold: input.qualityGateOverrides?.threshold,
+        criticalContradictions: input.qualityGateOverrides?.criticalContradictions,
+      });
+    } catch (error) {
+      if (error instanceof CorpusRemoteSynthesisError) {
+        synthesisErrorMessage = error.message;
+      } else {
+        synthesisErrorMessage = error instanceof Error ? error.message : String(error);
+      }
+      stageReports.push({
+        stage: 'synthesize',
+        status: 'failed',
+        message: synthesisErrorMessage,
+      });
+      stageReports.push({
+        stage: 'validate',
+        status: 'skipped',
+        message: 'blocked-by-synthesis-failure',
+      });
     }
-    stageReports.push({
-      stage: 'synthesize',
-      status: 'failed',
-      message: synthesisErrorMessage,
-    });
-    stageReports.push({
-      stage: 'validate',
-      status: 'skipped',
-      message: 'blocked-by-synthesis-failure',
-    });
   }
 
   stageReports.push({
