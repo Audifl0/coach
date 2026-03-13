@@ -13,6 +13,7 @@ import {
 import { parseAdaptiveKnowledgePipelineConfig } from '../../scripts/adaptive-knowledge/config';
 import { runAdaptiveKnowledgePipeline } from '../../scripts/adaptive-knowledge/pipeline-run';
 import { buildValidatedSynthesisFromPrinciples, synthesizeCorpusPrinciples } from '../../scripts/adaptive-knowledge/synthesis';
+import { parseWorkerCorpusOverviewResponse } from '../../src/lib/program/contracts';
 
 function buildConnectorSuccess(source: 'pubmed' | 'crossref' | 'openalex'): ConnectorFetchResult {
   const tagsBySource = {
@@ -579,4 +580,69 @@ test('bootstrap mode persists and reloads campaign progress across reruns', asyn
   assert.equal(secondCampaign.startedAt, firstCampaign.startedAt);
   assert.equal(secondCampaign.lastRunId, 'run-bootstrap-b');
   assert.equal(secondCampaign.progress.canonicalRecordCount, 4);
+});
+
+test('shared worker dashboard contracts accept bootstrap campaign metadata', () => {
+  const overview = parseWorkerCorpusOverviewResponse({
+    generatedAt: '2026-03-13T10:30:00.000Z',
+    control: {
+      state: 'running',
+      pid: 4242,
+      mode: 'bootstrap',
+      startedAt: '2026-03-13T10:00:00.000Z',
+      stoppedAt: null,
+      pauseRequestedAt: null,
+      message: 'bootstrap campaign active',
+      campaign: {
+        campaignId: 'bootstrap-run',
+        status: 'running',
+        startedAt: '2026-03-13T10:00:00.000Z',
+        updatedAt: '2026-03-13T10:30:00.000Z',
+        lastRunId: 'run-bootstrap-b',
+        activeJobId: 'job-pubmed',
+        backlog: {
+          pending: 12,
+          running: 1,
+          blocked: 0,
+          completed: 4,
+        },
+        progress: {
+          discoveredQueryFamilies: 6,
+          canonicalRecordCount: 4,
+          extractionBacklogCount: 2,
+          publicationCandidateCount: 1,
+        },
+      },
+    },
+    live: {
+      state: 'heartbeat',
+      severity: 'healthy',
+      runId: 'run-bootstrap-b',
+      mode: 'bootstrap',
+      startedAt: '2026-03-13T10:00:00.000Z',
+      heartbeatAt: '2026-03-13T10:30:00.000Z',
+      leaseExpiresAt: '2026-03-13T10:35:00.000Z',
+      message: 'running',
+      isHeartbeatStale: false,
+    },
+    publication: {
+      severity: 'degraded',
+      activeSnapshotId: null,
+      activeSnapshotDir: null,
+      promotedAt: null,
+      rollbackSnapshotId: null,
+      rollbackSnapshotDir: null,
+      rollbackAvailable: false,
+      snapshotAgeHours: null,
+      evidenceRecordCount: null,
+      principleCount: null,
+      sourceDomains: [],
+      qualityGateReasons: [],
+      lastRunAgeHours: 0.5,
+    },
+    recentRuns: [],
+  });
+
+  assert.equal(overview.control.mode, 'bootstrap');
+  assert.equal(overview.control.campaign?.progress.canonicalRecordCount, 4);
 });
