@@ -308,7 +308,7 @@ export async function runAdaptiveKnowledgePipeline(
   const stageReports: PipelineStage[] = [];
 
   const sourceResults = await Promise.all(
-    discoveryPlan.map(async (source) => {
+    discoveryPlan.map(async (source, index) => {
       const connector = connectors[source.source];
       return connector({
         query: source.query,
@@ -318,6 +318,7 @@ export async function runAdaptiveKnowledgePipeline(
         timeoutMs: config.requestTimeoutMs,
         now,
         cursorState,
+        collectionJob: mode === 'bootstrap' ? bootstrapJobs[index] : undefined,
       });
     }),
   );
@@ -498,6 +499,7 @@ export async function runAdaptiveKnowledgePipeline(
         parseAdaptiveKnowledgeCollectionJob({
           ...job,
           status: 'completed',
+          cursor: sourceResults[index]?.telemetry.nextCursor ?? job.cursor,
           pagesFetched: job.pagesFetched + 1,
           recordsFetched: job.recordsFetched + (sourceResults[index]?.recordsFetched ?? 0),
           canonicalRecords: job.canonicalRecords + (sourceResults[index]?.records.length ?? 0),

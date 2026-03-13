@@ -212,6 +212,12 @@ export function buildAdaptiveKnowledgeBootstrapCollectionJobs(input?: {
   const maxJobs = Math.max(1, input?.maxJobs ?? 1);
   const existingJobs = (input?.existingJobs ?? []).map((job) => parseAdaptiveKnowledgeCollectionJob(job));
   const activeJobs = existingJobs.filter((job) => job.status !== 'completed' && job.status !== 'exhausted');
+  if (activeJobs.length > 0) {
+    return activeJobs
+      .slice()
+      .sort((left, right) => left.priority - right.priority || left.id.localeCompare(right.id))
+      .slice(0, maxJobs);
+  }
   const existingIds = new Set(existingJobs.map((job) => job.id));
   const generatedJobs = buildAdaptiveKnowledgeDiscoveryPlan({
     sources: input?.sources,
@@ -240,7 +246,7 @@ export function buildAdaptiveKnowledgeBootstrapCollectionJobs(input?: {
     )
     .filter((job) => !existingIds.has(job.id));
 
-  return [...activeJobs, ...generatedJobs]
+  return generatedJobs
     .sort((left, right) => left.priority - right.priority || left.id.localeCompare(right.id))
     .slice(0, maxJobs);
 }

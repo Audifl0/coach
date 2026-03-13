@@ -1,4 +1,9 @@
-import { parseNormalizedEvidenceRecord, type NormalizedEvidenceRecord } from '../contracts';
+import {
+  parseAdaptiveKnowledgeCollectionJob,
+  parseNormalizedEvidenceRecord,
+  type AdaptiveKnowledgeCollectionJob,
+  type NormalizedEvidenceRecord,
+} from '../contracts';
 import { parseAdaptiveKnowledgePipelineConfig, type AdaptiveKnowledgePipelineConfig } from '../config';
 
 export type ConnectorSource = 'pubmed' | 'crossref' | 'openalex';
@@ -15,6 +20,7 @@ export type ConnectorFetchInput = {
   timeoutMs?: number;
   now?: Date;
   cursorState?: ConnectorCursorState;
+  collectionJob?: AdaptiveKnowledgeCollectionJob;
   fetchImpl?: (url: string) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
 };
 
@@ -118,8 +124,14 @@ export function resolveConnectorConfig(input: ConnectorFetchInput): AdaptiveKnow
 }
 
 function normalizeRecord(raw: RawRecord): NormalizedEvidenceRecord {
+  const canonicalId = buildCanonicalRecordId({
+    id: raw.id,
+    title: raw.title,
+    url: raw.url,
+  });
   return parseNormalizedEvidenceRecord({
     id: raw.id,
+    canonicalId,
     sourceType: raw.sourceType,
     sourceUrl: raw.url,
     sourceDomain: extractHost(raw.url),
@@ -129,6 +141,53 @@ function normalizeRecord(raw: RawRecord): NormalizedEvidenceRecord {
     tags: raw.tags?.length ? raw.tags : ['adaptive-coaching'],
     provenanceIds: [raw.id],
   });
+}
+
+function normalizeTitleToken(title: string): string {
+  return title
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function extractDoiToken(value: string): string | null {
+  const match = value.toLowerCase().match(/10\.\d{4,9}\/[-._;()/:a-z0-9]+/i);
+  return match ? match[0].toLowerCase() : null;
+}
+
+function buildCanonicalRecordId(input: { id: string; title: string; url: string }): string {
+  const normalizedTitle = normalizeTitleToken(input.title);
+  if (normalizedTitle) {
+    return `title:${normalizedTitle}`;
+  }
+
+  const doi = extractDoiToken(input.id) ?? extractDoiToken(input.url);
+  if (doi) {
+    return `doi:${doi}`;
+  }
+
+  try {
+    const url = new URL(input.url);
+    if (url.hostname.endsWith('pubmed.ncbi.nlm.nih.gov')) {
+      const pmid = url.pathname.split('/').filter(Boolean)[0];
+      if (pmid) {
+        return `pmid:${pmid}`;
+      }
+    }
+  } catch {
+    // ignore malformed URL here; upstream validation will reject it later if needed
+  }
+
+  return `record:${input.id.toLowerCase()}`;
+}
+
+function normalizeProvenanceIds(record: NormalizedEvidenceRecord): string[] {
+  if (record.provenanceIds.length === 1 && record.provenanceIds[0] !== record.id) {
+    return [record.id];
+  }
+
+  return [...new Set([...record.provenanceIds, record.id])];
 }
 
 export function normalizeConnectorRecords(
@@ -208,15 +267,36 @@ export function parseConnectorCursorState(input: unknown): ConnectorCursorState 
 }
 
 export function dedupeNormalizedEvidenceRecords(records: NormalizedEvidenceRecord[]): NormalizedEvidenceRecord[] {
-  const seen = new Set<string>();
+  const seen = new Map<string, number>();
   const deduped: NormalizedEvidenceRecord[] = [];
 
   for (const record of records) {
-    if (seen.has(record.id)) {
+    const canonicalId =
+      record.canonicalId ??
+      buildCanonicalRecordId({
+        id: record.id,
+        title: record.title,
+        url: record.sourceUrl,
+      });
+    const seenIndex = seen.get(canonicalId);
+    if (seenIndex !== undefined) {
+      const existing = deduped[seenIndex]!;
+      deduped[seenIndex] = parseNormalizedEvidenceRecord({
+        ...existing,
+        canonicalId,
+        provenanceIds: [...new Set([...normalizeProvenanceIds(existing), ...normalizeProvenanceIds(record)])],
+        tags: [...new Set([...existing.tags, ...record.tags])],
+      });
       continue;
     }
-    seen.add(record.id);
-    deduped.push(record);
+    seen.set(canonicalId, deduped.length);
+    deduped.push(
+      parseNormalizedEvidenceRecord({
+        ...record,
+        canonicalId,
+        provenanceIds: normalizeProvenanceIds(record),
+      }),
+    );
   }
 
   return deduped;

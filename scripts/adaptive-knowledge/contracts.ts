@@ -101,6 +101,7 @@ export const adaptiveKnowledgeDiscoveryTelemetrySchema = z
 export const normalizedEvidenceRecordSchema = z
   .object({
     id: z.string().min(1),
+    canonicalId: z.string().min(1).optional(),
     sourceType: z.enum(SOURCE_TYPE_VALUES),
     sourceUrl: z.string().url(),
     sourceDomain: z.string().min(1),
