@@ -57,19 +57,19 @@ test('connector freshness window excludes records older than 5-year default', as
         results: [
           {
             id: 'oa-fresh',
-            title: 'Fresh review',
+            title: 'Resistance training review for hypertrophy',
             url: 'https://openalex.org/W1',
             publishedAt: '2025-11-02',
             sourceType: 'review',
-            summary: 'fresh',
+            summary: 'Resistance training and hypertrophy outcomes.',
           },
           {
             id: 'oa-stale',
-            title: 'Old review',
+            title: 'Resistance training review from 2017',
             url: 'https://openalex.org/W2',
             publishedAt: '2017-01-01',
             sourceType: 'review',
-            summary: 'stale',
+            summary: 'Older resistance training review.',
           },
         ],
       }),
@@ -112,8 +112,8 @@ test('crossref connector parses representative native response items', async () 
           items: [
             {
               DOI: '10.1000/test',
-              title: ['Crossref native title'],
-              abstract: 'crossref abstract',
+              title: ['Resistance training hypertrophy review'],
+              abstract: 'Review of resistance training and hypertrophy outcomes.',
               created: { 'date-parts': [[2025, 11, 2]] },
             },
           ],
@@ -124,6 +124,31 @@ test('crossref connector parses representative native response items', async () 
   assert.equal(result.records.length, 1);
   assert.equal(result.records[0]?.id, '10.1000/test');
   assert.equal(result.telemetry.nextCursor, '10.1000/test');
+});
+
+test('crossref connector rejects semantically off-topic native items even when domains are allowed', async () => {
+  const result = await fetchCrossrefEvidenceBatch({
+    query: 'resistance training pain modification exercise selection',
+    allowedDomains: ['doi.org'],
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    fetchImpl: async () =>
+      buildJsonResponse({
+        message: {
+          items: [
+            {
+              DOI: '10.1000/fine-dining',
+              title: ['Systematic literature review of determinants of restaurant preference in hospitality'],
+              abstract: 'A hospitality review about dining behavior and customer revisit intention.',
+              created: { 'date-parts': [[2025, 11, 2]] },
+            },
+          ],
+        },
+      }),
+  });
+
+  assert.equal(result.records.length, 0);
+  assert.equal(result.recordsSkipped, 1);
+  assert.equal(result.telemetry.skipReasons?.offTopic, 1);
 });
 
 test('cursor state excludes already seen records before final normalization', async () => {

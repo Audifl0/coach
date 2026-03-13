@@ -338,6 +338,7 @@ function buildClientProps() {
             stalePublication: 8,
             alreadySeen: 6,
             invalidUrl: 1,
+            offTopic: 4,
           },
           error: null,
         },
@@ -373,6 +374,7 @@ test('worker corpus dashboard client renders bootstrap campaign controls and dia
   assert.match(html, /Campaign progress/);
   assert.match(html, /cursor jobs 2/);
   assert.match(html, /budget canonical 250/);
+  assert.match(html, /off-topic 4/);
 });
 
 test('run detail panel stays readable for progressing bootstrap runs', () => {

@@ -643,6 +643,7 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
                           <span className={styles.chip}>stale {summary.skipReasons?.stalePublication ?? 0}</span>
                           <span className={styles.chip}>seen {summary.skipReasons?.alreadySeen ?? 0}</span>
                           <span className={styles.chip}>invalid-url {summary.skipReasons?.invalidUrl ?? 0}</span>
+                          <span className={styles.chip}>off-topic {summary.skipReasons?.offTopic ?? 0}</span>
                         </div>
                         {summary.error ? <div className={styles.panelText}>{summary.error.message}</div> : null}
                       </div>

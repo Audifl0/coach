@@ -89,7 +89,11 @@ export async function fetchOpenAlexEvidenceBatch(input: ConnectorFetchInput): Pr
     };
   }
 
-  const normalized = normalizeConnectorRecords('openalex', result.value, config, input.now ?? new Date(), input.cursorState);
+  const normalized = normalizeConnectorRecords('openalex', result.value, config, input.now ?? new Date(), input.cursorState, {
+    query: input.query,
+    topicKey: input.collectionJob?.topicKey,
+    targetPopulation: input.collectionJob?.targetPopulation ?? null,
+  });
   return {
     source: 'openalex',
     skipped: false,

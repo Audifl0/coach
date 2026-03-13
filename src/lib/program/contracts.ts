@@ -575,6 +575,7 @@ export const workerCorpusLibraryDetailSchema = z.object({
           stalePublication: z.number().int().nonnegative(),
           alreadySeen: z.number().int().nonnegative(),
           invalidUrl: z.number().int().nonnegative(),
+          offTopic: z.number().int().nonnegative(),
         })
         .nullable()
         .default(null),

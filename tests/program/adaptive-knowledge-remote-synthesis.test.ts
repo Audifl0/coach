@@ -446,3 +446,88 @@ test('remote synthesis defers invalid lots instead of failing the whole bootstra
     true,
   );
 });
+
+test('remote synthesis defers retryable timeout and rate-limit lots instead of failing bootstrap orchestration', async () => {
+  const output = await synthesizeCorpusWithRemoteModel({
+    runId: 'run-remote-retryable-deferred',
+    records: baseRecords,
+    client: {
+      synthesizeLot: async (input) => {
+        if (input.lotId === 'lot-guideline') {
+          throw new CorpusRemoteSynthesisError({
+            message: 'lot=lot-guideline;message=Request timed out.',
+            reason: 'timeout',
+            retryable: true,
+            metadata: {
+              provider: 'openai',
+              model: 'gpt-test',
+              latencyMs: 5,
+              requestId: 'req_timeout',
+            },
+          });
+        }
+        if (input.lotId === 'lot-review') {
+          throw new CorpusRemoteSynthesisError({
+            message: 'lot=lot-review;status=429;message=Rate limited.',
+            reason: 'rate_limited',
+            retryable: true,
+            metadata: {
+              provider: 'openai',
+              model: 'gpt-test',
+              latencyMs: 5,
+              requestId: 'req_rate_limited',
+            },
+          });
+        }
+
+        return {
+          lotId: input.lotId,
+          recordIds: input.records.map((record) => record.id),
+          studyExtractions: [],
+          retainedClaims: [],
+          rejectedClaims: [],
+          coverageTags: input.records.flatMap((record) => record.tags),
+          contradictions: [],
+          modelRun: {
+            provider: 'openai',
+            model: 'gpt-test',
+            promptVersion: 'test-v1',
+            requestId: `req-${input.lotId}`,
+            latencyMs: 5,
+          },
+        };
+      },
+      consolidate: async () => ({
+        principles: [],
+        studyExtractions: [],
+        rejectedClaims: [],
+        coverage: {
+          recordCount: 0,
+          batchCount: 0,
+          retainedClaimCount: 0,
+          sourceDomains: ['unavailable'],
+          coveredTags: [],
+        },
+        contradictions: [],
+        modelRun: {
+          provider: 'openai',
+          model: 'gpt-test',
+          promptVersion: 'test-v1',
+          requestId: null,
+          requestIds: [],
+          totalLatencyMs: 0,
+        },
+      }),
+    },
+  });
+
+  assert.equal(output.principles.length, 0);
+  assert.equal(
+    output.validatedSynthesis.rejectedClaims.some((claim) => claim.code === 'deferred_remote_timeout'),
+    true,
+  );
+  assert.equal(
+    output.validatedSynthesis.rejectedClaims.some((claim) => claim.code === 'deferred_remote_rate_limit'),
+    true,
+  );
+});

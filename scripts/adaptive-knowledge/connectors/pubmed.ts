@@ -84,7 +84,11 @@ export async function fetchPubmedEvidenceBatch(input: ConnectorFetchInput): Prom
     };
   }
 
-  const normalized = normalizeConnectorRecords('pubmed', result.value, config, input.now ?? new Date(), input.cursorState);
+  const normalized = normalizeConnectorRecords('pubmed', result.value, config, input.now ?? new Date(), input.cursorState, {
+    query: input.query,
+    topicKey: input.collectionJob?.topicKey,
+    targetPopulation: input.collectionJob?.targetPopulation ?? null,
+  });
   return {
     source: 'pubmed',
     skipped: false,

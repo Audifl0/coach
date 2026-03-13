@@ -323,7 +323,7 @@ export function buildStructuredExtractionPlan(input: {
   maxRecordsPerLot?: number;
   maxLots?: number;
 }): StructuredExtractionPlan {
-  const maxRecordsPerLot = Math.max(1, input.maxRecordsPerLot ?? 3);
+  const maxRecordsPerLot = Math.max(1, input.maxRecordsPerLot ?? 2);
   const maxLots = Math.max(1, input.maxLots ?? 3);
   const ordered = [...input.records].sort((left, right) => {
     const priorityDelta = documentaryPriority(left) - documentaryPriority(right);
@@ -374,6 +374,8 @@ export async function synthesizeCorpusWithRemoteModel(input: {
 }): Promise<CorpusSynthesisOutput> {
   const plan = buildStructuredExtractionPlan({
     records: input.records,
+    maxRecordsPerLot: 2,
+    maxLots: 4,
   });
   const lots = plan.lots.length > 0 ? plan.lots : createSynthesisLots(input.records);
   const batchSyntheses: SourceSynthesisBatch[] = [];
@@ -388,12 +390,20 @@ export async function synthesizeCorpusWithRemoteModel(input: {
         }),
       );
     } catch (error) {
-      if (error instanceof CorpusRemoteSynthesisError && error.reason === 'invalid_payload') {
+      if (
+        error instanceof CorpusRemoteSynthesisError &&
+        (error.reason === 'invalid_payload' || error.reason === 'timeout' || error.reason === 'rate_limited')
+      ) {
         deferredRejectedClaims.push(
           ...lot.records.map((record) =>
             parseRejectedSynthesisClaim({
               recordId: record.id,
-              code: 'deferred_remote_extraction',
+              code:
+                error.reason === 'timeout'
+                  ? 'deferred_remote_timeout'
+                  : error.reason === 'rate_limited'
+                    ? 'deferred_remote_rate_limit'
+                    : 'deferred_remote_extraction',
               reason: error.message,
             }),
           ),
@@ -402,6 +412,26 @@ export async function synthesizeCorpusWithRemoteModel(input: {
       }
       throw error;
     }
+  }
+
+  if (batchSyntheses.length === 0) {
+    const validated = buildValidatedSynthesisFromPrinciples({
+      records: [],
+      principles: [],
+      rejectedClaims: deferredRejectedClaims,
+      modelRun: {
+        provider: 'openai',
+        model: 'deferred-bootstrap-synthesis',
+        promptVersion: 'deferred-v1',
+        requestIds: [],
+        totalLatencyMs: 0,
+      },
+    });
+
+    return {
+      principles: [],
+      validatedSynthesis: validated,
+    };
   }
 
   const validated = await input.client.consolidate({

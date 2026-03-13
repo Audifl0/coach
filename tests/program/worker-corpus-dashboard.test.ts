@@ -216,6 +216,7 @@ async function buildWorkerFixture() {
             stalePublication: 18,
             alreadySeen: 1,
             invalidUrl: 0,
+            offTopic: 0,
           },
         },
       },

@@ -84,6 +84,7 @@ type SourcesArtifact = {
       stalePublication: number;
       alreadySeen: number;
       invalidUrl: number;
+      offTopic: number;
     } | null;
     error: {
       message: string;
@@ -333,6 +334,7 @@ async function readSourcesArtifact(snapshotDir: string): Promise<SourcesArtifact
                       typeof skipReasons.stalePublication === 'number' ? skipReasons.stalePublication : 0,
                     alreadySeen: typeof skipReasons.alreadySeen === 'number' ? skipReasons.alreadySeen : 0,
                     invalidUrl: typeof skipReasons.invalidUrl === 'number' ? skipReasons.invalidUrl : 0,
+                    offTopic: typeof skipReasons.offTopic === 'number' ? skipReasons.offTopic : 0,
                   }
                 : null,
               error: error

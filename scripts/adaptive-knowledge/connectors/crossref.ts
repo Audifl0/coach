@@ -101,7 +101,11 @@ export async function fetchCrossrefEvidenceBatch(input: ConnectorFetchInput): Pr
     };
   }
 
-  const normalized = normalizeConnectorRecords('crossref', result.value, config, input.now ?? new Date(), input.cursorState);
+  const normalized = normalizeConnectorRecords('crossref', result.value, config, input.now ?? new Date(), input.cursorState, {
+    query: input.query,
+    topicKey: input.collectionJob?.topicKey,
+    targetPopulation: input.collectionJob?.targetPopulation ?? null,
+  });
   return {
     source: 'crossref',
     skipped: false,

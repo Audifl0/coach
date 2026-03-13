@@ -56,6 +56,7 @@ export type ConnectorFetchResult = {
       stalePublication: number;
       alreadySeen: number;
       invalidUrl: number;
+      offTopic: number;
     };
   };
   error?: {
@@ -226,6 +227,98 @@ function normalizeTitleToken(title: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+const QUERY_STOPWORDS = new Set([
+  'and',
+  'for',
+  'the',
+  'with',
+  'from',
+  'into',
+  'over',
+  'under',
+  'between',
+  'during',
+  'based',
+  'management',
+  'monitoring',
+  'weekly',
+  'response',
+]);
+
+const GENERAL_TRAINING_TERMS = new Set([
+  'resistance',
+  'training',
+  'exercise',
+  'strength',
+  'hypertrophy',
+  'muscle',
+  'load',
+  'fatigue',
+  'recovery',
+  'readiness',
+  'pain',
+  'injury',
+  'progression',
+  'volume',
+  'frequency',
+  'autoregulation',
+]);
+
+const TOPIC_TERMS: Record<string, string[]> = {
+  progression: ['progression', 'overload', 'strength', 'load'],
+  'hypertrophy-dose': ['hypertrophy', 'muscle', 'volume', 'frequency'],
+  'fatigue-readiness': ['fatigue', 'readiness', 'recovery', 'autoregulation'],
+  'limitations-pain': ['pain', 'injury', 'limitation', 'substitution'],
+  'population-context': ['novice', 'beginner', 'older', 'population', 'time'],
+  'exercise-selection': ['exercise', 'movement', 'variation', 'specificity'],
+};
+
+function tokenizeSemanticText(value: string): string[] {
+  return value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9\s-]+/g, ' ')
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 4 && !QUERY_STOPWORDS.has(token));
+}
+
+function buildSemanticBody(raw: RawRecord): string {
+  const title = raw.title.trim();
+  const summary = raw.summary.trim();
+  if (!summary || /(?:crossref|openalex|pubmed) result for/i.test(summary)) {
+    return title;
+  }
+  return `${title} ${summary}`;
+}
+
+function isSemanticallyRelevant(input: {
+  raw: RawRecord;
+  query: string;
+  topicKey?: string;
+  targetPopulation?: string | null;
+}): boolean {
+  const bodyTokens = new Set(tokenizeSemanticText(buildSemanticBody(input.raw)));
+  if (bodyTokens.size === 0) {
+    return false;
+  }
+
+  const queryTokens = tokenizeSemanticText(input.query).filter((token) => !GENERAL_TRAINING_TERMS.has(token));
+  const topicTokens = [
+    ...(input.topicKey ? (TOPIC_TERMS[input.topicKey] ?? []) : []),
+    ...tokenizeSemanticText(input.targetPopulation ?? ''),
+  ];
+  const generalHit = [...GENERAL_TRAINING_TERMS].some((term) => bodyTokens.has(term));
+  const queryHits = queryTokens.filter((token) => bodyTokens.has(token)).length;
+  const topicHits = topicTokens.filter((token) => bodyTokens.has(token)).length;
+
+  if (queryTokens.length <= 2) {
+    return generalHit || topicHits > 0;
+  }
+
+  return generalHit && (queryHits >= 1 || topicHits >= 1);
+}
+
 function extractDoiToken(value: string): string | null {
   const match = value.toLowerCase().match(/10\.\d{4,9}\/[-._;()/:a-z0-9]+/i);
   return match ? match[0].toLowerCase() : null;
@@ -271,6 +364,11 @@ export function normalizeConnectorRecords(
   config: AdaptiveKnowledgePipelineConfig,
   now: Date,
   cursorState?: ConnectorCursorState,
+  semanticContext?: {
+    query: string;
+    topicKey?: string;
+    targetPopulation?: string | null;
+  },
 ): {
   records: NormalizedEvidenceRecord[];
   skipped: number;
@@ -279,6 +377,7 @@ export function normalizeConnectorRecords(
     stalePublication: number;
     alreadySeen: number;
     invalidUrl: number;
+    offTopic: number;
   };
 } {
   const accepted: NormalizedEvidenceRecord[] = [];
@@ -288,6 +387,7 @@ export function normalizeConnectorRecords(
     stalePublication: 0,
     alreadySeen: 0,
     invalidUrl: 0,
+    offTopic: 0,
   };
   const seenIds = new Set(cursorState?.seenRecordIds ?? []);
 
@@ -314,6 +414,19 @@ export function normalizeConnectorRecords(
     if (seenIds.has(raw.id)) {
       skipped += 1;
       skipReasons.alreadySeen += 1;
+      continue;
+    }
+    if (
+      semanticContext &&
+      !isSemanticallyRelevant({
+        raw,
+        query: semanticContext.query,
+        topicKey: semanticContext.topicKey,
+        targetPopulation: semanticContext.targetPopulation,
+      })
+    ) {
+      skipped += 1;
+      skipReasons.offTopic += 1;
       continue;
     }
     accepted.push(normalizeRecord(raw));
