@@ -11,6 +11,10 @@ const DEFAULT_BACKFILL_MAX_DAYS = 1825;
 const DEFAULT_PIPELINE_SCHEDULE_CRON = '0 4 * * 1';
 const DEFAULT_PIPELINE_SCHEDULE_TIMEZONE = 'UTC';
 const DEFAULT_PIPELINE_TIMEOUT_MS = 8000;
+const DEFAULT_BOOTSTRAP_MAX_JOBS_PER_RUN = 12;
+const DEFAULT_BOOTSTRAP_MAX_PAGES_PER_JOB = 5;
+const DEFAULT_BOOTSTRAP_MAX_CANONICAL_RECORDS_PER_RUN = 250;
+const DEFAULT_BOOTSTRAP_MAX_RUNTIME_MS = 15 * 60 * 1000;
 const MAX_PIPELINE_RETRY_COUNT = 3;
 
 export const DEFAULT_PIPELINE_FRESHNESS_DAYS = 1825;
@@ -27,6 +31,12 @@ export type AdaptiveKnowledgePipelineConfig = {
     readonly cron: string;
     readonly timezone: string;
   };
+  readonly bootstrap: {
+    readonly maxJobsPerRun: number;
+    readonly maxPagesPerJob: number;
+    readonly maxCanonicalRecordsPerRun: number;
+    readonly maxRuntimeMs: number;
+  };
   readonly cadence: 'weekly';
 };
 
@@ -40,6 +50,10 @@ type OverridesInput = Partial<{
   timeoutMs: number;
   requestTimeoutMs: number;
   maxQueriesPerRun: number;
+  bootstrapMaxJobsPerRun: number;
+  bootstrapMaxPagesPerJob: number;
+  bootstrapMaxCanonicalRecordsPerRun: number;
+  bootstrapMaxRuntimeMs: number;
   scheduleCron: string;
   scheduleTimezone: string;
 }>;
@@ -133,6 +147,20 @@ function parseFromEnv(env: EnvInput): AdaptiveKnowledgePipelineConfig {
     parseMaybeInteger(env.PIPELINE_REQUEST_TIMEOUT_MS, 'PIPELINE_REQUEST_TIMEOUT_MS') ?? DEFAULT_PIPELINE_TIMEOUT_MS;
   const maxQueriesPerRun =
     parseMaybeInteger(env.PIPELINE_MAX_QUERIES_PER_RUN, 'PIPELINE_MAX_QUERIES_PER_RUN') ?? 6;
+  const bootstrapMaxJobsPerRun =
+    parseMaybeInteger(env.PIPELINE_BOOTSTRAP_MAX_JOBS_PER_RUN, 'PIPELINE_BOOTSTRAP_MAX_JOBS_PER_RUN') ??
+    DEFAULT_BOOTSTRAP_MAX_JOBS_PER_RUN;
+  const bootstrapMaxPagesPerJob =
+    parseMaybeInteger(env.PIPELINE_BOOTSTRAP_MAX_PAGES_PER_JOB, 'PIPELINE_BOOTSTRAP_MAX_PAGES_PER_JOB') ??
+    DEFAULT_BOOTSTRAP_MAX_PAGES_PER_JOB;
+  const bootstrapMaxCanonicalRecordsPerRun =
+    parseMaybeInteger(
+      env.PIPELINE_BOOTSTRAP_MAX_CANONICAL_RECORDS_PER_RUN,
+      'PIPELINE_BOOTSTRAP_MAX_CANONICAL_RECORDS_PER_RUN',
+    ) ?? DEFAULT_BOOTSTRAP_MAX_CANONICAL_RECORDS_PER_RUN;
+  const bootstrapMaxRuntimeMs =
+    parseMaybeInteger(env.PIPELINE_BOOTSTRAP_MAX_RUNTIME_MS, 'PIPELINE_BOOTSTRAP_MAX_RUNTIME_MS') ??
+    DEFAULT_BOOTSTRAP_MAX_RUNTIME_MS;
 
   if (backfillMaxDays < freshnessWindowDays) {
     throw new Error('PIPELINE_BACKFILL_MAX_DAYS must be greater than or equal to PIPELINE_FRESHNESS_WINDOW_DAYS');
@@ -151,6 +179,12 @@ function parseFromEnv(env: EnvInput): AdaptiveKnowledgePipelineConfig {
     schedule: Object.freeze({
       cron,
       timezone,
+    }),
+    bootstrap: Object.freeze({
+      maxJobsPerRun: bootstrapMaxJobsPerRun,
+      maxPagesPerJob: bootstrapMaxPagesPerJob,
+      maxCanonicalRecordsPerRun: bootstrapMaxCanonicalRecordsPerRun,
+      maxRuntimeMs: bootstrapMaxRuntimeMs,
     }),
     cadence: 'weekly' as const,
   });
@@ -183,6 +217,23 @@ function parseFromOverrides(overrides: OverridesInput = {}): AdaptiveKnowledgePi
   if (!Number.isInteger(maxQueriesPerRun) || maxQueriesPerRun <= 0) {
     throw new Error('maxQueriesPerRun must be a positive integer');
   }
+  const bootstrapMaxJobsPerRun = overrides.bootstrapMaxJobsPerRun ?? DEFAULT_BOOTSTRAP_MAX_JOBS_PER_RUN;
+  if (!Number.isInteger(bootstrapMaxJobsPerRun) || bootstrapMaxJobsPerRun <= 0) {
+    throw new Error('bootstrapMaxJobsPerRun must be a positive integer');
+  }
+  const bootstrapMaxPagesPerJob = overrides.bootstrapMaxPagesPerJob ?? DEFAULT_BOOTSTRAP_MAX_PAGES_PER_JOB;
+  if (!Number.isInteger(bootstrapMaxPagesPerJob) || bootstrapMaxPagesPerJob <= 0) {
+    throw new Error('bootstrapMaxPagesPerJob must be a positive integer');
+  }
+  const bootstrapMaxCanonicalRecordsPerRun =
+    overrides.bootstrapMaxCanonicalRecordsPerRun ?? DEFAULT_BOOTSTRAP_MAX_CANONICAL_RECORDS_PER_RUN;
+  if (!Number.isInteger(bootstrapMaxCanonicalRecordsPerRun) || bootstrapMaxCanonicalRecordsPerRun <= 0) {
+    throw new Error('bootstrapMaxCanonicalRecordsPerRun must be a positive integer');
+  }
+  const bootstrapMaxRuntimeMs = overrides.bootstrapMaxRuntimeMs ?? DEFAULT_BOOTSTRAP_MAX_RUNTIME_MS;
+  if (!Number.isInteger(bootstrapMaxRuntimeMs) || bootstrapMaxRuntimeMs <= 0) {
+    throw new Error('bootstrapMaxRuntimeMs must be a positive integer');
+  }
 
   if (backfillMaxDays < freshnessWindowDays) {
     throw new Error('backfillMaxDays must be greater than or equal to freshnessWindowDays');
@@ -198,6 +249,12 @@ function parseFromOverrides(overrides: OverridesInput = {}): AdaptiveKnowledgePi
     schedule: Object.freeze({
       cron: overrides.scheduleCron?.trim() || DEFAULT_PIPELINE_SCHEDULE_CRON,
       timezone: overrides.scheduleTimezone?.trim() || DEFAULT_PIPELINE_SCHEDULE_TIMEZONE,
+    }),
+    bootstrap: Object.freeze({
+      maxJobsPerRun: bootstrapMaxJobsPerRun,
+      maxPagesPerJob: bootstrapMaxPagesPerJob,
+      maxCanonicalRecordsPerRun: bootstrapMaxCanonicalRecordsPerRun,
+      maxRuntimeMs: bootstrapMaxRuntimeMs,
     }),
     cadence: 'weekly' as const,
   });

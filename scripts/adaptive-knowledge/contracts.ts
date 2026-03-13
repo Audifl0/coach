@@ -3,11 +3,13 @@ import { z } from 'zod';
 const SOURCE_TYPE_VALUES = ['guideline', 'review', 'expertise'] as const;
 const STAGE_VALUES = ['discover', 'ingest', 'synthesize', 'validate', 'publish'] as const;
 const STAGE_STATUS_VALUES = ['succeeded', 'failed', 'skipped'] as const;
+const PIPELINE_MODE_VALUES = ['bootstrap', 'refresh', 'check'] as const;
 const SYNTHESIS_PROVIDER_VALUES = ['openai', 'deterministic'] as const;
 const CONTRADICTION_SEVERITY_VALUES = ['low', 'medium', 'high', 'critical'] as const;
 const CONTRADICTION_RESOLUTION_VALUES = ['pending', 'retained', 'rejected'] as const;
 const DISCOVERY_GAP_STATUS_VALUES = ['covered', 'partial', 'uncovered'] as const;
 const RANKING_REASON_DIRECTION_VALUES = ['boost', 'penalty', 'reject'] as const;
+const BOOTSTRAP_CAMPAIGN_STATUS_VALUES = ['idle', 'running', 'paused', 'completed', 'failed'] as const;
 
 export const evidenceRankingReasonSchema = z
   .object({
@@ -125,6 +127,35 @@ export const corpusPrincipleSchema = z
   })
   .strict();
 
+export const adaptiveKnowledgeBootstrapCampaignStateSchema = z
+  .object({
+    schemaVersion: z.string().min(1),
+    campaignId: z.string().min(1),
+    status: z.enum(BOOTSTRAP_CAMPAIGN_STATUS_VALUES),
+    mode: z.literal('bootstrap'),
+    startedAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    lastRunId: z.string().min(1).nullable().optional(),
+    activeJobId: z.string().min(1).nullable().optional(),
+    backlog: z
+      .object({
+        pending: z.number().int().nonnegative(),
+        running: z.number().int().nonnegative(),
+        blocked: z.number().int().nonnegative(),
+        completed: z.number().int().nonnegative(),
+      })
+      .strict(),
+    progress: z
+      .object({
+        discoveredQueryFamilies: z.number().int().nonnegative(),
+        canonicalRecordCount: z.number().int().nonnegative(),
+        extractionBacklogCount: z.number().int().nonnegative(),
+        publicationCandidateCount: z.number().int().nonnegative(),
+      })
+      .strict(),
+  })
+  .strict();
+
 export const synthesisRunMetadataSchema = z
   .object({
     provider: z.enum(SYNTHESIS_PROVIDER_VALUES),
@@ -221,7 +252,7 @@ const orderedStages = [...STAGE_VALUES];
 export const corpusRunReportSchema = z
   .object({
     runId: z.string().min(1),
-    mode: z.enum(['refresh', 'check']),
+    mode: z.enum(PIPELINE_MODE_VALUES),
     startedAt: z.string().datetime(),
     completedAt: z.string().datetime(),
     snapshotId: z.string().min(1),
@@ -266,6 +297,7 @@ export type EvidenceScientificRanking = z.infer<typeof evidenceScientificRanking
 export type StructuredStudyExtraction = z.infer<typeof structuredStudyExtractionSchema>;
 export type AdaptiveKnowledgeRankingTelemetry = z.infer<typeof adaptiveKnowledgeRankingTelemetrySchema>;
 export type CorpusPrinciple = z.infer<typeof corpusPrincipleSchema>;
+export type AdaptiveKnowledgeBootstrapCampaignState = z.infer<typeof adaptiveKnowledgeBootstrapCampaignStateSchema>;
 export type SynthesisRunMetadata = z.infer<typeof synthesisRunMetadataSchema>;
 export type RejectedSynthesisClaim = z.infer<typeof rejectedSynthesisClaimSchema>;
 export type SynthesisContradiction = z.infer<typeof synthesisContradictionSchema>;
@@ -300,6 +332,10 @@ export function parseAdaptiveKnowledgeRankingTelemetry(input: unknown): Adaptive
 
 export function parseCorpusPrinciple(input: unknown): CorpusPrinciple {
   return corpusPrincipleSchema.parse(input);
+}
+
+export function parseAdaptiveKnowledgeBootstrapCampaignState(input: unknown): AdaptiveKnowledgeBootstrapCampaignState {
+  return adaptiveKnowledgeBootstrapCampaignStateSchema.parse(input);
 }
 
 export function parseSourceSynthesisBatch(input: unknown): SourceSynthesisBatch {
