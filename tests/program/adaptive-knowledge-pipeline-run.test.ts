@@ -6,6 +6,11 @@ import path from 'node:path';
 import test from 'node:test';
 
 import type { ConnectorFetchResult } from '../../scripts/adaptive-knowledge/connectors/shared';
+import {
+  parseAdaptiveKnowledgeBootstrapCampaignState,
+  parseCorpusRunReport,
+} from '../../scripts/adaptive-knowledge/contracts';
+import { parseAdaptiveKnowledgePipelineConfig } from '../../scripts/adaptive-knowledge/config';
 import { runAdaptiveKnowledgePipeline } from '../../scripts/adaptive-knowledge/pipeline-run';
 import { buildValidatedSynthesisFromPrinciples, synthesizeCorpusPrinciples } from '../../scripts/adaptive-knowledge/synthesis';
 
@@ -451,4 +456,69 @@ test('rerun incremental cursor state is persisted and surfaced in run telemetry'
 
   await access(path.join(outputRootDir, 'connector-state.json'), constants.F_OK);
   assert.equal(result.runReport.stageReports[1]?.message?.includes('incrementalSkipped='), true);
+});
+
+test('bootstrap config exposes dedicated campaign budgets without mutating refresh defaults', () => {
+  const config = parseAdaptiveKnowledgePipelineConfig({
+    freshnessWindowDays: 365,
+    backfillMaxDays: 1825,
+    maxQueriesPerRun: 6,
+    bootstrapMaxJobsPerRun: 12,
+    bootstrapMaxPagesPerJob: 7,
+    bootstrapMaxCanonicalRecordsPerRun: 240,
+    bootstrapMaxRuntimeMs: 900_000,
+  });
+
+  assert.equal(config.maxQueriesPerRun, 6);
+  assert.deepEqual(config.bootstrap, {
+    maxJobsPerRun: 12,
+    maxPagesPerJob: 7,
+    maxCanonicalRecordsPerRun: 240,
+    maxRuntimeMs: 900_000,
+  });
+});
+
+test('bootstrap campaign state and run reports accept durable bootstrap mode metadata', () => {
+  const campaign = parseAdaptiveKnowledgeBootstrapCampaignState({
+    schemaVersion: 'v1',
+    campaignId: 'bootstrap-2026-03-13',
+    status: 'running',
+    mode: 'bootstrap',
+    startedAt: '2026-03-13T10:00:00.000Z',
+    updatedAt: '2026-03-13T10:05:00.000Z',
+    lastRunId: 'run-bootstrap-1',
+    activeJobId: 'job-pubmed-progressive',
+    backlog: {
+      pending: 18,
+      running: 1,
+      blocked: 0,
+      completed: 4,
+    },
+    progress: {
+      discoveredQueryFamilies: 6,
+      canonicalRecordCount: 120,
+      extractionBacklogCount: 42,
+      publicationCandidateCount: 15,
+    },
+  });
+
+  assert.equal(campaign.mode, 'bootstrap');
+  assert.equal(campaign.backlog.pending, 18);
+
+  const report = parseCorpusRunReport({
+    runId: 'run-bootstrap-1',
+    mode: 'bootstrap',
+    startedAt: '2026-03-13T10:00:00.000Z',
+    completedAt: '2026-03-13T10:15:00.000Z',
+    snapshotId: 'run-bootstrap-1',
+    stageReports: [
+      { stage: 'discover', status: 'succeeded', message: 'ok' },
+      { stage: 'ingest', status: 'succeeded', message: 'ok' },
+      { stage: 'synthesize', status: 'skipped', message: 'deferred-to-bootstrap' },
+      { stage: 'validate', status: 'skipped', message: 'deferred-to-bootstrap' },
+      { stage: 'publish', status: 'skipped', message: 'deferred-to-bootstrap' },
+    ],
+  });
+
+  assert.equal(report.mode, 'bootstrap');
 });
