@@ -7,6 +7,7 @@ import test from 'node:test';
 
 import type { ConnectorFetchResult } from '../../scripts/adaptive-knowledge/connectors/shared';
 import {
+  parseDocumentaryRecordStagingArtifact,
   parseAdaptiveKnowledgeBootstrapCampaignState,
   parseAdaptiveKnowledgeCollectionJob,
   parseCorpusRunReport,
@@ -102,6 +103,14 @@ test('pipeline executes deterministic stage order and writes snapshot artifacts'
   const structuredExtractions = (await loadJson(path.join(snapshotDir, 'study-extractions.json'))) as {
     studyExtractions: unknown[];
   };
+  const documentaryStaging = (await loadJson(path.join(snapshotDir, 'document-staging.json'))) as {
+    records: Array<{
+      documentary?: {
+        status: string;
+        acquisition?: { rejectionReason?: { code: string } | null };
+      };
+    }>;
+  };
   const report = (await loadJson(path.join(snapshotDir, 'run-report.json'))) as {
     stageReports: Array<{ stage: string }>;
   };
@@ -130,6 +139,8 @@ test('pipeline executes deterministic stage order and writes snapshot artifacts'
   assert.equal(validated.modelRun.provider, 'deterministic');
   assert.equal(Array.isArray(validated.studyExtractions), true);
   assert.equal(Array.isArray(structuredExtractions.studyExtractions), true);
+  assert.equal(documentaryStaging.records.length, 3);
+  assert.equal(documentaryStaging.records.every((record) => typeof record.documentary?.status === 'string'), true);
   assert.equal(sourcePayload.discoveryPlan.length >= 3, true);
   assert.equal(sourcePayload.discoveryPlan.every((query) => query.topicKey.length > 0), true);
   assert.equal(sourcePayload.discoveryPlan.every((query) => query.subtopicKey.length > 0), true);
@@ -144,6 +155,123 @@ test('pipeline executes deterministic stage order and writes snapshot artifacts'
     report.stageReports.map((stage) => stage.stage),
     ['discover', 'ingest', 'synthesize', 'validate', 'publish'],
   );
+});
+
+test('documentary staging persists acquisition statuses and rejection reasons separately from runtime snapshot payloads', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+
+  await runPipelineWithDeterministicSynthesis({
+    runId: 'run-document-staging',
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    outputRootDir,
+    connectors: {
+      pubmed: async () => ({
+        ...buildConnectorSuccess('pubmed'),
+        records: [
+          {
+            ...buildConnectorSuccess('pubmed').records[0]!,
+            id: 'doc-metadata',
+            documentary: {
+              status: 'metadata-only',
+              acquisition: {
+                attemptedAt: '2026-03-05T00:00:00.000Z',
+                sourceKind: 'metadata',
+                rejectionReason: null,
+              },
+            },
+          },
+        ],
+      }),
+      crossref: async () => ({
+        ...buildConnectorSuccess('crossref'),
+        records: [
+          {
+            ...buildConnectorSuccess('crossref').records[0]!,
+            id: 'doc-full-text',
+            documentary: {
+              status: 'full-text-ready',
+              acquisition: {
+                attemptedAt: '2026-03-05T00:01:00.000Z',
+                sourceKind: 'full-text',
+                rejectionReason: null,
+              },
+            },
+          },
+        ],
+      }),
+      openalex: async () => ({
+        ...buildConnectorSuccess('openalex'),
+        records: [
+          {
+            ...buildConnectorSuccess('openalex').records[0]!,
+            id: 'doc-blocked',
+            documentary: {
+              status: 'blocked',
+              acquisition: {
+                attemptedAt: '2026-03-05T00:02:00.000Z',
+                sourceKind: 'abstract',
+                rejectionReason: {
+                  code: 'paywall-no-access',
+                  reason: 'Full text unavailable for bootstrap acquisition.',
+                },
+              },
+            },
+          },
+        ],
+      }),
+    },
+  });
+
+  const snapshotDir = path.join(outputRootDir, 'snapshots', 'run-document-staging', 'validated');
+  const documentaryArtifact = parseDocumentaryRecordStagingArtifact(
+    await loadJson(path.join(snapshotDir, 'document-staging.json')),
+  );
+  const sourcesArtifact = (await loadJson(path.join(snapshotDir, 'sources.json'))) as {
+    records: Array<{ id: string; documentary?: { status: string } }>;
+  };
+
+  assert.deepEqual(
+    documentaryArtifact.records.map((record) => record.documentary.status),
+    ['metadata-only', 'full-text-ready', 'blocked'],
+  );
+  assert.equal(
+    documentaryArtifact.records.find((record) => record.id === 'doc-blocked')?.documentary.acquisition.rejectionReason?.code,
+    'paywall-no-access',
+  );
+  assert.equal(sourcesArtifact.records.some((record) => record.id === 'doc-blocked'), true);
+  assert.equal(
+    documentaryArtifact.runtimeProjection.recordIds.every((recordId) =>
+      sourcesArtifact.records.some((record) => record.id === recordId),
+    ),
+    true,
+  );
+});
+
+test('documentary staging contract remains backward-compatible with legacy normalized records', () => {
+  const artifact = parseDocumentaryRecordStagingArtifact({
+    runId: 'legacy-documentary',
+    generatedAt: '2026-03-05T00:00:00.000Z',
+    runtimeProjection: {
+      recordIds: ['legacy-record'],
+      promotedRecordIds: ['legacy-record'],
+    },
+    records: [
+      {
+        id: 'legacy-record',
+        sourceType: 'review',
+        sourceUrl: 'https://doi.org/10.1000/legacy-record',
+        sourceDomain: 'doi.org',
+        publishedAt: '2025-01-01',
+        title: 'Legacy record',
+        summaryEn: 'Legacy normalized record without documentary acquisition metadata.',
+        tags: ['progression'],
+        provenanceIds: ['legacy-record'],
+      },
+    ],
+  });
+
+  assert.equal(artifact.records[0]?.documentary.status, 'metadata-only');
+  assert.equal(artifact.records[0]?.documentary.acquisition.rejectionReason, null);
 });
 
 test('single-source fetch failure marks source skipped and completes run', async () => {
