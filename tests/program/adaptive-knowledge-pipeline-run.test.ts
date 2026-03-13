@@ -8,9 +8,11 @@ import test from 'node:test';
 import type { ConnectorFetchResult } from '../../scripts/adaptive-knowledge/connectors/shared';
 import {
   parseAdaptiveKnowledgeBootstrapCampaignState,
+  parseAdaptiveKnowledgeCollectionJob,
   parseCorpusRunReport,
 } from '../../scripts/adaptive-knowledge/contracts';
 import { parseAdaptiveKnowledgePipelineConfig } from '../../scripts/adaptive-knowledge/config';
+import { buildAdaptiveKnowledgeBootstrapCollectionJobs } from '../../scripts/adaptive-knowledge/discovery';
 import { runAdaptiveKnowledgePipeline } from '../../scripts/adaptive-knowledge/pipeline-run';
 import { buildValidatedSynthesisFromPrinciples, synthesizeCorpusPrinciples } from '../../scripts/adaptive-knowledge/synthesis';
 import { parseWorkerCorpusOverviewResponse } from '../../src/lib/program/contracts';
@@ -645,4 +647,80 @@ test('shared worker dashboard contracts accept bootstrap campaign metadata', () 
 
   assert.equal(overview.control.mode, 'bootstrap');
   assert.equal(overview.control.campaign?.progress.canonicalRecordCount, 4);
+});
+
+test('bootstrap discovery generates prioritized collection jobs and skips already completed ones', () => {
+  const jobs = buildAdaptiveKnowledgeBootstrapCollectionJobs({
+    sources: ['pubmed', 'crossref', 'openalex'],
+    maxJobs: 4,
+    existingJobs: [
+      {
+        id: 'pubmed:progression-load',
+        source: 'pubmed',
+        query: 'resistance training load progression hypertrophy strength',
+        queryFamily: 'progression-load',
+        topicKey: 'progression',
+        topicLabel: 'Progression et surcharge progressive',
+        subtopicKey: 'load-progression',
+        subtopicLabel: 'Progression de charge',
+        priority: 1,
+        status: 'completed',
+        targetPopulation: null,
+        cursor: null,
+        pagesFetched: 1,
+        recordsFetched: 20,
+        canonicalRecords: 12,
+        lastError: null,
+      },
+    ],
+  });
+
+  assert.equal(jobs.length, 4);
+  assert.equal(jobs.some((job) => job.id === 'pubmed:progression-load'), false);
+  assert.deepEqual(
+    jobs.map((job) => parseAdaptiveKnowledgeCollectionJob(job).status),
+    ['pending', 'pending', 'pending', 'pending'],
+  );
+  assert.equal(jobs[0]?.priority <= jobs[1]?.priority!, true);
+});
+
+test('bootstrap mode persists collection jobs and does not recreate completed work on rerun', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+
+  await runPipelineWithDeterministicSynthesis({
+    runId: 'run-bootstrap-jobs-a',
+    mode: 'bootstrap',
+    now: new Date('2026-03-13T10:00:00.000Z'),
+    outputRootDir,
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const firstJobs = (await loadJson(path.join(outputRootDir, 'bootstrap-jobs.json'))) as unknown[];
+  assert.equal(firstJobs.length >= 3, true);
+  assert.equal(firstJobs.some((job) => parseAdaptiveKnowledgeCollectionJob(job).status === 'completed'), true);
+
+  await runPipelineWithDeterministicSynthesis({
+    runId: 'run-bootstrap-jobs-b',
+    mode: 'bootstrap',
+    now: new Date('2026-03-14T10:00:00.000Z'),
+    outputRootDir,
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const secondJobs = (await loadJson(path.join(outputRootDir, 'bootstrap-jobs.json'))) as unknown[];
+  const parsedJobs = secondJobs.map((job) => parseAdaptiveKnowledgeCollectionJob(job));
+  const completedIds = parsedJobs.filter((job) => job.status === 'completed').map((job) => job.id);
+  assert.equal(new Set(completedIds).size, completedIds.length);
+  assert.deepEqual(
+    completedIds.filter((id) => id === 'pubmed:progression-load'),
+    ['pubmed:progression-load'],
+  );
 });
