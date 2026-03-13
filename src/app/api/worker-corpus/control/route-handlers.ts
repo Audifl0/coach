@@ -6,7 +6,7 @@ import {
 export type WorkerCorpusControlRouteDeps = {
   resolveSession: () => Promise<{ userId: string } | null>;
   readControl: () => Promise<unknown>;
-  startWorker: (input: { mode: 'refresh' | 'check' }) => Promise<unknown>;
+  startWorker: (input: { mode: 'bootstrap' | 'refresh' | 'check' }) => Promise<unknown>;
   pauseWorker: () => Promise<unknown>;
 };
 
