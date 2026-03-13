@@ -471,6 +471,10 @@ export function parseSourceSynthesisBatch(input: unknown): SourceSynthesisBatch 
   return sourceSynthesisBatchSchema.parse(input);
 }
 
+export function parseRejectedSynthesisClaim(input: unknown): RejectedSynthesisClaim {
+  return rejectedSynthesisClaimSchema.parse(input);
+}
+
 export function parseValidatedSynthesis(input: unknown): ValidatedSynthesis {
   return validatedSynthesisSchema.parse(input);
 }

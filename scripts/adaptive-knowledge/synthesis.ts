@@ -2,6 +2,7 @@ import {
   parseAdaptiveKnowledgeRankingTelemetry,
   parseCorpusPrinciple,
   parseEvidenceScientificRanking,
+  parseRejectedSynthesisClaim,
   parseValidatedSynthesis,
   type AdaptiveKnowledgeRankingTelemetry,
   type CorpusPrinciple,
@@ -12,6 +13,7 @@ import {
   type ValidatedSynthesis,
 } from './contracts';
 import type { CorpusRemoteSynthesisClient } from './remote-synthesis';
+import { CorpusRemoteSynthesisError } from './remote-synthesis';
 
 type PrincipleBlueprint = {
   id: string;
@@ -375,14 +377,31 @@ export async function synthesizeCorpusWithRemoteModel(input: {
   });
   const lots = plan.lots.length > 0 ? plan.lots : createSynthesisLots(input.records);
   const batchSyntheses: SourceSynthesisBatch[] = [];
+  const deferredRejectedClaims: ValidatedSynthesis['rejectedClaims'] = [];
 
   for (const lot of lots) {
-    batchSyntheses.push(
-      await input.client.synthesizeLot({
-        lotId: lot.lotId,
-        records: lot.records,
-      }),
-    );
+    try {
+      batchSyntheses.push(
+        await input.client.synthesizeLot({
+          lotId: lot.lotId,
+          records: lot.records,
+        }),
+      );
+    } catch (error) {
+      if (error instanceof CorpusRemoteSynthesisError && error.reason === 'invalid_payload') {
+        deferredRejectedClaims.push(
+          ...lot.records.map((record) =>
+            parseRejectedSynthesisClaim({
+              recordId: record.id,
+              code: 'deferred_remote_extraction',
+              reason: error.message,
+            }),
+          ),
+        );
+        continue;
+      }
+      throw error;
+    }
   }
 
   const validated = await input.client.consolidate({
@@ -391,10 +410,15 @@ export async function synthesizeCorpusWithRemoteModel(input: {
     batches: batchSyntheses,
   });
 
+  const mergedValidated = parseValidatedSynthesis({
+    ...validated,
+    rejectedClaims: [...validated.rejectedClaims, ...deferredRejectedClaims],
+  });
+
   return {
-    principles: validated.principles
+    principles: mergedValidated.principles
       .map((principle) => parseCorpusPrinciple(principle))
       .sort((left, right) => left.id.localeCompare(right.id)),
-    validatedSynthesis: validated,
+    validatedSynthesis: mergedValidated,
   };
 }

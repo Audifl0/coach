@@ -374,9 +374,9 @@ test('remote synthesis defers invalid lots instead of failing the whole bootstra
     records: baseRecords,
     client: {
       synthesizeLot: async (input) => {
-        if (input.lotId === 'lot-1') {
+        if (input.lotId === 'lot-guideline') {
           throw new CorpusRemoteSynthesisError({
-            message: 'lot=lot-1;message=invalid_payload',
+            message: 'lot=lot-guideline;message=invalid_payload',
             reason: 'invalid_payload',
             retryable: true,
             metadata: {

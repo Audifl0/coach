@@ -61,6 +61,8 @@ export class CorpusRemoteSynthesisError extends Error {
     model: string;
     latencyMs: number;
     requestId: string | null;
+    operation?: 'synthesizeLot' | 'consolidate';
+    lotId?: string | null;
   };
 
   constructor(input: {
@@ -214,7 +216,18 @@ function buildSourceSynthesisSchema() {
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['recordId', 'topicKeys', 'outcomes', 'evidenceSignals', 'limitations', 'safetySignals'],
+          required: [
+            'recordId',
+            'topicKeys',
+            'population',
+            'intervention',
+            'applicationContext',
+            'outcomes',
+            'evidenceSignals',
+            'limitations',
+            'safetySignals',
+            'rejectionReason',
+          ],
           properties: {
             recordId: { type: 'string', minLength: 1 },
             topicKeys: {
@@ -222,6 +235,9 @@ function buildSourceSynthesisSchema() {
               minItems: 1,
               items: { type: 'string', minLength: 1 },
             },
+            population: { type: ['string', 'null'] },
+            intervention: { type: ['string', 'null'] },
+            applicationContext: { type: ['string', 'null'] },
             outcomes: {
               type: 'array',
               items: { type: 'string', minLength: 1 },
@@ -237,6 +253,15 @@ function buildSourceSynthesisSchema() {
             safetySignals: {
               type: 'array',
               items: { type: 'string', minLength: 1 },
+            },
+            rejectionReason: {
+              type: ['object', 'null'],
+              additionalProperties: false,
+              required: ['code', 'reason'],
+              properties: {
+                code: { type: 'string', minLength: 1 },
+                reason: { type: 'string', minLength: 1 },
+              },
             },
           },
         },
@@ -370,6 +395,7 @@ async function requestStructuredOutput<T>(input: {
   schema: Record<string, unknown>;
   systemPrompt: string;
   userPrompt: string;
+  diagnosticScope?: string;
   parse: (payload: unknown) => T;
 }): Promise<T> {
   const startedAt = input.now();
@@ -409,7 +435,7 @@ async function requestStructuredOutput<T>(input: {
     const latencyMs = Math.max(0, input.now() - startedAt);
     if (isPayloadError(error)) {
       throw new CorpusRemoteSynthesisError({
-        message: 'invalid_payload',
+        message: input.diagnosticScope ? `${input.diagnosticScope};message=invalid_payload` : 'invalid_payload',
         reason: 'invalid_payload',
         retryable: true,
         metadata: {
@@ -423,7 +449,7 @@ async function requestStructuredOutput<T>(input: {
 
     const normalized = normalizeError(error);
     throw new CorpusRemoteSynthesisError({
-      message: normalized.message,
+      message: input.diagnosticScope ? `${input.diagnosticScope};${normalized.message}` : normalized.message,
       reason: normalized.reason,
       retryable: normalized.retryable,
       metadata: {
@@ -434,6 +460,33 @@ async function requestStructuredOutput<T>(input: {
       },
     });
   }
+}
+
+function sanitizeStudyExtractionPayload<T>(payload: T): T {
+  if (!payload || typeof payload !== 'object') {
+    return payload;
+  }
+
+  if (Array.isArray(payload)) {
+    return payload.map((entry) => sanitizeStudyExtractionPayload(entry)) as T;
+  }
+
+  const record = { ...(payload as Record<string, unknown>) };
+  if (Array.isArray(record.studyExtractions)) {
+    record.studyExtractions = record.studyExtractions.map((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return entry;
+      }
+      const extraction = { ...(entry as Record<string, unknown>) };
+      for (const key of ['population', 'intervention', 'applicationContext', 'rejectionReason'] as const) {
+        if (extraction[key] === null) {
+          delete extraction[key];
+        }
+      }
+      return extraction;
+    });
+  }
+  return record as T;
 }
 
 export function createOpenAiCorpusSynthesisClient(
@@ -458,7 +511,8 @@ export function createOpenAiCorpusSynthesisClient(
         now,
         schemaName: 'corpus_source_synthesis',
         schema: buildSourceSynthesisSchema(),
-        parse: parseSourceSynthesisBatch,
+        diagnosticScope: `operation=synthesizeLot;lot=${input.lotId}`,
+        parse: (payload) => parseSourceSynthesisBatch(sanitizeStudyExtractionPayload(payload)),
         systemPrompt:
           'You extract structured sports-science evidence and compact safety-first claims into auditable JSON. Keep outputs traceable and conservative.',
         userPrompt:
@@ -475,7 +529,8 @@ export function createOpenAiCorpusSynthesisClient(
         now,
         schemaName: 'corpus_validated_synthesis',
         schema: buildValidatedSynthesisSchema(),
-        parse: parseValidatedSynthesis,
+        diagnosticScope: `operation=consolidate;run=${input.runId}`,
+        parse: (payload) => parseValidatedSynthesis(sanitizeStudyExtractionPayload(payload)),
         systemPrompt:
           'You consolidate previously extracted sports-science evidence into a compact, conservative, auditable JSON artifact for a training-program knowledge bible.',
         userPrompt:
