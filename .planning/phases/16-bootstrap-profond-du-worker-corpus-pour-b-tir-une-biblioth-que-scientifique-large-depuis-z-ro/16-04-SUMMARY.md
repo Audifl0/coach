@@ -59,9 +59,9 @@ completed: 2026-03-13
 
 Each task was committed atomically:
 
-1. **Task 1: Introduire des quality gates progressifs alignes sur la bibliotheque et non sur un seul lot** - `pending`
-2. **Task 2: Construire une projection publishable compacte depuis la bibliotheque accumulee** - verifiee compatible sans changement supplementaire de code
-3. **Task 3: Rendre les artefacts de campagne et de publication lisibles et auditables** - `pending`
+1. **Task 1: Introduire des quality gates progressifs alignes sur la bibliotheque et non sur un seul lot** - `a0f0ff6`
+2. **Task 2: Construire une projection publishable compacte depuis la bibliotheque accumulee** - verifiee compatible sans changement supplementaire de code dans `publish.ts`, `curation.ts` et `knowledge-bible.ts`
+3. **Task 3: Rendre les artefacts de campagne et de publication lisibles et auditables** - `a0f0ff6`
 
 ## Files Created/Modified
 
