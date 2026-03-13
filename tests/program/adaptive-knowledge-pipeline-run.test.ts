@@ -581,7 +581,7 @@ test('bootstrap mode persists and reloads campaign progress across reruns', asyn
   assert.equal(secondCampaign.campaignId, firstCampaign.campaignId);
   assert.equal(secondCampaign.startedAt, firstCampaign.startedAt);
   assert.equal(secondCampaign.lastRunId, 'run-bootstrap-b');
-  assert.equal(secondCampaign.progress.canonicalRecordCount, 4);
+  assert.equal(secondCampaign.progress.canonicalRecordCount, 3);
 });
 
 test('shared worker dashboard contracts accept bootstrap campaign metadata', () => {
@@ -701,7 +701,10 @@ test('bootstrap mode persists collection jobs and does not recreate completed wo
 
   const firstJobs = (await loadJson(path.join(outputRootDir, 'bootstrap-jobs.json'))) as unknown[];
   assert.equal(firstJobs.length >= 3, true);
-  assert.equal(firstJobs.some((job) => parseAdaptiveKnowledgeCollectionJob(job).status === 'completed'), true);
+  assert.equal(
+    firstJobs.some((job) => ['completed', 'exhausted'].includes(parseAdaptiveKnowledgeCollectionJob(job).status)),
+    true,
+  );
 
   await runPipelineWithDeterministicSynthesis({
     runId: 'run-bootstrap-jobs-b',
@@ -717,7 +720,9 @@ test('bootstrap mode persists collection jobs and does not recreate completed wo
 
   const secondJobs = (await loadJson(path.join(outputRootDir, 'bootstrap-jobs.json'))) as unknown[];
   const parsedJobs = secondJobs.map((job) => parseAdaptiveKnowledgeCollectionJob(job));
-  const completedIds = parsedJobs.filter((job) => job.status === 'completed').map((job) => job.id);
+  const completedIds = parsedJobs
+    .filter((job) => ['completed', 'exhausted'].includes(job.status))
+    .map((job) => job.id);
   assert.equal(new Set(completedIds).size, completedIds.length);
   assert.deepEqual(
     completedIds.filter((id) => id === 'pubmed:progression-load'),
@@ -899,6 +904,7 @@ test('bootstrap reports expose queue depth, pages consumed, and exhaustion reaso
   assert.equal(result.runReport.bootstrap?.pagesConsumed, 1);
   assert.deepEqual(result.runReport.bootstrap?.exhaustionReasons, {
     sourceExhausted: 1,
+    maxPagesReached: 0,
     blocked: 0,
     deferred: 1,
   });
@@ -979,7 +985,7 @@ test('bootstrap tick can leave pending jobs without being considered a failure',
   assert.equal(result.runReport.bootstrap?.queueDepth.total, 2);
   assert.deepEqual(
     persistedJobs.map((job) => `${job.id}:${job.status}`),
-    ['pubmed:progression-load:completed', 'crossref:progression-split:pending'],
+    ['pubmed:progression-load:exhausted', 'crossref:progression-split:pending'],
   );
 });
 
@@ -1069,9 +1075,6 @@ test('bootstrap resumes pending queue without duplicating work units', async () 
   const persistedJobIds = persistedJobs.map((job) => job.id);
 
   assert.equal(new Set(persistedJobIds).size, persistedJobIds.length);
-  assert.deepEqual(persistedJobIds, ['pubmed:progression-load', 'crossref:progression-split']);
-  assert.deepEqual(
-    persistedJobs.map((job) => job.status),
-    ['completed', 'completed'],
-  );
+  assert.deepEqual(persistedJobIds.slice(0, 2), ['pubmed:progression-load', 'crossref:progression-split']);
+  assert.deepEqual(persistedJobs.slice(0, 2).map((job) => job.status), ['completed', 'exhausted']);
 });

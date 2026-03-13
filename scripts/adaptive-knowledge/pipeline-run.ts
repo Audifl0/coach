@@ -4,6 +4,7 @@ import path from 'node:path';
 import { parseAdaptiveKnowledgePipelineConfig } from './config';
 import {
   parseAdaptiveKnowledgeCollectionJob,
+  parseAdaptiveKnowledgeBootstrapRunTelemetry,
   parseAdaptiveKnowledgeRankingTelemetry,
   parseAdaptiveKnowledgeCoverageGap,
   parseAdaptiveKnowledgeDiscoveryTelemetry,
@@ -11,6 +12,7 @@ import {
   parseCorpusRunReport,
   parseCorpusSnapshotManifest,
   type AdaptiveKnowledgeCoverageGap,
+  type AdaptiveKnowledgeBootstrapRunTelemetry,
   type AdaptiveKnowledgeCollectionJob,
   type AdaptiveKnowledgeDiscoveryQuery,
   type AdaptiveKnowledgeDiscoveryTelemetry,
@@ -239,6 +241,90 @@ async function writeBootstrapCollectionJobs(
   await writeFile(path.join(outputRootDir, 'bootstrap-jobs.json'), JSON.stringify(jobs, null, 2) + '\n', 'utf8');
 }
 
+function summarizeBootstrapQueue(jobs: readonly AdaptiveKnowledgeCollectionJob[]) {
+  return {
+    pending: jobs.filter((job) => job.status === 'pending').length,
+    running: jobs.filter((job) => job.status === 'running').length,
+    blocked: jobs.filter((job) => job.status === 'blocked').length,
+    completed: jobs.filter((job) => job.status === 'completed').length,
+    exhausted: jobs.filter((job) => job.status === 'exhausted').length,
+    total: jobs.length,
+  };
+}
+
+function finalizeBootstrapJob(input: {
+  job: AdaptiveKnowledgeCollectionJob;
+  result: ConnectorFetchResult | undefined;
+  maxPagesPerJob: number;
+}): {
+  job: AdaptiveKnowledgeCollectionJob;
+  exhaustionReason: 'sourceExhausted' | 'maxPagesReached' | 'blocked' | null;
+} {
+  const nextPagesFetched = input.job.pagesFetched + 1;
+  const fetchedRecords = input.result?.recordsFetched ?? 0;
+  const canonicalRecords = input.result?.records.length ?? 0;
+  const nextCursor = input.result?.telemetry.nextCursor ?? input.job.cursor ?? null;
+  const errorMessage = input.result?.error?.message ?? null;
+
+  if (input.result?.skipped || errorMessage) {
+    return {
+      job: parseAdaptiveKnowledgeCollectionJob({
+        ...input.job,
+        status: 'blocked',
+        cursor: nextCursor,
+        pagesFetched: nextPagesFetched,
+        recordsFetched: input.job.recordsFetched + fetchedRecords,
+        canonicalRecords: input.job.canonicalRecords + canonicalRecords,
+        lastError: errorMessage ?? 'connector-skipped',
+      }),
+      exhaustionReason: 'blocked',
+    };
+  }
+
+  if (nextPagesFetched >= input.maxPagesPerJob) {
+    return {
+      job: parseAdaptiveKnowledgeCollectionJob({
+        ...input.job,
+        status: 'exhausted',
+        cursor: nextCursor,
+        pagesFetched: nextPagesFetched,
+        recordsFetched: input.job.recordsFetched + fetchedRecords,
+        canonicalRecords: input.job.canonicalRecords + canonicalRecords,
+        lastError: 'max-pages-reached',
+      }),
+      exhaustionReason: 'maxPagesReached',
+    };
+  }
+
+  if (!input.result?.telemetry.nextCursor || fetchedRecords === 0) {
+    return {
+      job: parseAdaptiveKnowledgeCollectionJob({
+        ...input.job,
+        status: 'exhausted',
+        cursor: nextCursor,
+        pagesFetched: nextPagesFetched,
+        recordsFetched: input.job.recordsFetched + fetchedRecords,
+        canonicalRecords: input.job.canonicalRecords + canonicalRecords,
+        lastError: errorMessage,
+      }),
+      exhaustionReason: 'sourceExhausted',
+    };
+  }
+
+  return {
+    job: parseAdaptiveKnowledgeCollectionJob({
+      ...input.job,
+      status: 'pending',
+      cursor: input.result.telemetry.nextCursor,
+      pagesFetched: nextPagesFetched,
+      recordsFetched: input.job.recordsFetched + fetchedRecords,
+      canonicalRecords: input.job.canonicalRecords + canonicalRecords,
+      lastError: null,
+    }),
+    exhaustionReason: null,
+  };
+}
+
 export async function runAdaptiveKnowledgePipeline(
   input: RunAdaptiveKnowledgePipelineInput = {},
 ): Promise<AdaptivePipelineRunResult> {
@@ -344,6 +430,41 @@ export async function runAdaptiveKnowledgePipeline(
   const incrementalSkipped = rawNormalizedRecords.length - incrementalFilteredRecords.length;
   const fetchedRecords = sourceResults.reduce((total, source) => total + source.recordsFetched, 0);
   const skippedRecords = sourceResults.reduce((total, source) => total + source.recordsSkipped, 0);
+  const finalizedBootstrapJobs =
+    mode === 'bootstrap'
+      ? bootstrapJobs.map((job, index) =>
+          finalizeBootstrapJob({
+            job,
+            result: sourceResults[index],
+            maxPagesPerJob: config.bootstrap.maxPagesPerJob,
+          }),
+        )
+      : [];
+  const persistedBootstrapJobs =
+    mode === 'bootstrap'
+      ? [
+          ...existingBootstrapJobs.filter((job) => !new Set(bootstrapJobs.map((activeJob) => activeJob.id)).has(job.id)),
+          ...finalizedBootstrapJobs.map((entry) => entry.job),
+        ].sort((left, right) => left.priority - right.priority || left.id.localeCompare(right.id))
+      : [];
+  const bootstrapTelemetry: AdaptiveKnowledgeBootstrapRunTelemetry | undefined =
+    mode === 'bootstrap'
+      ? parseAdaptiveKnowledgeBootstrapRunTelemetry({
+          queueDepth: summarizeBootstrapQueue(persistedBootstrapJobs),
+          jobsProcessed: bootstrapJobs.length,
+          pagesConsumed: bootstrapJobs.length,
+          processedJobIds: bootstrapJobs.map((job) => job.id),
+          pendingJobIds: persistedBootstrapJobs.filter((job) => job.status === 'pending').map((job) => job.id),
+          exhaustionReasons: {
+            sourceExhausted: finalizedBootstrapJobs.filter((entry) => entry.exhaustionReason === 'sourceExhausted').length,
+            maxPagesReached: finalizedBootstrapJobs.filter((entry) => entry.exhaustionReason === 'maxPagesReached').length,
+            blocked: finalizedBootstrapJobs.filter((entry) => entry.exhaustionReason === 'blocked').length,
+            deferred: persistedBootstrapJobs.filter((job) => job.status === 'pending').length,
+          },
+          dedupedCanonicalRecords: dedupedRecords,
+          incrementalSkippedRecords: incrementalSkipped,
+        })
+      : undefined;
   stageReports.push({
     stage: 'discover',
     status: 'succeeded',
@@ -359,6 +480,11 @@ export async function runAdaptiveKnowledgePipeline(
       `sources=${sourceResults.length}; skippedSources=${skippedSources}; ` +
       `fetched=${fetchedRecords}; incrementalSkipped=${incrementalSkipped}; deduped=${dedupedRecords}; skipped=${skippedRecords}; normalized=${normalizedRecords.length}; selected=${rankingTelemetry.selectedRecordCount}; rejected=${rankingTelemetry.rejectedRecordCount}`,
   });
+  if (bootstrapTelemetry) {
+    stageReports[1]!.message +=
+      `; queue=${bootstrapTelemetry.queueDepth.total}; pending=${bootstrapTelemetry.queueDepth.pending}; ` +
+      `processed=${bootstrapTelemetry.jobsProcessed}; pages=${bootstrapTelemetry.pagesConsumed}; exhausted=${bootstrapTelemetry.queueDepth.exhausted}; blocked=${bootstrapTelemetry.queueDepth.blocked}`;
+  }
 
   let principles: CorpusPrinciple[] = [];
   let validatedSynthesis = buildValidatedSynthesisFromPrinciples({
@@ -459,6 +585,7 @@ export async function runAdaptiveKnowledgePipeline(
     stageReports,
     discovery: discoveryTelemetry,
     ranking: rankingTelemetry,
+    bootstrap: bootstrapTelemetry,
   });
 
   manifest = parseCorpusSnapshotManifest({
@@ -492,21 +619,6 @@ export async function runAdaptiveKnowledgePipeline(
     [...cursorState.seenRecordIds, ...normalizedRecords.map((record) => record.id)],
   );
   if (mode === 'bootstrap') {
-    const completedJobIds = new Set(bootstrapJobs.map((job) => job.id));
-    const persistedBootstrapJobs = [
-      ...existingBootstrapJobs.filter((job) => !completedJobIds.has(job.id)),
-      ...bootstrapJobs.map((job, index) =>
-        parseAdaptiveKnowledgeCollectionJob({
-          ...job,
-          status: 'completed',
-          cursor: sourceResults[index]?.telemetry.nextCursor ?? job.cursor,
-          pagesFetched: job.pagesFetched + 1,
-          recordsFetched: job.recordsFetched + (sourceResults[index]?.recordsFetched ?? 0),
-          canonicalRecords: job.canonicalRecords + (sourceResults[index]?.records.length ?? 0),
-          lastError: sourceResults[index]?.error?.message ?? null,
-        }),
-      ),
-    ].sort((left, right) => left.priority - right.priority || left.id.localeCompare(right.id));
     await writeBootstrapCollectionJobs(outputRootDir, persistedBootstrapJobs);
     const canonicalRecordIds = [...new Set([...cursorState.seenRecordIds, ...normalizedRecords.map((record) => record.id)])];
     await upsertAdaptiveKnowledgeBootstrapCampaignState({
@@ -515,10 +627,12 @@ export async function runAdaptiveKnowledgePipeline(
       now: new Date(now.getTime() + 500),
       status: 'completed',
       backlog: {
-        pending: 0,
-        running: 0,
-        blocked: 0,
-        completed: discoveryPlan.length,
+        pending: bootstrapTelemetry?.queueDepth.pending ?? 0,
+        running: bootstrapTelemetry?.queueDepth.running ?? 0,
+        blocked: bootstrapTelemetry?.queueDepth.blocked ?? 0,
+        completed:
+          (bootstrapTelemetry?.queueDepth.completed ?? 0) + (bootstrapTelemetry?.queueDepth.exhausted ?? 0),
+        exhausted: bootstrapTelemetry?.queueDepth.exhausted ?? 0,
       },
       progress: {
         discoveredQueryFamilies: new Set(discoveryPlan.map((query) => query.queryFamily)).size,
@@ -540,6 +654,7 @@ export async function runAdaptiveKnowledgePipeline(
         discoveryPlan,
         discovery: discoveryTelemetry,
         ranking: rankingTelemetry,
+        bootstrap: bootstrapTelemetry,
         selectedRecordIds: recordsForSynthesis.map((record) => record.id),
         rejectedRecordIds: rankingSelection.rejectedRecords.map((record) => record.id),
         sources: sourceResults,

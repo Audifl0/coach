@@ -145,6 +145,7 @@ export const adaptiveKnowledgeBootstrapCampaignStateSchema = z
         running: z.number().int().nonnegative(),
         blocked: z.number().int().nonnegative(),
         completed: z.number().int().nonnegative(),
+        exhausted: z.number().int().nonnegative().optional(),
       })
       .strict(),
     progress: z
@@ -176,6 +177,35 @@ export const adaptiveKnowledgeCollectionJobSchema = z
     recordsFetched: z.number().int().nonnegative(),
     canonicalRecords: z.number().int().nonnegative(),
     lastError: z.string().min(1).nullable().optional(),
+  })
+  .strict();
+
+export const adaptiveKnowledgeBootstrapRunTelemetrySchema = z
+  .object({
+    queueDepth: z
+      .object({
+        pending: z.number().int().nonnegative(),
+        running: z.number().int().nonnegative(),
+        blocked: z.number().int().nonnegative(),
+        completed: z.number().int().nonnegative(),
+        exhausted: z.number().int().nonnegative(),
+        total: z.number().int().nonnegative(),
+      })
+      .strict(),
+    jobsProcessed: z.number().int().nonnegative(),
+    pagesConsumed: z.number().int().nonnegative(),
+    processedJobIds: z.array(z.string().min(1)),
+    pendingJobIds: z.array(z.string().min(1)),
+    exhaustionReasons: z
+      .object({
+        sourceExhausted: z.number().int().nonnegative(),
+        maxPagesReached: z.number().int().nonnegative(),
+        blocked: z.number().int().nonnegative(),
+        deferred: z.number().int().nonnegative(),
+      })
+      .strict(),
+    dedupedCanonicalRecords: z.number().int().nonnegative(),
+    incrementalSkippedRecords: z.number().int().nonnegative(),
   })
   .strict();
 
@@ -282,6 +312,7 @@ export const corpusRunReportSchema = z
     stageReports: z.array(stageReportSchema).min(1),
     discovery: adaptiveKnowledgeDiscoveryTelemetrySchema.optional(),
     ranking: adaptiveKnowledgeRankingTelemetrySchema.optional(),
+    bootstrap: adaptiveKnowledgeBootstrapRunTelemetrySchema.optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -322,6 +353,7 @@ export type AdaptiveKnowledgeRankingTelemetry = z.infer<typeof adaptiveKnowledge
 export type CorpusPrinciple = z.infer<typeof corpusPrincipleSchema>;
 export type AdaptiveKnowledgeBootstrapCampaignState = z.infer<typeof adaptiveKnowledgeBootstrapCampaignStateSchema>;
 export type AdaptiveKnowledgeCollectionJob = z.infer<typeof adaptiveKnowledgeCollectionJobSchema>;
+export type AdaptiveKnowledgeBootstrapRunTelemetry = z.infer<typeof adaptiveKnowledgeBootstrapRunTelemetrySchema>;
 export type SynthesisRunMetadata = z.infer<typeof synthesisRunMetadataSchema>;
 export type RejectedSynthesisClaim = z.infer<typeof rejectedSynthesisClaimSchema>;
 export type SynthesisContradiction = z.infer<typeof synthesisContradictionSchema>;
@@ -364,6 +396,10 @@ export function parseCorpusPrinciple(input: unknown): CorpusPrinciple {
 
 export function parseAdaptiveKnowledgeBootstrapCampaignState(input: unknown): AdaptiveKnowledgeBootstrapCampaignState {
   return adaptiveKnowledgeBootstrapCampaignStateSchema.parse(input);
+}
+
+export function parseAdaptiveKnowledgeBootstrapRunTelemetry(input: unknown): AdaptiveKnowledgeBootstrapRunTelemetry {
+  return adaptiveKnowledgeBootstrapRunTelemetrySchema.parse(input);
 }
 
 export function parseSourceSynthesisBatch(input: unknown): SourceSynthesisBatch {
