@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 16
 current_phase_name: bootstrap profond du worker corpus pour batir une bibliotheque scientifique large depuis zero
-current_plan: 16-03
+current_plan: 16-04
 status: in_progress
-stopped_at: Completed 16-02-PLAN.md
-last_updated: "2026-03-13T07:48:50Z"
+stopped_at: Completed 16-03-PLAN.md
+last_updated: "2026-03-13T08:11:19.333Z"
 last_activity: 2026-03-13
 progress:
   total_phases: 16
   completed_phases: 15
   total_plans: 82
-  completed_plans: 79
-  percent: 96
+  completed_plans: 80
+  percent: 98
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 16
 **Current Phase Name:** bootstrap profond du worker corpus pour batir une bibliotheque scientifique large depuis zero
 **Total Phases:** 16
-**Current Plan:** 16-03
+**Current Plan:** 16-04
 **Total Plans in Phase:** 5
 **Status:** In Progress
 **Last Activity:** 2026-03-13
-**Last Activity Description:** Completed 16-02 deep bootstrap collection
-**Progress:** [██████████] 96%
+**Last Activity Description:** Completed 16-03 documentary staging and remote extraction hardening
+**Progress:** [██████████] 98%
 
 ## Performance Metrics
 
@@ -84,6 +84,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu P11-01 | 2 min | 3 tasks | 2 files |
 | Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu P11-02 | 3 min | 3 tasks | 2 files |
 | Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu P11-04 | 2m14s | 3 tasks | 2 files |
+| Phase 16 P16-03 | 22 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -250,6 +251,8 @@ Recent decisions affecting current work:
 - [Phase 16]: Bootstrap queue entries remain `pending` when a cursor can continue and become `exhausted` only on terminal source or page-budget depletion.
 - [Phase 16]: Canonical evidence identity is assigned during connector normalization and becomes the multi-source dedup key before ranking and synthesis.
 - [Phase 16]: Run reports now expose structured bootstrap queue telemetry instead of forcing dashboards to parse stage message strings.
+- [Phase 16]: Le staging documentaire vit dans un artefact document-staging.json separe du snapshot runtime publie.
+- [Phase 16]: Le worker inferre abstract-ready quand un resume exploitable existe deja, sinon metadata-only.
 
 ### Roadmap Evolution
 
@@ -276,6 +279,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-13T07:48:50Z
-**Stopped At:** Completed 16-02-PLAN.md
+**Last Date:** 2026-03-13T08:11:19.330Z
+**Stopped At:** Completed 16-03-PLAN.md
 **Resume File:** None
