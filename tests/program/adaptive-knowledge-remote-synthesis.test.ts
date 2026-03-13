@@ -104,6 +104,73 @@ test('openai corpus synthesis client parses source-synthesis payloads', async ()
   assert.equal(result.modelRun.provider, 'openai');
 });
 
+test('openai lot request uses a strict extraction schema compatible with provider json_schema rules', async () => {
+  let capturedBody: Record<string, unknown> | null = null;
+  const client = createOpenAiCorpusSynthesisClient(
+    {
+      apiKey: 'test',
+      model: 'gpt-test',
+      timeoutMs: 5000,
+      promptVersion: 'test-v1',
+    },
+    {
+      sdk: {
+        responses: {
+          create: async (body) => {
+            capturedBody = body;
+            return {
+              output_text: JSON.stringify({
+                lotId: 'lot-guideline',
+                recordIds: ['guideline-1'],
+                studyExtractions: [],
+                retainedClaims: [],
+                rejectedClaims: [],
+                coverageTags: [],
+                contradictions: [],
+                modelRun: {
+                  provider: 'openai',
+                  model: 'gpt-test',
+                  promptVersion: 'test-v1',
+                  requestId: 'req_schema',
+                  latencyMs: 1,
+                },
+              }),
+              _request_id: 'req_schema',
+            };
+          },
+        },
+      },
+    },
+  );
+
+  await client.synthesizeLot({
+    lotId: 'lot-guideline',
+    records: [baseRecords[0]!],
+  });
+
+  const format = (capturedBody?.text as { format?: { schema?: any } } | undefined)?.format;
+  const extractionSchema = format?.schema?.properties?.studyExtractions?.items;
+
+  assert.equal(format?.type, 'json_schema');
+  assert.deepEqual(
+    extractionSchema.required,
+    [
+      'recordId',
+      'topicKeys',
+      'population',
+      'intervention',
+      'applicationContext',
+      'outcomes',
+      'evidenceSignals',
+      'limitations',
+      'safetySignals',
+      'rejectionReason',
+    ],
+  );
+  assert.deepEqual(extractionSchema.properties.population.type, ['string', 'null']);
+  assert.deepEqual(extractionSchema.properties.rejectionReason.type, ['object', 'null']);
+});
+
 test('openai corpus synthesis client converts invalid payloads to deterministic invalid_payload errors', async () => {
   const client = createOpenAiCorpusSynthesisClient(
     {
@@ -168,6 +235,51 @@ test('openai corpus synthesis client normalizes timeout/provider errors', async 
     (error: unknown) => {
       assert.equal(error instanceof CorpusRemoteSynthesisError, true);
       assert.equal((error as CorpusRemoteSynthesisError).reason, 'timeout');
+      return true;
+    },
+  );
+});
+
+test('openai corpus synthesis client surfaces lot diagnostics on provider schema failures', async () => {
+  const client = createOpenAiCorpusSynthesisClient(
+    {
+      apiKey: 'test',
+      model: 'gpt-test',
+      timeoutMs: 5000,
+      promptVersion: 'test-v1',
+    },
+    {
+      sdk: {
+        responses: {
+          create: async () => {
+            const error = new Error("Invalid schema for response_format 'corpus_source_synthesis'") as Error & {
+              status?: number;
+              code?: string;
+              type?: string;
+              _request_id?: string;
+            };
+            error.status = 400;
+            error.code = 'invalid_json_schema';
+            error.type = 'invalid_request_error';
+            error._request_id = 'req_bad_schema';
+            throw error;
+          },
+        },
+      },
+    },
+  );
+
+  await assert.rejects(
+    () =>
+      client.synthesizeLot({
+        lotId: 'lot-guideline',
+        records: [baseRecords[0]!],
+      }),
+    (error: unknown) => {
+      assert.equal(error instanceof CorpusRemoteSynthesisError, true);
+      assert.match((error as CorpusRemoteSynthesisError).message, /lot=lot-guideline/);
+      assert.match((error as CorpusRemoteSynthesisError).message, /code=invalid_json_schema/);
+      assert.match((error as CorpusRemoteSynthesisError).message, /request_id=req_bad_schema/);
       return true;
     },
   );
@@ -254,4 +366,83 @@ test('remote synthesis orchestration runs the two-step lot plus consolidation fl
   assert.equal(output.validatedSynthesis.coverage.batchCount, 2);
   assert.equal(output.validatedSynthesis.studyExtractions.length, 2);
   assert.deepEqual(output.validatedSynthesis.modelRun.requestIds, ['req-lot-guideline', 'req-lot-review']);
+});
+
+test('remote synthesis defers invalid lots instead of failing the whole bootstrap orchestration', async () => {
+  const output = await synthesizeCorpusWithRemoteModel({
+    runId: 'run-remote-deferred',
+    records: baseRecords,
+    client: {
+      synthesizeLot: async (input) => {
+        if (input.lotId === 'lot-1') {
+          throw new CorpusRemoteSynthesisError({
+            message: 'lot=lot-1;message=invalid_payload',
+            reason: 'invalid_payload',
+            retryable: true,
+            metadata: {
+              provider: 'openai',
+              model: 'gpt-test',
+              latencyMs: 4,
+              requestId: 'req_invalid_lot',
+            },
+          });
+        }
+
+        return {
+          lotId: input.lotId,
+          recordIds: input.records.map((record) => record.id),
+          studyExtractions: input.records.map((record) => ({
+            recordId: record.id,
+            topicKeys: record.tags.slice(0, 1),
+            population: 'general population',
+            intervention: record.title,
+            applicationContext: 'program design',
+            outcomes: ['training adaptation'],
+            evidenceSignals: [record.sourceType],
+            limitations: [],
+            safetySignals: ['conservative progression'],
+          })),
+          retainedClaims: [],
+          rejectedClaims: [],
+          coverageTags: input.records.flatMap((record) => record.tags),
+          contradictions: [],
+          modelRun: {
+            provider: 'openai',
+            model: 'gpt-test',
+            promptVersion: 'test-v1',
+            requestId: `req-${input.lotId}`,
+            latencyMs: 5,
+          },
+        };
+      },
+      consolidate: async (input) => ({
+        principles: [],
+        studyExtractions: input.batches.flatMap((batch) => batch.studyExtractions),
+        rejectedClaims: [],
+        coverage: {
+          recordCount: input.records.length,
+          batchCount: input.batches.length,
+          retainedClaimCount: 0,
+          sourceDomains: ['doi.org', 'pubmed.ncbi.nlm.nih.gov'],
+          coveredTags: ['fatigue', 'progression', 'readiness'],
+        },
+        contradictions: [],
+        modelRun: {
+          provider: 'openai',
+          model: 'gpt-test',
+          promptVersion: 'test-v1',
+          requestId: null,
+          requestIds: input.batches.map((batch) => batch.modelRun.requestId ?? 'missing'),
+          totalLatencyMs: 5,
+        },
+      }),
+    },
+  });
+
+  assert.equal(output.validatedSynthesis.coverage.batchCount, 1);
+  assert.equal(output.validatedSynthesis.studyExtractions.length, 1);
+  assert.equal(
+    output.validatedSynthesis.rejectedClaims.some((claim) => claim.code === 'deferred_remote_extraction'),
+    true,
+  );
 });
