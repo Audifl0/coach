@@ -1,4 +1,8 @@
-import type { AdaptiveKnowledgeDiscoveryQuery } from './contracts';
+import {
+  parseAdaptiveKnowledgeCollectionJob,
+  type AdaptiveKnowledgeCollectionJob,
+  type AdaptiveKnowledgeDiscoveryQuery,
+} from './contracts';
 import type { ConnectorSource } from './connectors/shared';
 
 type DiscoverySubtopic = {
@@ -197,4 +201,46 @@ export function buildAdaptiveKnowledgeDiscoveryPlan(input?: {
       priority: candidate.priority,
       targetPopulation: candidate.targetPopulation,
     }));
+}
+
+export function buildAdaptiveKnowledgeBootstrapCollectionJobs(input?: {
+  sources?: readonly ConnectorSource[];
+  topicSeeds?: readonly string[];
+  maxJobs?: number;
+  existingJobs?: readonly AdaptiveKnowledgeCollectionJob[];
+}): AdaptiveKnowledgeCollectionJob[] {
+  const maxJobs = Math.max(1, input?.maxJobs ?? 1);
+  const existingJobs = (input?.existingJobs ?? []).map((job) => parseAdaptiveKnowledgeCollectionJob(job));
+  const activeJobs = existingJobs.filter((job) => job.status !== 'completed' && job.status !== 'exhausted');
+  const existingIds = new Set(existingJobs.map((job) => job.id));
+  const generatedJobs = buildAdaptiveKnowledgeDiscoveryPlan({
+    sources: input?.sources,
+    topicSeeds: input?.topicSeeds,
+    maxQueries: maxJobs + existingJobs.length,
+  })
+    .map((query) =>
+      parseAdaptiveKnowledgeCollectionJob({
+        id: `${query.source}:${query.queryFamily}`,
+        source: query.source,
+        query: query.query,
+        queryFamily: query.queryFamily,
+        topicKey: query.topicKey,
+        topicLabel: query.topicLabel,
+        subtopicKey: query.subtopicKey,
+        subtopicLabel: query.subtopicLabel,
+        priority: query.priority,
+        status: 'pending',
+        targetPopulation: query.targetPopulation ?? null,
+        cursor: null,
+        pagesFetched: 0,
+        recordsFetched: 0,
+        canonicalRecords: 0,
+        lastError: null,
+      }),
+    )
+    .filter((job) => !existingIds.has(job.id));
+
+  return [...activeJobs, ...generatedJobs]
+    .sort((left, right) => left.priority - right.priority || left.id.localeCompare(right.id))
+    .slice(0, maxJobs);
 }

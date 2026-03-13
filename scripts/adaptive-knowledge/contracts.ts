@@ -10,6 +10,7 @@ const CONTRADICTION_RESOLUTION_VALUES = ['pending', 'retained', 'rejected'] as c
 const DISCOVERY_GAP_STATUS_VALUES = ['covered', 'partial', 'uncovered'] as const;
 const RANKING_REASON_DIRECTION_VALUES = ['boost', 'penalty', 'reject'] as const;
 const BOOTSTRAP_CAMPAIGN_STATUS_VALUES = ['idle', 'running', 'paused', 'completed', 'failed'] as const;
+const COLLECTION_JOB_STATUS_VALUES = ['pending', 'running', 'completed', 'blocked', 'exhausted'] as const;
 
 export const evidenceRankingReasonSchema = z
   .object({
@@ -90,8 +91,8 @@ export const adaptiveKnowledgeCoverageGapSchema = z
 
 export const adaptiveKnowledgeDiscoveryTelemetrySchema = z
   .object({
-    targetTopicKeys: z.array(z.string().min(1)).min(1),
-    targetTopicLabels: z.array(z.string().min(1)).min(1),
+    targetTopicKeys: z.array(z.string().min(1)),
+    targetTopicLabels: z.array(z.string().min(1)),
     totalQueries: z.number().int().nonnegative(),
     coverageGaps: z.array(adaptiveKnowledgeCoverageGapSchema),
   })
@@ -153,6 +154,27 @@ export const adaptiveKnowledgeBootstrapCampaignStateSchema = z
         publicationCandidateCount: z.number().int().nonnegative(),
       })
       .strict(),
+  })
+  .strict();
+
+export const adaptiveKnowledgeCollectionJobSchema = z
+  .object({
+    id: z.string().min(1),
+    source: z.enum(['pubmed', 'crossref', 'openalex']),
+    query: z.string().min(1),
+    queryFamily: z.string().min(1),
+    topicKey: z.string().min(1),
+    topicLabel: z.string().min(1),
+    subtopicKey: z.string().min(1),
+    subtopicLabel: z.string().min(1),
+    priority: z.number().int().positive(),
+    status: z.enum(COLLECTION_JOB_STATUS_VALUES),
+    targetPopulation: z.string().min(1).nullable().optional(),
+    cursor: z.string().min(1).nullable().optional(),
+    pagesFetched: z.number().int().nonnegative(),
+    recordsFetched: z.number().int().nonnegative(),
+    canonicalRecords: z.number().int().nonnegative(),
+    lastError: z.string().min(1).nullable().optional(),
   })
   .strict();
 
@@ -298,6 +320,7 @@ export type StructuredStudyExtraction = z.infer<typeof structuredStudyExtraction
 export type AdaptiveKnowledgeRankingTelemetry = z.infer<typeof adaptiveKnowledgeRankingTelemetrySchema>;
 export type CorpusPrinciple = z.infer<typeof corpusPrincipleSchema>;
 export type AdaptiveKnowledgeBootstrapCampaignState = z.infer<typeof adaptiveKnowledgeBootstrapCampaignStateSchema>;
+export type AdaptiveKnowledgeCollectionJob = z.infer<typeof adaptiveKnowledgeCollectionJobSchema>;
 export type SynthesisRunMetadata = z.infer<typeof synthesisRunMetadataSchema>;
 export type RejectedSynthesisClaim = z.infer<typeof rejectedSynthesisClaimSchema>;
 export type SynthesisContradiction = z.infer<typeof synthesisContradictionSchema>;
@@ -316,6 +339,10 @@ export function parseAdaptiveKnowledgeDiscoveryQuery(input: unknown): AdaptiveKn
 
 export function parseAdaptiveKnowledgeCoverageGap(input: unknown): AdaptiveKnowledgeCoverageGap {
   return adaptiveKnowledgeCoverageGapSchema.parse(input);
+}
+
+export function parseAdaptiveKnowledgeCollectionJob(input: unknown): AdaptiveKnowledgeCollectionJob {
+  return adaptiveKnowledgeCollectionJobSchema.parse(input);
 }
 
 export function parseAdaptiveKnowledgeDiscoveryTelemetry(input: unknown): AdaptiveKnowledgeDiscoveryTelemetry {

@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { parseAdaptiveKnowledgePipelineConfig } from './config';
 import {
+  parseAdaptiveKnowledgeCollectionJob,
   parseAdaptiveKnowledgeRankingTelemetry,
   parseAdaptiveKnowledgeCoverageGap,
   parseAdaptiveKnowledgeDiscoveryTelemetry,
@@ -10,6 +11,7 @@ import {
   parseCorpusRunReport,
   parseCorpusSnapshotManifest,
   type AdaptiveKnowledgeCoverageGap,
+  type AdaptiveKnowledgeCollectionJob,
   type AdaptiveKnowledgeDiscoveryQuery,
   type AdaptiveKnowledgeDiscoveryTelemetry,
   type AdaptiveKnowledgeRankingTelemetry,
@@ -20,7 +22,7 @@ import {
   type ValidatedSynthesis,
 } from './contracts';
 import { fetchCrossrefEvidenceBatch } from './connectors/crossref';
-import { buildAdaptiveKnowledgeDiscoveryPlan } from './discovery';
+import { buildAdaptiveKnowledgeBootstrapCollectionJobs, buildAdaptiveKnowledgeDiscoveryPlan } from './discovery';
 import { fetchOpenAlexEvidenceBatch } from './connectors/openalex';
 import { fetchPubmedEvidenceBatch } from './connectors/pubmed';
 import {
@@ -217,6 +219,26 @@ async function loadPreviousManifest(outputRootDir: string): Promise<CorpusSnapsh
   }
 }
 
+async function loadBootstrapCollectionJobs(outputRootDir: string): Promise<AdaptiveKnowledgeCollectionJob[]> {
+  try {
+    const raw = await readFile(path.join(outputRootDir, 'bootstrap-jobs.json'), 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.map((job) => parseAdaptiveKnowledgeCollectionJob(job));
+  } catch {
+    return [];
+  }
+}
+
+async function writeBootstrapCollectionJobs(
+  outputRootDir: string,
+  jobs: readonly AdaptiveKnowledgeCollectionJob[],
+): Promise<void> {
+  await writeFile(path.join(outputRootDir, 'bootstrap-jobs.json'), JSON.stringify(jobs, null, 2) + '\n', 'utf8');
+}
+
 export async function runAdaptiveKnowledgePipeline(
   input: RunAdaptiveKnowledgePipelineInput = {},
 ): Promise<AdaptivePipelineRunResult> {
@@ -240,10 +262,48 @@ export async function runAdaptiveKnowledgePipeline(
         client: createConfiguredOpenAiCorpusSynthesisClient(),
       }));
   const cursorState = await loadCursorState(outputRootDir);
-  const discoveryPlan = buildAdaptiveKnowledgeDiscoveryPlan({
-    sources: Object.keys(connectors) as Array<keyof PipelineConnectors>,
-    maxQueries: config.maxQueriesPerRun,
-  });
+  const existingBootstrapJobs = mode === 'bootstrap' ? await loadBootstrapCollectionJobs(outputRootDir) : [];
+  const plannedBootstrapJobs =
+    mode === 'bootstrap'
+      ? buildAdaptiveKnowledgeBootstrapCollectionJobs({
+          sources: Object.keys(connectors) as Array<keyof PipelineConnectors>,
+          maxJobs: config.bootstrap.maxJobsPerRun,
+          existingJobs: existingBootstrapJobs,
+        })
+      : [];
+  const bootstrapJobs =
+    mode === 'bootstrap'
+      ? plannedBootstrapJobs.length > 0
+        ? plannedBootstrapJobs
+        : existingBootstrapJobs
+            .filter((job) => job.status === 'completed')
+            .sort((left, right) => left.priority - right.priority || left.id.localeCompare(right.id))
+            .slice(0, config.bootstrap.maxJobsPerRun)
+            .map((job) =>
+              parseAdaptiveKnowledgeCollectionJob({
+                ...job,
+                status: 'pending',
+                lastError: null,
+              }),
+            )
+      : [];
+  const discoveryPlan =
+    mode === 'bootstrap'
+      ? bootstrapJobs.map((job) => ({
+          source: job.source,
+          query: job.query,
+          topicKey: job.topicKey,
+          topicLabel: job.topicLabel,
+          subtopicKey: job.subtopicKey,
+          subtopicLabel: job.subtopicLabel,
+          queryFamily: job.queryFamily,
+          priority: job.priority,
+          targetPopulation: job.targetPopulation ?? null,
+        }))
+      : buildAdaptiveKnowledgeDiscoveryPlan({
+          sources: Object.keys(connectors) as Array<keyof PipelineConnectors>,
+          maxQueries: config.maxQueriesPerRun,
+        });
 
   const stageReports: PipelineStage[] = [];
 
@@ -431,6 +491,21 @@ export async function runAdaptiveKnowledgePipeline(
     [...cursorState.seenRecordIds, ...normalizedRecords.map((record) => record.id)],
   );
   if (mode === 'bootstrap') {
+    const completedJobIds = new Set(bootstrapJobs.map((job) => job.id));
+    const persistedBootstrapJobs = [
+      ...existingBootstrapJobs.filter((job) => !completedJobIds.has(job.id)),
+      ...bootstrapJobs.map((job, index) =>
+        parseAdaptiveKnowledgeCollectionJob({
+          ...job,
+          status: 'completed',
+          pagesFetched: job.pagesFetched + 1,
+          recordsFetched: job.recordsFetched + (sourceResults[index]?.recordsFetched ?? 0),
+          canonicalRecords: job.canonicalRecords + (sourceResults[index]?.records.length ?? 0),
+          lastError: sourceResults[index]?.error?.message ?? null,
+        }),
+      ),
+    ].sort((left, right) => left.priority - right.priority || left.id.localeCompare(right.id));
+    await writeBootstrapCollectionJobs(outputRootDir, persistedBootstrapJobs);
     const canonicalRecordIds = [...new Set([...cursorState.seenRecordIds, ...normalizedRecords.map((record) => record.id)])];
     await upsertAdaptiveKnowledgeBootstrapCampaignState({
       outputRootDir,
