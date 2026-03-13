@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, access } from 'node:fs/promises';
+import { mkdtemp, readFile, access, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -723,4 +723,92 @@ test('bootstrap mode persists collection jobs and does not recreate completed wo
     completedIds.filter((id) => id === 'pubmed:progression-load'),
     ['pubmed:progression-load'],
   );
+});
+
+test('bootstrap connectors receive job-specific cursor and query family on rerun', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+
+  const existingJobs = [
+    {
+      id: 'pubmed:progression-load',
+      source: 'pubmed',
+      query: 'resistance training load progression hypertrophy strength',
+      queryFamily: 'progression-load',
+      topicKey: 'progression',
+      topicLabel: 'Progression et surcharge progressive',
+      subtopicKey: 'load-progression',
+      subtopicLabel: 'Progression de charge',
+      priority: 1,
+      status: 'pending',
+      targetPopulation: null,
+      cursor: 'cursor-pubmed-2',
+      pagesFetched: 2,
+      recordsFetched: 40,
+      canonicalRecords: 18,
+      lastError: null,
+    },
+  ];
+  await writeFile(path.join(outputRootDir, 'bootstrap-jobs.json'), JSON.stringify(existingJobs, null, 2) + '\n', 'utf8');
+
+  const seenJobs: Array<{ id: string | null; cursor: string | null; queryFamily: string | null }> = [];
+
+  await runPipelineWithDeterministicSynthesis({
+    runId: 'run-bootstrap-cursor',
+    mode: 'bootstrap',
+    now: new Date('2026-03-15T10:00:00.000Z'),
+    outputRootDir,
+    connectors: {
+      pubmed: async (input) => {
+        seenJobs.push({
+          id: input.collectionJob?.id ?? null,
+          cursor: input.collectionJob?.cursor ?? null,
+          queryFamily: input.collectionJob?.queryFamily ?? null,
+        });
+        return buildConnectorSuccess('pubmed');
+      },
+      crossref: async () => ({ ...buildConnectorSuccess('crossref'), records: [] }),
+      openalex: async () => ({ ...buildConnectorSuccess('openalex'), records: [] }),
+    },
+  });
+
+  assert.deepEqual(seenJobs, [
+    {
+      id: 'pubmed:progression-load',
+      cursor: 'cursor-pubmed-2',
+      queryFamily: 'progression-load',
+    },
+  ]);
+});
+
+test('pipeline dedupes cross-source records that collapse to the same canonical identity', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+
+  const pubmedRecord = buildConnectorSuccess('pubmed').records[0]!;
+  const crossrefRecord = {
+    ...buildConnectorSuccess('crossref').records[0]!,
+    id: 'crossref-doi-1',
+    title: pubmedRecord.title,
+    summaryEn: pubmedRecord.summaryEn,
+  };
+
+  const result = await runPipelineWithDeterministicSynthesis({
+    runId: 'run-bootstrap-canonical',
+    now: new Date('2026-03-15T10:00:00.000Z'),
+    outputRootDir,
+    connectors: {
+      pubmed: async () => ({
+        ...buildConnectorSuccess('pubmed'),
+        records: [pubmedRecord],
+      }),
+      crossref: async () => ({
+        ...buildConnectorSuccess('crossref'),
+        records: [crossrefRecord],
+      }),
+      openalex: async () => ({ ...buildConnectorSuccess('openalex'), records: [] }),
+    },
+  });
+
+  assert.equal(result.normalizedRecords.length, 1);
+  assert.equal(result.normalizedRecords[0]?.canonicalId?.length ? true : false, true);
+  assert.deepEqual(result.normalizedRecords[0]?.provenanceIds.sort(), ['crossref-doi-1', 'pubmed-1']);
 });
