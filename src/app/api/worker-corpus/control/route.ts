@@ -1,7 +1,13 @@
 import type { NextRequest } from 'next/server';
 
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
-import { pauseWorkerControl, readWorkerControlState, startWorkerControl } from '@/server/dashboard/worker-control';
+import {
+  pauseWorkerControl,
+  readWorkerControlState,
+  resetWorkerControl,
+  resumeWorkerControl,
+  startWorkerControl,
+} from '@/server/dashboard/worker-control';
 import {
   createWorkerCorpusControlGetHandler,
   createWorkerCorpusControlPostHandler,
@@ -14,6 +20,8 @@ async function buildDefaultDeps() {
     readControl: () => readWorkerControlState(),
     startWorker: ({ mode }: { mode: 'bootstrap' | 'refresh' | 'check' }) => startWorkerControl({ mode }),
     pauseWorker: () => pauseWorkerControl(),
+    resumeWorker: ({ mode }: { mode?: 'bootstrap' | 'refresh' | 'check' }) => resumeWorkerControl({ mode }),
+    resetWorker: () => resetWorkerControl(),
   };
 }
 

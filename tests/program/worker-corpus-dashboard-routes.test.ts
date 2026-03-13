@@ -58,6 +58,7 @@ test('control and library routes validate authenticated worker dashboard workflo
       stoppedAt: null,
       pauseRequestedAt: null,
       message: null,
+      campaign: null,
     }),
     startWorker: async ({ mode }) => ({
       state: 'running',
@@ -67,6 +68,7 @@ test('control and library routes validate authenticated worker dashboard workflo
       stoppedAt: null,
       pauseRequestedAt: null,
       message: `worker launched from dashboard (${mode})`,
+      campaign: null,
     }),
     pauseWorker: async () => ({
       state: 'paused',
@@ -76,6 +78,27 @@ test('control and library routes validate authenticated worker dashboard workflo
       stoppedAt: '2026-03-11T10:06:00.000Z',
       pauseRequestedAt: '2026-03-11T10:06:00.000Z',
       message: 'pause requested from dashboard',
+      campaign: null,
+    }),
+    resumeWorker: async ({ mode }) => ({
+      state: 'running',
+      pid: 8765,
+      mode: mode ?? 'bootstrap',
+      startedAt: '2026-03-11T10:07:00.000Z',
+      stoppedAt: null,
+      pauseRequestedAt: null,
+      message: `campaign resumed from dashboard (${mode ?? 'bootstrap'})`,
+      campaign: null,
+    }),
+    resetWorker: async () => ({
+      state: 'idle',
+      pid: null,
+      mode: 'bootstrap',
+      startedAt: null,
+      stoppedAt: '2026-03-11T10:08:00.000Z',
+      pauseRequestedAt: null,
+      message: 'bootstrap scope reset from dashboard',
+      campaign: null,
     }),
   });
   const postControl = createWorkerCorpusControlPostHandler({
@@ -89,6 +112,7 @@ test('control and library routes validate authenticated worker dashboard workflo
       stoppedAt: null,
       pauseRequestedAt: null,
       message: `worker launched from dashboard (${mode})`,
+      campaign: null,
     }),
     pauseWorker: async () => ({
       state: 'paused',
@@ -98,6 +122,27 @@ test('control and library routes validate authenticated worker dashboard workflo
       stoppedAt: '2026-03-11T10:06:00.000Z',
       pauseRequestedAt: '2026-03-11T10:06:00.000Z',
       message: 'pause requested from dashboard',
+      campaign: null,
+    }),
+    resumeWorker: async ({ mode }) => ({
+      state: 'running',
+      pid: 8765,
+      mode: mode ?? 'bootstrap',
+      startedAt: '2026-03-11T10:07:00.000Z',
+      stoppedAt: null,
+      pauseRequestedAt: null,
+      message: `campaign resumed from dashboard (${mode ?? 'bootstrap'})`,
+      campaign: null,
+    }),
+    resetWorker: async () => ({
+      state: 'idle',
+      pid: null,
+      mode: 'bootstrap',
+      startedAt: null,
+      stoppedAt: '2026-03-11T10:08:00.000Z',
+      pauseRequestedAt: null,
+      message: 'bootstrap scope reset from dashboard',
+      campaign: null,
     }),
   });
   const getLibrary = createWorkerCorpusLibraryGetHandler({
@@ -153,6 +198,30 @@ test('control and library routes validate authenticated worker dashboard workflo
     ).status,
     200,
   );
+  assert.equal(
+    (
+      await postControl(
+        new Request('http://localhost/api/worker-corpus/control', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'resume', mode: 'bootstrap' }),
+        }),
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await postControl(
+        new Request('http://localhost/api/worker-corpus/control', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'reset' }),
+        }),
+      )
+    ).status,
+    200,
+  );
   assert.equal((await getLibrary()).status, 200);
   assert.equal(
     (
@@ -175,9 +244,41 @@ test('status and runs routes return parse-validated payloads for authenticated u
         mode: null,
         startedAt: null,
         stoppedAt: null,
-        pauseRequestedAt: null,
-        message: null,
+      pauseRequestedAt: null,
+      message: null,
+      campaign: {
+        campaignId: 'bootstrap-1',
+        status: 'running',
+        startedAt: '2026-03-11T08:00:00.000Z',
+        updatedAt: '2026-03-11T10:00:00.000Z',
+        lastRunId: 'run-live',
+        activeJobId: 'pubmed:progression-load',
+        backlog: {
+          pending: 4,
+          running: 1,
+          blocked: 1,
+          completed: 3,
+          exhausted: 2,
+        },
+        progress: {
+          discoveredQueryFamilies: 12,
+          canonicalRecordCount: 48,
+          extractionBacklogCount: 9,
+          publicationCandidateCount: 6,
+        },
+        cursors: {
+          resumableJobCount: 5,
+          activeCursorCount: 3,
+          sampleJobIds: ['pubmed:progression-load'],
+        },
+        budgets: {
+          maxJobsPerRun: 12,
+          maxPagesPerJob: 5,
+          maxCanonicalRecordsPerRun: 250,
+          maxRuntimeMs: 900000,
+        },
       },
+    },
       live: {
         state: 'heartbeat',
         severity: 'healthy',
@@ -238,6 +339,7 @@ test('status and runs routes return parse-validated payloads for authenticated u
   assert.equal(statusResponse.status, 200);
   assert.equal(runsResponse.status, 200);
   assert.equal((await statusResponse.clone().json()).control.state, 'idle');
+  assert.equal((await statusResponse.clone().json()).control.campaign.cursors.activeCursorCount, 3);
   assert.equal((await statusResponse.json()).live.runId, 'run-live');
   assert.equal((await runsResponse.json()).runs.length, 1);
 });

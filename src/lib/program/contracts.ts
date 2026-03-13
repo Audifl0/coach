@@ -212,7 +212,7 @@ export const workerCorpusStageValues = ['discover', 'ingest', 'synthesize', 'val
 export const workerCorpusStageStatusValues = ['succeeded', 'failed', 'skipped'] as const;
 export const workerCorpusModeValues = ['bootstrap', 'refresh', 'check'] as const;
 export const workerCorpusControlStateValues = ['idle', 'running', 'paused', 'failed'] as const;
-export const workerCorpusControlActionValues = ['start', 'pause'] as const;
+export const workerCorpusControlActionValues = ['start', 'pause', 'resume', 'reset'] as const;
 
 export const workerCorpusBootstrapCampaignSchema = z.object({
   campaignId: z.string().trim().min(1),
@@ -226,12 +226,24 @@ export const workerCorpusBootstrapCampaignSchema = z.object({
     running: z.number().int().nonnegative(),
     blocked: z.number().int().nonnegative(),
     completed: z.number().int().nonnegative(),
+    exhausted: z.number().int().nonnegative().default(0),
   }),
   progress: z.object({
     discoveredQueryFamilies: z.number().int().nonnegative(),
     canonicalRecordCount: z.number().int().nonnegative(),
     extractionBacklogCount: z.number().int().nonnegative(),
     publicationCandidateCount: z.number().int().nonnegative(),
+  }),
+  cursors: z.object({
+    resumableJobCount: z.number().int().nonnegative(),
+    activeCursorCount: z.number().int().nonnegative(),
+    sampleJobIds: z.array(z.string().trim().min(1)).default([]),
+  }),
+  budgets: z.object({
+    maxJobsPerRun: z.number().int().positive(),
+    maxPagesPerJob: z.number().int().positive(),
+    maxCanonicalRecordsPerRun: z.number().int().positive(),
+    maxRuntimeMs: z.number().int().positive(),
   }),
 });
 
@@ -382,6 +394,13 @@ export const workerCorpusControlCommandSchema = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal('pause'),
+  }),
+  z.object({
+    action: z.literal('resume'),
+    mode: z.enum(workerCorpusModeValues).optional(),
+  }),
+  z.object({
+    action: z.literal('reset'),
   }),
 ]);
 

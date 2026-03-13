@@ -69,6 +69,15 @@ function describeLiveState(status: WorkerCorpusStatusResponse['live']): string {
   return `${status.state} · ${formatMaybe(status.mode)} · lease ${formatMaybe(status.leaseExpiresAt)}`;
 }
 
+function describeCampaignState(control: WorkerCorpusStatusResponse['control']): string {
+  const campaign = control.campaign;
+  if (!campaign) {
+    return 'aucune campagne bootstrap persistante';
+  }
+
+  return `${campaign.status} · jobs ${campaign.backlog.pending + campaign.backlog.running + campaign.backlog.blocked + campaign.backlog.completed + campaign.backlog.exhausted}`;
+}
+
 export function resolveWorkerCorpusRefreshInterval(state: WorkerCorpusStatusResponse['live']['state']): number {
   return state === 'started' || state === 'heartbeat' ? 10_000 : 30_000;
 }
@@ -100,7 +109,7 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
       props.initialLibrary.entries[0]?.snapshotId ??
       null,
   );
-  const [mode, setMode] = useState<'refresh' | 'check'>('refresh');
+  const [mode, setMode] = useState<'bootstrap' | 'refresh' | 'check'>('bootstrap');
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -153,7 +162,7 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
     });
   }
 
-  async function handleControl(action: 'start' | 'pause') {
+  async function handleControl(action: 'start' | 'pause' | 'resume' | 'reset') {
     setPendingAction(action);
     setMessage(null);
     try {
@@ -165,7 +174,7 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(action === 'start' ? { action, mode } : { action }),
+          body: JSON.stringify(action === 'start' || action === 'resume' ? { action, mode } : { action }),
         },
       );
       startTransition(() => {
@@ -173,7 +182,15 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
           ...current,
           control: response.control,
         }));
-        setMessage(action === 'start' ? `Worker lance en mode ${mode}` : 'Pause demandee au worker');
+        setMessage(
+          action === 'start'
+            ? `Worker lance en mode ${mode}`
+            : action === 'resume'
+              ? `Campagne reprise en mode ${mode}`
+              : action === 'reset'
+                ? 'Scope bootstrap reinitialise'
+                : 'Pause demandee au worker',
+        );
       });
       await refreshControlAndLists();
     } catch (error) {
@@ -214,6 +231,14 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
   }
 
   const sectionReady = props.initialSection.status === 'ready';
+  const campaign = status.control.campaign;
+  const totalCampaignJobs = campaign
+    ? campaign.backlog.pending +
+      campaign.backlog.running +
+      campaign.backlog.blocked +
+      campaign.backlog.completed +
+      campaign.backlog.exhausted
+    : 0;
   const headline = sectionReady
     ? `${runs.length} runs traces · ${library.entries.length} snapshots lisibles`
     : props.initialSection.status === 'empty'
@@ -243,6 +268,10 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
               <div className={styles.metaLabel}>Publication active</div>
               <div className={styles.metaValue}>{formatMaybe(status.publication.activeSnapshotId, 'aucun snapshot actif')}</div>
             </div>
+            <div className={styles.metaCard}>
+              <div className={styles.metaLabel}>Campagne bootstrap</div>
+              <div className={styles.metaValue}>{describeCampaignState(status.control)}</div>
+            </div>
           </div>
         </section>
 
@@ -250,6 +279,14 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
           <div>
             <div className={styles.label}>Mode de lancement</div>
             <div className={styles.segmented}>
+              <button
+                type="button"
+                className={mode === 'bootstrap' ? styles.activeSegment : undefined}
+                onClick={() => setMode('bootstrap')}
+                disabled={pendingAction !== null}
+              >
+                Bootstrap
+              </button>
               <button
                 type="button"
                 className={mode === 'refresh' ? styles.activeSegment : undefined}
@@ -275,10 +312,26 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
             <button
               type="button"
               className={`${styles.actionButton} ${styles.secondaryButton}`}
+              onClick={() => void handleControl('resume')}
+              disabled={pendingAction !== null}
+            >
+              Reprendre
+            </button>
+            <button
+              type="button"
+              className={`${styles.actionButton} ${styles.secondaryButton}`}
               onClick={() => void handleControl('pause')}
               disabled={pendingAction !== null}
             >
               Mettre en pause
+            </button>
+            <button
+              type="button"
+              className={`${styles.actionButton} ${styles.ghostButton}`}
+              onClick={() => void handleControl('reset')}
+              disabled={pendingAction !== null || status.control.state === 'running'}
+            >
+              Reset scope
             </button>
           </div>
         </section>
@@ -286,6 +339,18 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
         {message ? <div className={styles.messageBar}>{message}</div> : null}
 
         <section className={styles.statsGrid}>
+          <article className={`${styles.metricCard} ${styles.metricFeature}`}>
+            <div className={styles.metaLabel}>Campagne</div>
+            <h2 className={styles.metricTitle}>Bootstrap longue duree</h2>
+            <div className={`${styles.statValue} ${campaign ? severityClass(campaign.status === 'failed' ? 'critical' : campaign.status === 'paused' ? 'degraded' : 'healthy') : styles.warn}`}>
+              {campaign ? campaign.status : 'idle'}
+            </div>
+            <div className={styles.muted}>
+              {campaign
+                ? `queue ${totalCampaignJobs} · lastRun ${formatMaybe(campaign.lastRunId)}`
+                : 'Aucune campagne hydratee'}
+            </div>
+          </article>
           <article className={styles.metricCard}>
             <div className={styles.metaLabel}>Worker live</div>
             <h2 className={styles.metricTitle}>Lease et heartbeat</h2>
@@ -307,6 +372,73 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
             <h2 className={styles.metricTitle}>Volume lisible</h2>
             <div className={styles.statValue}>{library.entries.length}</div>
             <div className={styles.muted}>{headline}</div>
+          </article>
+        </section>
+
+        <section className={styles.detailGrid}>
+          <article className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <div>
+                <h2 className={styles.panelTitle}>Campaign progress</h2>
+                <p className={styles.panelText}>Progression globale, backlog, publication candidate et budget de collecte visibles sans shell.</p>
+              </div>
+              <span className={styles.badge}>{campaign?.campaignId ?? 'none'}</span>
+            </div>
+            {!campaign ? (
+              <div className={styles.emptyState}>Aucune campagne bootstrap persistee pour le moment.</div>
+            ) : (
+              <div className={styles.contentStack}>
+                <div className={styles.artifactStats}>
+                  <div className={styles.kv}><span className={styles.label}>Canonical library</span><strong>{campaign.progress.canonicalRecordCount}</strong></div>
+                  <div className={styles.kv}><span className={styles.label}>Query families</span><strong>{campaign.progress.discoveredQueryFamilies}</strong></div>
+                  <div className={styles.kv}><span className={styles.label}>Extraction backlog</span><strong>{campaign.progress.extractionBacklogCount}</strong></div>
+                  <div className={styles.kv}><span className={styles.label}>Publication candidates</span><strong>{campaign.progress.publicationCandidateCount}</strong></div>
+                </div>
+                <div className={styles.chips}>
+                  <span className={styles.chip}>pending {campaign.backlog.pending}</span>
+                  <span className={styles.chip}>running {campaign.backlog.running}</span>
+                  <span className={styles.chip}>blocked {campaign.backlog.blocked}</span>
+                  <span className={styles.chip}>completed {campaign.backlog.completed}</span>
+                  <span className={styles.chip}>exhausted {campaign.backlog.exhausted}</span>
+                </div>
+                <div className={styles.chips}>
+                  <span className={styles.chip}>cursor jobs {campaign.cursors.activeCursorCount}</span>
+                  <span className={styles.chip}>resumable {campaign.cursors.resumableJobCount}</span>
+                  <span className={styles.chip}>budget jobs {campaign.budgets.maxJobsPerRun}</span>
+                  <span className={styles.chip}>budget pages {campaign.budgets.maxPagesPerJob}</span>
+                  <span className={styles.chip}>budget canonical {campaign.budgets.maxCanonicalRecordsPerRun}</span>
+                </div>
+              </div>
+            )}
+          </article>
+
+          <article className={styles.panel}>
+            <div className={styles.panelHeader}>
+              <div>
+                <h2 className={styles.panelTitle}>Resumption and diagnostics</h2>
+                <p className={styles.panelText}>Identifie vite une campagne bloquee, reprenable ou simplement partiellement productive.</p>
+              </div>
+              <span className={styles.badge}>{campaign?.cursors.sampleJobIds.length ?? 0}</span>
+            </div>
+            {!campaign ? (
+              <div className={styles.emptyState}>Aucun curseur ni job reprenable disponible.</div>
+            ) : (
+              <div className={styles.contentStack}>
+                <div className={styles.artifactStats}>
+                  <div className={styles.kv}><span className={styles.label}>Updated</span><strong>{formatMaybe(campaign.updatedAt)}</strong></div>
+                  <div className={styles.kv}><span className={styles.label}>Active job</span><strong>{formatMaybe(campaign.activeJobId)}</strong></div>
+                  <div className={styles.kv}><span className={styles.label}>Paused at</span><strong>{formatMaybe(status.control.pauseRequestedAt)}</strong></div>
+                  <div className={styles.kv}><span className={styles.label}>Control state</span><strong>{status.control.state}</strong></div>
+                </div>
+                <div className={styles.chips}>
+                  {campaign.cursors.sampleJobIds.length > 0 ? (
+                    campaign.cursors.sampleJobIds.map((jobId) => <span key={jobId} className={styles.chip}>{jobId}</span>)
+                  ) : (
+                    <span className={styles.chip}>aucun curseur actif</span>
+                  )}
+                </div>
+              </div>
+            )}
           </article>
         </section>
 

@@ -30,13 +30,83 @@ async function buildWorkerFixture() {
 
   await writeJson(path.join(rootDir, 'worker-state.json'), {
     runId: 'worker-live',
-    mode: 'refresh',
+    mode: 'bootstrap',
     status: 'heartbeat',
     startedAt: '2026-03-11T10:00:00.000Z',
     heartbeatAt: '2026-03-11T10:01:00.000Z',
     leaseExpiresAt: '2026-03-11T10:06:00.000Z',
     message: 'discovering new evidence',
   });
+  await writeJson(path.join(rootDir, 'worker-control.json'), {
+    state: 'running',
+    pid: 4321,
+    mode: 'bootstrap',
+    startedAt: '2026-03-11T09:58:00.000Z',
+    stoppedAt: null,
+    pauseRequestedAt: null,
+    message: 'worker launched from dashboard (bootstrap)',
+  });
+  await writeJson(path.join(rootDir, 'bootstrap-state.json'), {
+    schemaVersion: 'v1',
+    campaignId: 'bootstrap-2026-03-11',
+    status: 'running',
+    mode: 'bootstrap',
+    startedAt: '2026-03-11T08:00:00.000Z',
+    updatedAt: '2026-03-11T10:01:00.000Z',
+    lastRunId: 'run-ready',
+    activeJobId: 'pubmed:progression-load',
+    backlog: {
+      pending: 4,
+      running: 1,
+      blocked: 1,
+      completed: 3,
+      exhausted: 2,
+    },
+    progress: {
+      discoveredQueryFamilies: 12,
+      canonicalRecordCount: 48,
+      extractionBacklogCount: 7,
+      publicationCandidateCount: 3,
+    },
+  });
+  await writeJson(path.join(rootDir, 'bootstrap-jobs.json'), [
+    {
+      id: 'pubmed:progression-load',
+      source: 'pubmed',
+      query: 'resistance training load progression hypertrophy strength',
+      queryFamily: 'progression-load',
+      topicKey: 'progression',
+      topicLabel: 'Progression et surcharge progressive',
+      subtopicKey: 'load-progression',
+      subtopicLabel: 'Progression de charge',
+      priority: 1,
+      status: 'pending',
+      targetPopulation: null,
+      cursor: 'cursor-pubmed-2',
+      pagesFetched: 2,
+      recordsFetched: 40,
+      canonicalRecords: 18,
+      lastError: null,
+    },
+    {
+      id: 'crossref:progression-split',
+      source: 'crossref',
+      query: 'strength programming weekly split resistance training',
+      queryFamily: 'progression-split',
+      topicKey: 'progression',
+      topicLabel: 'Progression et surcharge progressive',
+      subtopicKey: 'weekly-split',
+      subtopicLabel: 'Organisation hebdomadaire',
+      priority: 2,
+      status: 'blocked',
+      targetPopulation: null,
+      cursor: 'cursor-crossref-1',
+      pagesFetched: 1,
+      recordsFetched: 20,
+      canonicalRecords: 6,
+      lastError: 'timeout',
+    },
+  ]);
   await writeJson(path.join(rootDir, 'active.json'), {
     snapshotId,
     snapshotDir,
@@ -339,6 +409,10 @@ test('worker dashboard overview projects live worker, publication and recent run
 
   assert.equal(section.data.live.state, 'heartbeat');
   assert.equal(section.data.live.isHeartbeatStale, false);
+  assert.equal(section.data.control.mode, 'bootstrap');
+  assert.equal(section.data.control.campaign?.campaignId, 'bootstrap-2026-03-11');
+  assert.equal(section.data.control.campaign?.backlog.blocked, 1);
+  assert.equal(section.data.control.campaign?.cursors.activeCursorCount, 2);
   assert.equal(section.data.publication.activeSnapshotId, 'run-ready');
   assert.equal(section.data.publication.rollbackAvailable, true);
   assert.equal(section.data.publication.lastRunAgeHours, 0);

@@ -141,6 +141,12 @@
   gap: 10px;
 }
 
+.metricFeature {
+  background:
+    linear-gradient(145deg, rgba(184, 92, 56, 0.1), rgba(255, 252, 247, 0.92)),
+    var(--panel);
+}
+
 .metricTitle {
   margin: 0;
   font-size: 1rem;
@@ -224,6 +230,11 @@
 .secondaryButton {
   background: rgba(31, 26, 23, 0.08);
   color: var(--text);
+}
+
+.ghostButton {
+  background: rgba(184, 92, 56, 0.1);
+  color: var(--accent-strong);
 }
 
 .actionButton:hover,

@@ -1,8 +1,48 @@
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { parseAdaptiveKnowledgePipelineConfig } from '../../../scripts/adaptive-knowledge/config';
+import {
+  parseAdaptiveKnowledgeCollectionJob,
+  type AdaptiveKnowledgeBootstrapCampaignState,
+} from '../../../scripts/adaptive-knowledge/contracts';
+import { readAdaptiveKnowledgeBootstrapCampaignState } from '../../../scripts/adaptive-knowledge/worker-state';
+
 export type WorkerControlMode = 'bootstrap' | 'refresh' | 'check';
+export type WorkerBootstrapCampaignOverview = {
+  campaignId: string;
+  status: 'idle' | 'running' | 'paused' | 'completed' | 'failed';
+  startedAt: string;
+  updatedAt: string;
+  lastRunId: string | null;
+  activeJobId: string | null;
+  backlog: {
+    pending: number;
+    running: number;
+    blocked: number;
+    completed: number;
+    exhausted: number;
+  };
+  progress: {
+    discoveredQueryFamilies: number;
+    canonicalRecordCount: number;
+    extractionBacklogCount: number;
+    publicationCandidateCount: number;
+  };
+  cursors: {
+    resumableJobCount: number;
+    activeCursorCount: number;
+    sampleJobIds: string[];
+  };
+  budgets: {
+    maxJobsPerRun: number;
+    maxPagesPerJob: number;
+    maxCanonicalRecordsPerRun: number;
+    maxRuntimeMs: number;
+  };
+};
+
 export type WorkerControlState = {
   state: 'idle' | 'running' | 'paused' | 'failed';
   pid: number | null;
@@ -11,6 +51,7 @@ export type WorkerControlState = {
   stoppedAt: string | null;
   pauseRequestedAt: string | null;
   message: string | null;
+  campaign: WorkerBootstrapCampaignOverview | null;
 };
 
 type WorkerControlInput = {
@@ -20,6 +61,11 @@ type WorkerControlInput = {
 
 const DEFAULT_ROOT_DIR = path.join(process.cwd(), '.planning', 'knowledge', 'adaptive-coaching');
 const CONTROL_STATE_FILE = 'worker-control.json';
+const BOOTSTRAP_JOBS_FILE = 'bootstrap-jobs.json';
+const CONNECTOR_STATE_FILE = 'connector-state.json';
+const BOOTSTRAP_STATE_FILE = 'bootstrap-state.json';
+const WORKER_STATE_FILE = 'worker-state.json';
+const WORKER_LOCK_FILE = 'worker.lock';
 
 function resolveKnowledgeRootDir(input?: string): string {
   return input ?? DEFAULT_ROOT_DIR;
@@ -41,6 +87,86 @@ async function safeReadControlState(filePath: string): Promise<WorkerControlStat
 async function writeControlState(filePath: string, state: WorkerControlState): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, JSON.stringify(state, null, 2) + '\n', 'utf8');
+}
+
+async function readBootstrapJobs(knowledgeRootDir: string) {
+  try {
+    const raw = await readFile(path.join(knowledgeRootDir, BOOTSTRAP_JOBS_FILE), 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.map((job) => parseAdaptiveKnowledgeCollectionJob(job));
+  } catch {
+    return [];
+  }
+}
+
+function mapCampaignStatus(input: {
+  campaign: AdaptiveKnowledgeBootstrapCampaignState | null;
+  control: Pick<WorkerControlState, 'state'>;
+}): WorkerBootstrapCampaignOverview['status'] {
+  if (!input.campaign) {
+    return input.control.state === 'paused' ? 'paused' : 'idle';
+  }
+  if (input.control.state === 'paused') {
+    return 'paused';
+  }
+  return input.campaign.status;
+}
+
+async function readCampaignOverview(
+  knowledgeRootDir: string,
+  controlState: Pick<WorkerControlState, 'state'>,
+): Promise<WorkerBootstrapCampaignOverview | null> {
+  const [campaign, jobs] = await Promise.all([
+    readAdaptiveKnowledgeBootstrapCampaignState(knowledgeRootDir),
+    readBootstrapJobs(knowledgeRootDir),
+  ]);
+  if (!campaign) {
+    return null;
+  }
+
+  const budgets = parseAdaptiveKnowledgePipelineConfig().bootstrap;
+  const resumableJobs = jobs.filter((job) => job.status === 'pending' || job.status === 'blocked');
+  const activeCursorJobs = jobs.filter((job) => typeof job.cursor === 'string' && job.cursor.length > 0);
+
+  return {
+    campaignId: campaign.campaignId,
+    status: mapCampaignStatus({ campaign, control: controlState }),
+    startedAt: campaign.startedAt,
+    updatedAt: campaign.updatedAt,
+    lastRunId: campaign.lastRunId ?? null,
+    activeJobId: campaign.activeJobId ?? null,
+    backlog: {
+      pending: campaign.backlog.pending,
+      running: campaign.backlog.running,
+      blocked: campaign.backlog.blocked,
+      completed: campaign.backlog.completed,
+      exhausted: campaign.backlog.exhausted ?? 0,
+    },
+    progress: campaign.progress,
+    cursors: {
+      resumableJobCount: resumableJobs.length,
+      activeCursorCount: activeCursorJobs.length,
+      sampleJobIds: activeCursorJobs.slice(0, 3).map((job) => job.id),
+    },
+    budgets: {
+      maxJobsPerRun: budgets.maxJobsPerRun,
+      maxPagesPerJob: budgets.maxPagesPerJob,
+      maxCanonicalRecordsPerRun: budgets.maxCanonicalRecordsPerRun,
+      maxRuntimeMs: budgets.maxRuntimeMs,
+    },
+  };
+}
+
+async function writeResolvedControlState(filePath: string, state: Omit<WorkerControlState, 'campaign'>): Promise<WorkerControlState> {
+  const nextState: WorkerControlState = {
+    ...state,
+    campaign: await readCampaignOverview(path.dirname(filePath), state),
+  };
+  await writeControlState(filePath, nextState);
+  return nextState;
 }
 
 function isPidRunning(pid: number | null): boolean {
@@ -65,6 +191,7 @@ function createIdleState(now: Date, message: string | null = null): WorkerContro
     stoppedAt: now.toISOString(),
     pauseRequestedAt: null,
     message,
+    campaign: null,
   };
 }
 
@@ -74,7 +201,10 @@ export async function readWorkerControlState(input: WorkerControlInput = {}): Pr
   const existing = await safeReadControlState(filePath);
 
   if (!existing) {
-    return createIdleState(now);
+    return {
+      ...createIdleState(now),
+      campaign: await readCampaignOverview(resolveKnowledgeRootDir(input.knowledgeRootDir), { state: 'idle' }),
+    };
   }
 
   if (existing.state === 'running' && !isPidRunning(existing.pid)) {
@@ -85,11 +215,13 @@ export async function readWorkerControlState(input: WorkerControlInput = {}): Pr
       stoppedAt: now.toISOString(),
       message: existing.message ?? 'worker process exited',
     };
-    await writeControlState(filePath, resolved);
-    return resolved;
+    return writeResolvedControlState(filePath, resolved);
   }
 
-  return existing;
+  return {
+    ...existing,
+    campaign: await readCampaignOverview(resolveKnowledgeRootDir(input.knowledgeRootDir), existing),
+  };
 }
 
 export async function startWorkerControl(
@@ -128,9 +260,9 @@ export async function startWorkerControl(
     stoppedAt: null,
     pauseRequestedAt: null,
     message: `worker launched from dashboard (${mode})`,
+    campaign: null,
   };
-  await writeControlState(filePath, nextState);
-  return nextState;
+  return writeResolvedControlState(filePath, nextState);
 }
 
 export async function pauseWorkerControl(input: WorkerControlInput = {}): Promise<WorkerControlState> {
@@ -145,8 +277,7 @@ export async function pauseWorkerControl(input: WorkerControlInput = {}): Promis
       state: 'paused' as const,
       pauseRequestedAt: now.toISOString(),
     };
-    await writeControlState(filePath, idleState);
-    return idleState;
+    return writeResolvedControlState(filePath, idleState);
   }
 
   process.kill(current.pid!, 'SIGTERM');
@@ -158,7 +289,50 @@ export async function pauseWorkerControl(input: WorkerControlInput = {}): Promis
     stoppedAt: now.toISOString(),
     pauseRequestedAt: now.toISOString(),
     message: 'pause requested from dashboard',
+    campaign: null,
   };
-  await writeControlState(filePath, nextState);
-  return nextState;
+  return writeResolvedControlState(filePath, nextState);
+}
+
+export async function resumeWorkerControl(
+  input: WorkerControlInput & {
+    mode?: WorkerControlMode;
+  } = {},
+): Promise<WorkerControlState> {
+  const current = await readWorkerControlState(input);
+  return startWorkerControl({
+    ...input,
+    mode: input.mode ?? current.mode ?? 'bootstrap',
+  });
+}
+
+export async function resetWorkerControl(input: WorkerControlInput = {}): Promise<WorkerControlState> {
+  const now = input.now ?? new Date();
+  const knowledgeRootDir = resolveKnowledgeRootDir(input.knowledgeRootDir);
+  const filePath = buildControlStatePath(knowledgeRootDir);
+  const current = await readWorkerControlState({ knowledgeRootDir, now });
+
+  if (current.state === 'running' && isPidRunning(current.pid)) {
+    throw new Error('Cannot reset bootstrap scope while worker is running');
+  }
+
+  await Promise.all([
+    rm(path.join(knowledgeRootDir, BOOTSTRAP_JOBS_FILE), { force: true }),
+    rm(path.join(knowledgeRootDir, CONNECTOR_STATE_FILE), { force: true }),
+    rm(path.join(knowledgeRootDir, BOOTSTRAP_STATE_FILE), { force: true }),
+    rm(path.join(knowledgeRootDir, WORKER_STATE_FILE), { force: true }),
+    rm(path.join(knowledgeRootDir, WORKER_LOCK_FILE), { force: true }),
+  ]);
+
+  const nextState: WorkerControlState = {
+    state: 'idle',
+    pid: null,
+    mode: 'bootstrap',
+    startedAt: null,
+    stoppedAt: now.toISOString(),
+    pauseRequestedAt: null,
+    message: 'bootstrap scope reset from dashboard',
+    campaign: null,
+  };
+  return writeResolvedControlState(filePath, nextState);
 }

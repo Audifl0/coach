@@ -130,6 +130,9 @@ function parseBlockedReasons(message: string | undefined): string[] {
 
 function deriveRunOutcome(report: CorpusRunReport): WorkerCorpusRunRow['outcome'] {
   const publishStage = report.stageReports.find((stage) => stage.stage === 'publish');
+  if (publishStage?.message?.startsWith('progressing:')) {
+    return 'running';
+  }
   if (publishStage?.status === 'succeeded') {
     return 'succeeded';
   }
@@ -150,6 +153,9 @@ function deriveSeverityForRun(report: CorpusRunReport): Severity {
   const publishStage = report.stageReports.find((stage) => stage.stage === 'publish');
   if (report.stageReports.some((stage) => stage.status === 'failed')) {
     return 'critical';
+  }
+  if (publishStage?.message?.startsWith('progressing:')) {
+    return 'healthy';
   }
   if (publishStage?.message?.startsWith('blocked:')) {
     return 'degraded';

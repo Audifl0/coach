@@ -8,6 +8,8 @@ export type WorkerCorpusControlRouteDeps = {
   readControl: () => Promise<unknown>;
   startWorker: (input: { mode: 'bootstrap' | 'refresh' | 'check' }) => Promise<unknown>;
   pauseWorker: () => Promise<unknown>;
+  resumeWorker: (input: { mode?: 'bootstrap' | 'refresh' | 'check' }) => Promise<unknown>;
+  resetWorker: () => Promise<unknown>;
 };
 
 function json(body: unknown, status: number): Response {
@@ -47,7 +49,11 @@ export function createWorkerCorpusControlPostHandler(deps: WorkerCorpusControlRo
       const control =
         command.action === 'start'
           ? await deps.startWorker({ mode: command.mode })
-          : await deps.pauseWorker();
+          : command.action === 'pause'
+            ? await deps.pauseWorker()
+            : command.action === 'resume'
+              ? await deps.resumeWorker({ mode: command.mode })
+              : await deps.resetWorker();
       return json(parseWorkerCorpusControlResponse({ control }), 200);
     } catch (error) {
       return json({ error: error instanceof Error ? error.message : 'Unable to execute worker control command' }, 500);
