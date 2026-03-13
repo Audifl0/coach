@@ -79,6 +79,10 @@ export type RunAdaptiveKnowledgePipelineInput = {
     backfillMaxDays: number;
     retryCount: number;
     timeoutMs: number;
+    bootstrapMaxJobsPerRun: number;
+    bootstrapMaxPagesPerJob: number;
+    bootstrapMaxCanonicalRecordsPerRun: number;
+    bootstrapMaxRuntimeMs: number;
   }>;
   connectors?: Partial<PipelineConnectors>;
   synthesizeImpl?: (
