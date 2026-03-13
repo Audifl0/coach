@@ -226,7 +226,7 @@ test('documentary staging persists acquisition statuses and rejection reasons se
     },
   });
 
-  const snapshotDir = path.join(outputRootDir, 'snapshots', 'run-document-staging', 'validated');
+  const snapshotDir = path.join(outputRootDir, 'snapshots', 'run-document-staging', 'candidate');
   const documentaryArtifact = parseDocumentaryRecordStagingArtifact(
     await loadJson(path.join(snapshotDir, 'document-staging.json')),
   );
@@ -305,6 +305,10 @@ test('pipeline triages documentary staging before synthesis and defers non-extra
           {
             ...buildConnectorSuccess('pubmed').records[0]!,
             id: 'doc-metadata-only',
+            title: 'Metadata only document',
+            sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/doc-metadata-only',
+            sourceDomain: 'pubmed.ncbi.nlm.nih.gov',
+            provenanceIds: ['doc-metadata-only'],
             documentary: {
               status: 'metadata-only',
               acquisition: {
@@ -367,13 +371,13 @@ test('pipeline triages documentary staging before synthesis and defers non-extra
     },
   });
 
-  const snapshotDir = path.join(outputRootDir, 'snapshots', 'run-document-triage', 'validated');
+  const snapshotDir = path.join(outputRootDir, 'snapshots', 'run-document-triage', 'candidate');
   const documentaryArtifact = parseDocumentaryRecordStagingArtifact(
     await loadJson(path.join(snapshotDir, 'document-staging.json')),
   );
 
-  assert.deepEqual(synthesizedRecordIds, ['doc-abstract', 'doc-full-text']);
-  assert.deepEqual(documentaryArtifact.triage?.extractableRecordIds, ['doc-abstract', 'doc-full-text']);
+  assert.deepEqual(synthesizedRecordIds, ['doc-full-text', 'doc-abstract']);
+  assert.deepEqual(documentaryArtifact.triage?.extractableRecordIds, ['doc-full-text', 'doc-abstract']);
   assert.deepEqual(documentaryArtifact.triage?.deferredRecordIds, ['doc-blocked', 'doc-metadata-only']);
 });
 

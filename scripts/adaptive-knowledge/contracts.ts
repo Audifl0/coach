@@ -324,6 +324,14 @@ export const documentaryRecordStagingArtifactSchema = z
         promotedRecordIds: z.array(z.string().min(1)),
       })
       .strict(),
+    triage: z
+      .object({
+        extractableRecordIds: z.array(z.string().min(1)),
+        deferredRecordIds: z.array(z.string().min(1)),
+        lotIds: z.array(z.string().min(1)),
+      })
+      .strict()
+      .optional(),
     records: z.array(normalizedEvidenceRecordSchema),
   })
   .strict()

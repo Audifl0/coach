@@ -44,6 +44,7 @@ import {
 import { curateAdaptiveKnowledgeBible } from './curation';
 import { createConfiguredOpenAiCorpusSynthesisClient, CorpusRemoteSynthesisError } from './remote-synthesis';
 import {
+  buildStructuredExtractionPlan,
   buildValidatedSynthesisFromPrinciples,
   rankEvidenceRecords,
   synthesizeCorpusPrinciples,
@@ -427,7 +428,12 @@ export async function runAdaptiveKnowledgePipeline(
   });
   const rankingSelection = rankEvidenceRecords(normalizedRecords, now);
   const rankedRecords = rankingSelection.scoredRecords;
-  const recordsForSynthesis = rankingSelection.selectedRecords.length > 0 ? rankingSelection.selectedRecords : rankedRecords;
+  const candidateRecordsForSynthesis =
+    rankingSelection.selectedRecords.length > 0 ? rankingSelection.selectedRecords : rankedRecords;
+  const extractionPlan = buildStructuredExtractionPlan({
+    records: candidateRecordsForSynthesis,
+  });
+  const recordsForSynthesis = extractionPlan.extractableRecords;
   const rankingTelemetry: AdaptiveKnowledgeRankingTelemetry = parseAdaptiveKnowledgeRankingTelemetry(
     rankingSelection.telemetry,
   );
@@ -485,6 +491,10 @@ export async function runAdaptiveKnowledgePipeline(
       `sources=${sourceResults.length}; skippedSources=${skippedSources}; ` +
       `fetched=${fetchedRecords}; incrementalSkipped=${incrementalSkipped}; deduped=${dedupedRecords}; skipped=${skippedRecords}; normalized=${normalizedRecords.length}; selected=${rankingTelemetry.selectedRecordCount}; rejected=${rankingTelemetry.rejectedRecordCount}`,
   });
+  if (extractionPlan.deferredRecordIds.length > 0) {
+    stageReports[1]!.message +=
+      `; extractable=${recordsForSynthesis.length}; deferredDocuments=${extractionPlan.deferredRecordIds.length}`;
+  }
   if (bootstrapTelemetry) {
     stageReports[1]!.message +=
       `; queue=${bootstrapTelemetry.queueDepth.total}; pending=${bootstrapTelemetry.queueDepth.pending}; ` +
@@ -505,7 +515,25 @@ export async function runAdaptiveKnowledgePipeline(
     threshold: input.qualityGateOverrides?.threshold,
     criticalContradictions: input.qualityGateOverrides?.criticalContradictions,
   });
-  if (recordsForSynthesis.length === 0) {
+  if (candidateRecordsForSynthesis.length > 0 && recordsForSynthesis.length === 0) {
+    stageReports.push({
+      stage: 'synthesize',
+      status: 'skipped',
+      message: 'blocked-by-document-triage',
+    });
+    stageReports.push({
+      stage: 'validate',
+      status: 'skipped',
+      message: 'blocked-by-document-triage',
+    });
+    qualityGateResult = evaluateCorpusQualityGate({
+      now,
+      records: normalizedRecords,
+      validatedSynthesis,
+      threshold: input.qualityGateOverrides?.threshold,
+      criticalContradictions: input.qualityGateOverrides?.criticalContradictions,
+    });
+  } else if (recordsForSynthesis.length === 0) {
     stageReports.push({
       stage: 'synthesize',
       status: 'skipped',
@@ -645,8 +673,9 @@ export async function runAdaptiveKnowledgePipeline(
         canonicalRecordCount: canonicalRecordIds.length,
         extractionBacklogCount:
           validatedSynthesis.studyExtractions.length > 0
-            ? Math.max(recordsForSynthesis.length - validatedSynthesis.studyExtractions.length, 0)
-            : recordsForSynthesis.length,
+            ? Math.max(recordsForSynthesis.length - validatedSynthesis.studyExtractions.length, 0) +
+              extractionPlan.deferredRecordIds.length
+            : recordsForSynthesis.length + extractionPlan.deferredRecordIds.length,
         publicationCandidateCount: principles.length,
       },
     });
@@ -679,6 +708,11 @@ export async function runAdaptiveKnowledgePipeline(
         generatedAt: now.toISOString(),
         recordIds: rankedRecords.map((record) => record.id),
         promotedRecordIds: normalizedRecords.map((record) => record.id),
+        triage: {
+          extractableRecordIds: recordsForSynthesis.map((record) => record.id),
+          deferredRecordIds: extractionPlan.deferredRecordIds,
+          lotIds: extractionPlan.lots.map((lot) => lot.lotId),
+        },
         records: rankedRecords,
       }),
       null,

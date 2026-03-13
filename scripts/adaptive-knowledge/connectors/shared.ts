@@ -142,17 +142,36 @@ function normalizeRecord(raw: RawRecord): NormalizedEvidenceRecord {
     summaryEn: raw.summary,
     tags: raw.tags?.length ? raw.tags : ['adaptive-coaching'],
     provenanceIds: [raw.id],
-    documentary: {
-      status: 'metadata-only',
-      acquisition: {
-        sourceKind: 'metadata',
-        rejectionReason: null,
-      },
-    },
+    documentary:
+      raw.summary.trim().length > 0
+        ? {
+            status: 'abstract-ready',
+            acquisition: {
+              sourceKind: 'abstract',
+              rejectionReason: null,
+            },
+          }
+        : {
+            status: 'metadata-only',
+            acquisition: {
+              sourceKind: 'metadata',
+              rejectionReason: null,
+            },
+          },
   });
 }
 
-function defaultDocumentaryState(): DocumentaryRecordState {
+function defaultDocumentaryState(record?: Pick<NormalizedEvidenceRecord, 'summaryEn'>): DocumentaryRecordState {
+  if (record?.summaryEn.trim().length) {
+    return {
+      status: 'abstract-ready',
+      acquisition: {
+        sourceKind: 'abstract',
+        rejectionReason: null,
+      },
+    };
+  }
+
   return {
     status: 'metadata-only',
     acquisition: {
@@ -165,7 +184,7 @@ function defaultDocumentaryState(): DocumentaryRecordState {
 export function ensureDocumentaryState(record: NormalizedEvidenceRecord): NormalizedEvidenceRecord {
   return parseNormalizedEvidenceRecord({
     ...record,
-    documentary: record.documentary ?? defaultDocumentaryState(),
+    documentary: record.documentary ?? defaultDocumentaryState(record),
   });
 }
 
@@ -174,6 +193,11 @@ export function buildDocumentaryRecordStagingArtifact(input: {
   generatedAt: string;
   recordIds: readonly string[];
   promotedRecordIds?: readonly string[];
+  triage?: {
+    extractableRecordIds: readonly string[];
+    deferredRecordIds: readonly string[];
+    lotIds: readonly string[];
+  };
   records: readonly NormalizedEvidenceRecord[];
 }) {
   return parseDocumentaryRecordStagingArtifact({
@@ -183,6 +207,13 @@ export function buildDocumentaryRecordStagingArtifact(input: {
       recordIds: [...input.recordIds],
       promotedRecordIds: [...(input.promotedRecordIds ?? input.recordIds)],
     },
+    triage: input.triage
+      ? {
+          extractableRecordIds: [...input.triage.extractableRecordIds],
+          deferredRecordIds: [...input.triage.deferredRecordIds],
+          lotIds: [...input.triage.lotIds],
+        }
+      : undefined,
     records: input.records.map((record) => ensureDocumentaryState(record)),
   });
 }
@@ -330,7 +361,7 @@ export function dedupeNormalizedEvidenceRecords(records: NormalizedEvidenceRecor
         canonicalId,
         provenanceIds: [...new Set([...normalizeProvenanceIds(existing), ...normalizeProvenanceIds(record)])],
         tags: [...new Set([...existing.tags, ...record.tags])],
-        documentary: existing.documentary ?? record.documentary ?? defaultDocumentaryState(),
+        documentary: existing.documentary ?? record.documentary ?? defaultDocumentaryState(existing),
       });
       continue;
     }

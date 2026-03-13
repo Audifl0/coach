@@ -102,6 +102,20 @@ type SynthesisLot = {
   records: NormalizedEvidenceRecord[];
 };
 
+export type StructuredExtractionPlan = {
+  lots: SynthesisLot[];
+  extractableRecords: NormalizedEvidenceRecord[];
+  deferredRecords: Array<{
+    record: NormalizedEvidenceRecord;
+    reason: 'documentary-status' | 'budget';
+  }>;
+  deferredRecordIds: string[];
+  telemetry: {
+    deferredByDocumentState: number;
+    deferredByBudget: number;
+  };
+};
+
 function uniqueSorted(values: readonly string[]): string[] {
   return [...new Set(values)].sort();
 }
@@ -283,12 +297,83 @@ export function createSynthesisLots(records: NormalizedEvidenceRecord[]): Synthe
     }));
 }
 
+function documentaryPriority(record: NormalizedEvidenceRecord): number {
+  switch (record.documentary?.status) {
+    case 'full-text-ready':
+      return 0;
+    case 'abstract-ready':
+      return 1;
+    case 'metadata-only':
+      return 2;
+    case 'blocked':
+      return 3;
+    default:
+      return 2;
+  }
+}
+
+function isExtractableDocument(record: NormalizedEvidenceRecord): boolean {
+  return record.documentary?.status === 'full-text-ready' || record.documentary?.status === 'abstract-ready';
+}
+
+export function buildStructuredExtractionPlan(input: {
+  records: NormalizedEvidenceRecord[];
+  maxRecordsPerLot?: number;
+  maxLots?: number;
+}): StructuredExtractionPlan {
+  const maxRecordsPerLot = Math.max(1, input.maxRecordsPerLot ?? 3);
+  const maxLots = Math.max(1, input.maxLots ?? 3);
+  const ordered = [...input.records].sort((left, right) => {
+    const priorityDelta = documentaryPriority(left) - documentaryPriority(right);
+    if (priorityDelta !== 0) return priorityDelta;
+    const scoreDelta = (right.ranking?.compositeScore ?? 0) - (left.ranking?.compositeScore ?? 0);
+    if (scoreDelta !== 0) return scoreDelta;
+    return left.id.localeCompare(right.id);
+  });
+
+  const extractable = ordered.filter((record) => isExtractableDocument(record));
+  const documentaryDeferred = ordered
+    .filter((record) => !isExtractableDocument(record))
+    .map((record) => ({ record, reason: 'documentary-status' as const }));
+  const budgetCapacity = maxRecordsPerLot * maxLots;
+  const budgetedRecords = extractable.slice(0, budgetCapacity);
+  const budgetDeferred = extractable.slice(budgetCapacity).map((record) => ({ record, reason: 'budget' as const }));
+
+  const lots: SynthesisLot[] = [];
+  for (let index = 0; index < budgetedRecords.length; index += maxRecordsPerLot) {
+    const lotRecords = budgetedRecords.slice(index, index + maxRecordsPerLot);
+    if (lotRecords.length === 0) {
+      continue;
+    }
+    lots.push({
+      lotId: `lot-${lots.length + 1}`,
+      records: lotRecords,
+    });
+  }
+
+  const deferredRecords = [...documentaryDeferred, ...budgetDeferred];
+
+  return {
+    lots,
+    extractableRecords: budgetedRecords,
+    deferredRecords,
+    deferredRecordIds: deferredRecords.map((entry) => entry.record.id).sort(),
+    telemetry: {
+      deferredByDocumentState: documentaryDeferred.length,
+      deferredByBudget: budgetDeferred.length,
+    },
+  };
+}
+
 export async function synthesizeCorpusWithRemoteModel(input: {
   records: NormalizedEvidenceRecord[];
   client: CorpusRemoteSynthesisClient;
   runId: string;
 }): Promise<CorpusSynthesisOutput> {
-  const lots = createSynthesisLots(input.records);
+  const plan = buildStructuredExtractionPlan({
+    records: input.records,
+  });
+  const lots = plan.lots.length > 0 ? plan.lots : createSynthesisLots(input.records);
   const batchSyntheses: SourceSynthesisBatch[] = [];
 
   for (const lot of lots) {
