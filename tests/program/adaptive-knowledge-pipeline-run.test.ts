@@ -15,7 +15,11 @@ import {
 import { parseAdaptiveKnowledgePipelineConfig } from '../../scripts/adaptive-knowledge/config';
 import { buildAdaptiveKnowledgeBootstrapCollectionJobs } from '../../scripts/adaptive-knowledge/discovery';
 import { runAdaptiveKnowledgePipeline } from '../../scripts/adaptive-knowledge/pipeline-run';
-import { buildValidatedSynthesisFromPrinciples, synthesizeCorpusPrinciples } from '../../scripts/adaptive-knowledge/synthesis';
+import {
+  buildStructuredExtractionPlan,
+  buildValidatedSynthesisFromPrinciples,
+  synthesizeCorpusPrinciples,
+} from '../../scripts/adaptive-knowledge/synthesis';
 import { parseWorkerCorpusOverviewResponse } from '../../src/lib/program/contracts';
 
 function buildConnectorSuccess(source: 'pubmed' | 'crossref' | 'openalex'): ConnectorFetchResult {
@@ -272,6 +276,166 @@ test('documentary staging contract remains backward-compatible with legacy norma
 
   assert.equal(artifact.records[0]?.documentary.status, 'metadata-only');
   assert.equal(artifact.records[0]?.documentary.acquisition.rejectionReason, null);
+});
+
+test('pipeline triages documentary staging before synthesis and defers non-extractable records', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+  let synthesizedRecordIds: string[] = [];
+
+  await runAdaptiveKnowledgePipeline({
+    runId: 'run-document-triage',
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    outputRootDir,
+    connectors: {
+      pubmed: async () => ({
+        ...buildConnectorSuccess('pubmed'),
+        records: [
+          {
+            ...buildConnectorSuccess('pubmed').records[0]!,
+            id: 'doc-abstract',
+            documentary: {
+              status: 'abstract-ready',
+              acquisition: {
+                attemptedAt: '2026-03-05T00:00:00.000Z',
+                sourceKind: 'abstract',
+                rejectionReason: null,
+              },
+            },
+          },
+          {
+            ...buildConnectorSuccess('pubmed').records[0]!,
+            id: 'doc-metadata-only',
+            documentary: {
+              status: 'metadata-only',
+              acquisition: {
+                attemptedAt: '2026-03-05T00:01:00.000Z',
+                sourceKind: 'metadata',
+                rejectionReason: null,
+              },
+            },
+          },
+        ],
+      }),
+      crossref: async () => ({
+        ...buildConnectorSuccess('crossref'),
+        records: [
+          {
+            ...buildConnectorSuccess('crossref').records[0]!,
+            id: 'doc-full-text',
+            documentary: {
+              status: 'full-text-ready',
+              acquisition: {
+                attemptedAt: '2026-03-05T00:02:00.000Z',
+                sourceKind: 'full-text',
+                rejectionReason: null,
+              },
+            },
+          },
+        ],
+      }),
+      openalex: async () => ({
+        ...buildConnectorSuccess('openalex'),
+        records: [
+          {
+            ...buildConnectorSuccess('openalex').records[0]!,
+            id: 'doc-blocked',
+            documentary: {
+              status: 'blocked',
+              acquisition: {
+                attemptedAt: '2026-03-05T00:03:00.000Z',
+                sourceKind: 'abstract',
+                rejectionReason: {
+                  code: 'license-blocked',
+                  reason: 'Blocked for extraction.',
+                },
+              },
+            },
+          },
+        ],
+      }),
+    },
+    synthesizeImpl: async (records) => {
+      synthesizedRecordIds = records.map((record) => record.id);
+      const principles = synthesizeCorpusPrinciples(records);
+      return {
+        principles,
+        validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+          records,
+          principles,
+        }),
+      };
+    },
+  });
+
+  const snapshotDir = path.join(outputRootDir, 'snapshots', 'run-document-triage', 'validated');
+  const documentaryArtifact = parseDocumentaryRecordStagingArtifact(
+    await loadJson(path.join(snapshotDir, 'document-staging.json')),
+  );
+
+  assert.deepEqual(synthesizedRecordIds, ['doc-abstract', 'doc-full-text']);
+  assert.deepEqual(documentaryArtifact.triage?.extractableRecordIds, ['doc-abstract', 'doc-full-text']);
+  assert.deepEqual(documentaryArtifact.triage?.deferredRecordIds, ['doc-blocked', 'doc-metadata-only']);
+});
+
+test('structured extraction planner budgets lots and defers overflow instead of dropping documents', () => {
+  const plan = buildStructuredExtractionPlan({
+    records: [
+      {
+        ...buildConnectorSuccess('pubmed').records[0]!,
+        id: 'doc-a',
+        documentary: {
+          status: 'full-text-ready',
+          acquisition: { sourceKind: 'full-text', rejectionReason: null },
+        },
+      },
+      {
+        ...buildConnectorSuccess('pubmed').records[0]!,
+        id: 'doc-b',
+        documentary: {
+          status: 'full-text-ready',
+          acquisition: { sourceKind: 'full-text', rejectionReason: null },
+        },
+      },
+      {
+        ...buildConnectorSuccess('crossref').records[0]!,
+        id: 'doc-c',
+        documentary: {
+          status: 'abstract-ready',
+          acquisition: { sourceKind: 'abstract', rejectionReason: null },
+        },
+      },
+      {
+        ...buildConnectorSuccess('crossref').records[0]!,
+        id: 'doc-d',
+        documentary: {
+          status: 'abstract-ready',
+          acquisition: { sourceKind: 'abstract', rejectionReason: null },
+        },
+      },
+      {
+        ...buildConnectorSuccess('openalex').records[0]!,
+        id: 'doc-e',
+        documentary: {
+          status: 'metadata-only',
+          acquisition: { sourceKind: 'metadata', rejectionReason: null },
+        },
+      },
+    ],
+    maxRecordsPerLot: 2,
+    maxLots: 2,
+  });
+
+  assert.equal(plan.lots.length, 2);
+  assert.deepEqual(
+    plan.lots.map((lot) => lot.records.map((record) => record.id)),
+    [
+      ['doc-a', 'doc-b'],
+      ['doc-c', 'doc-d'],
+    ],
+  );
+  assert.deepEqual(plan.deferredRecordIds, ['doc-e']);
+  assert.equal(plan.telemetry.deferredByBudget, 0);
+  assert.equal(plan.telemetry.deferredByDocumentState, 1);
 });
 
 test('single-source fetch failure marks source skipped and completes run', async () => {
