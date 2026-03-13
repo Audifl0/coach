@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 16
 current_phase_name: bootstrap profond du worker corpus pour batir une bibliotheque scientifique large depuis zero
-current_plan: 16-02
+current_plan: 16-03
 status: in_progress
-stopped_at: Completed 16-01-PLAN.md
-last_updated: "2026-03-13T07:31:25.317Z"
+stopped_at: Completed 16-02-PLAN.md
+last_updated: "2026-03-13T07:48:50Z"
 last_activity: 2026-03-13
 progress:
   total_phases: 16
   completed_phases: 15
   total_plans: 82
-  completed_plans: 78
-  percent: 95
+  completed_plans: 79
+  percent: 96
 ---
 
 # Project State
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 **Current Phase:** 16
 **Current Phase Name:** bootstrap profond du worker corpus pour batir une bibliotheque scientifique large depuis zero
 **Total Phases:** 16
-**Current Plan:** 16-02
+**Current Plan:** 16-03
 **Total Plans in Phase:** 5
 **Status:** In Progress
 **Last Activity:** 2026-03-13
-**Last Activity Description:** Completed 16-01 bootstrap foundations
-**Progress:** [██████████] 95%
+**Last Activity Description:** Completed 16-02 deep bootstrap collection
+**Progress:** [██████████] 96%
 
 ## Performance Metrics
 
@@ -79,6 +79,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 10-maintainability-cleanup-and-operational-hardening P10-02 | 15 min | 3 tasks | 16 files |
 | Phase 10-maintainability-cleanup-and-operational-hardening P10-03 | 5 min | 3 tasks | 11 files |
 | Phase 16 P16-01 | 6m | 3 tasks | 11 files |
+| Phase 16 P16-02 | 13m | 3 tasks | 5 files |
 | Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu P11-03 | 3 min | 3 tasks | 1 files |
 | Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu P11-01 | 2 min | 3 tasks | 2 files |
 | Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu P11-02 | 3 min | 3 tasks | 2 files |
@@ -246,6 +247,9 @@ Recent decisions affecting current work:
 - [Phase 16]: Persist bootstrap campaign progress in a dedicated bootstrap-state.json file, separate from worker lease state and runtime snapshots.
 - [Phase 16]: Expose bootstrap collection budgets as a nested bootstrap config object so refresh/check defaults remain stable.
 - [Phase 16]: Widen shared worker control/dashboard contracts to carry bootstrap mode and campaign telemetry before the dedicated dashboard wave.
+- [Phase 16]: Bootstrap queue entries remain `pending` when a cursor can continue and become `exhausted` only on terminal source or page-budget depletion.
+- [Phase 16]: Canonical evidence identity is assigned during connector normalization and becomes the multi-source dedup key before ranking and synthesis.
+- [Phase 16]: Run reports now expose structured bootstrap queue telemetry instead of forcing dashboards to parse stage message strings.
 
 ### Roadmap Evolution
 
@@ -272,6 +276,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-13T07:31:25.313Z
-**Stopped At:** Completed 16-01-PLAN.md
+**Last Date:** 2026-03-13T07:48:50Z
+**Stopped At:** Completed 16-02-PLAN.md
 **Resume File:** None
