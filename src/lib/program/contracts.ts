@@ -210,9 +210,30 @@ export const workerCorpusOutcomeValues = ['succeeded', 'failed', 'blocked', 'run
 export const workerCorpusArtifactStateValues = ['candidate', 'validated'] as const;
 export const workerCorpusStageValues = ['discover', 'ingest', 'synthesize', 'validate', 'publish'] as const;
 export const workerCorpusStageStatusValues = ['succeeded', 'failed', 'skipped'] as const;
-export const workerCorpusModeValues = ['refresh', 'check'] as const;
+export const workerCorpusModeValues = ['bootstrap', 'refresh', 'check'] as const;
 export const workerCorpusControlStateValues = ['idle', 'running', 'paused', 'failed'] as const;
 export const workerCorpusControlActionValues = ['start', 'pause'] as const;
+
+export const workerCorpusBootstrapCampaignSchema = z.object({
+  campaignId: z.string().trim().min(1),
+  status: z.enum(['idle', 'running', 'paused', 'completed', 'failed']),
+  startedAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+  lastRunId: z.string().trim().min(1).nullable(),
+  activeJobId: z.string().trim().min(1).nullable(),
+  backlog: z.object({
+    pending: z.number().int().nonnegative(),
+    running: z.number().int().nonnegative(),
+    blocked: z.number().int().nonnegative(),
+    completed: z.number().int().nonnegative(),
+  }),
+  progress: z.object({
+    discoveredQueryFamilies: z.number().int().nonnegative(),
+    canonicalRecordCount: z.number().int().nonnegative(),
+    extractionBacklogCount: z.number().int().nonnegative(),
+    publicationCandidateCount: z.number().int().nonnegative(),
+  }),
+});
 
 export const workerCorpusStageReportSchema = z.object({
   stage: z.enum(workerCorpusStageValues),
@@ -297,6 +318,7 @@ export const workerCorpusOverviewResponseSchema = z.object({
     stoppedAt: z.iso.datetime().nullable(),
     pauseRequestedAt: z.iso.datetime().nullable(),
     message: z.string().trim().min(1).nullable(),
+    campaign: workerCorpusBootstrapCampaignSchema.nullable().default(null),
   }),
   live: z.object({
     state: z.enum(workerCorpusLiveStateValues),
