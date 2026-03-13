@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 15
-current_phase_name: qualite scientifique du worker corpus
-current_plan: Completed
-status: completed
-stopped_at: Completed 15-04-PLAN.md
-last_updated: "2026-03-11T20:05:00.000Z"
-last_activity: 2026-03-11
+current_phase: 16
+current_phase_name: bootstrap profond du worker corpus pour batir une bibliotheque scientifique large depuis zero
+current_plan: 16-02
+status: in_progress
+stopped_at: Completed 16-01-PLAN.md
+last_updated: "2026-03-13T07:31:25.317Z"
+last_activity: 2026-03-13
 progress:
-  total_phases: 15
+  total_phases: 16
   completed_phases: 15
-  total_plans: 77
-  completed_plans: 77
-  percent: 100
+  total_plans: 82
+  completed_plans: 78
+  percent: 95
 ---
 
 # Project State
@@ -24,19 +24,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-04)
 
 **Core value:** Fournir un coaching musculation personnalisé, sûr et adaptatif au quotidien, sans perdre la simplicité d'usage.
-**Current focus:** Phase 15 complete - qualite scientifique du worker corpus
+**Current focus:** Phase 16 in progress - bootstrap profond du worker corpus
 
 ## Current Position
 
-**Current Phase:** 15
-**Current Phase Name:** qualite scientifique du worker corpus
-**Total Phases:** 15
-**Current Plan:** Completed
-**Total Plans in Phase:** 4
-**Status:** Completed
-**Last Activity:** 2026-03-11
-**Last Activity Description:** Phase 15 complete
-**Progress:** [██████████] 100%
+**Current Phase:** 16
+**Current Phase Name:** bootstrap profond du worker corpus pour batir une bibliotheque scientifique large depuis zero
+**Total Phases:** 16
+**Current Plan:** 16-02
+**Total Plans in Phase:** 5
+**Status:** In Progress
+**Last Activity:** 2026-03-13
+**Last Activity Description:** Completed 16-01 bootstrap foundations
+**Progress:** [██████████] 95%
 
 ## Performance Metrics
 
@@ -78,6 +78,7 @@ See: .planning/PROJECT.md (updated 2026-03-04)
 | Phase 10-maintainability-cleanup-and-operational-hardening P10-01 | 16min | 3 tasks | 28 files |
 | Phase 10-maintainability-cleanup-and-operational-hardening P10-02 | 15 min | 3 tasks | 16 files |
 | Phase 10-maintainability-cleanup-and-operational-hardening P10-03 | 5 min | 3 tasks | 11 files |
+| Phase 16 P16-01 | 6m | 3 tasks | 11 files |
 | Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu P11-03 | 3 min | 3 tasks | 1 files |
 | Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu P11-01 | 2 min | 3 tasks | 2 files |
 | Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu P11-02 | 3 min | 3 tasks | 2 files |
@@ -242,6 +243,9 @@ Recent decisions affecting current work:
 - [Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu]: Le README_FR reste un portail court et renvoie vers les guides specialises sans duplication massive.
 - [Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu]: La checklist suit strictement release-proof/deploy/smokes comme sequence de controle executable.
 - [Phase 11-documentation-compl-te-en-fran-ais-et-d-ploiement-vps-ubuntu]: Les hypotheses/limites operationnelles restent explicites dans les documents de cloture de phase.
+- [Phase 16]: Persist bootstrap campaign progress in a dedicated bootstrap-state.json file, separate from worker lease state and runtime snapshots.
+- [Phase 16]: Expose bootstrap collection budgets as a nested bootstrap config object so refresh/check defaults remain stable.
+- [Phase 16]: Widen shared worker control/dashboard contracts to carry bootstrap mode and campaign telemetry before the dedicated dashboard wave.
 
 ### Roadmap Evolution
 
@@ -268,6 +272,6 @@ None.
 
 ## Session
 
-**Last Date:** 2026-03-10T11:17:24.163Z
-**Stopped At:** Completed 13-04-PLAN.md
+**Last Date:** 2026-03-13T07:31:25.313Z
+**Stopped At:** Completed 16-01-PLAN.md
 **Resume File:** None

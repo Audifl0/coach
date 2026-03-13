@@ -276,10 +276,10 @@ Plans:
 **Goal:** Transformer le worker corpus actuel en un sous-systeme capable de construire une bibliotheque scientifique large depuis zero sur plusieurs runs, avec backfill profond, reprise apres interruption, staging d'evidences, extraction structuree, quality gates progressifs et publication sure d'un snapshot actif exploitable par le runtime.
 **Requirements**: PROG-01, PROG-02, SAFE-02, SAFE-03, DASH-02, PLAT-02
 **Depends on:** Phase 15
-**Plans:** 5 plans
+**Plans:** 1/5 plans executed
 
 Plans:
-- [ ] 16-01-PLAN.md - Contrats bootstrap, etat persistant, mode split bootstrap versus refresh et surfaces de reprise
+- [x] 16-01-PLAN.md - Contrats bootstrap, etat persistant, mode split bootstrap versus refresh et surfaces de reprise
 - [ ] 16-02-PLAN.md - Backfill profond multi-sources, pagination/cursors, file de travail et budgets de collecte
 - [ ] 16-03-PLAN.md - Staging documentaire, acquisition abstract/full-text, extraction structuree et artefacts auditable a grande echelle
 - [ ] 16-04-PLAN.md - Ranking/triage de masse, quality gates progressifs et publication incrementale d'une bibliotheque utile
