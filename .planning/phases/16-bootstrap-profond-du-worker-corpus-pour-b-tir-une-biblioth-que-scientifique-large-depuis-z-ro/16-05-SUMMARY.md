@@ -68,9 +68,9 @@ completed: 2026-03-13
 
 Each task was committed atomically:
 
-1. **Task 1: Projeter la campagne bootstrap cote serveur** - `pending`
-2. **Task 2: Redessiner l'UI pour un bootstrap longue duree** - `pending`
-3. **Task 3: Verifier les scenarii critiques de campagne et de reprise** - `pending`
+1. **Task 1: Projeter la campagne bootstrap cote serveur** - `e99884f`
+2. **Task 2: Redessiner l'UI pour un bootstrap longue duree** - `e99884f`
+3. **Task 3: Verifier les scenarii critiques de campagne et de reprise** - `e99884f`
 
 ## Files Created/Modified
 
