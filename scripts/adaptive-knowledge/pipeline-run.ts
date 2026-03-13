@@ -258,6 +258,40 @@ function summarizeBootstrapQueue(jobs: readonly AdaptiveKnowledgeCollectionJob[]
   };
 }
 
+function buildQualityGateProjection(input: {
+  mode: PipelineMode;
+  normalizedRecords: NormalizedEvidenceRecord[];
+  cursorState: { seenRecordIds: string[] };
+  bootstrapTelemetry?: AdaptiveKnowledgeBootstrapRunTelemetry;
+}): NonNullable<RunAdaptiveKnowledgePipelineInput['qualityGateOverrides']> extends never
+  ? never
+  : {
+      libraryRecordCount: number;
+      projectionRecordCount: number;
+      backlogRecordCount: number;
+      projectionSafe: boolean;
+      canonicalRecordsOnly: boolean;
+    } {
+  const libraryRecordCount =
+    input.mode === 'bootstrap'
+      ? new Set([...input.cursorState.seenRecordIds, ...input.normalizedRecords.map((record) => record.id)]).size
+      : input.normalizedRecords.length;
+  const backlogRecordCount =
+    input.mode === 'bootstrap'
+      ? (input.bootstrapTelemetry?.queueDepth.pending ?? 0) +
+        (input.bootstrapTelemetry?.queueDepth.running ?? 0) +
+        (input.bootstrapTelemetry?.queueDepth.blocked ?? 0)
+      : 0;
+
+  return {
+    libraryRecordCount,
+    projectionRecordCount: input.normalizedRecords.length,
+    backlogRecordCount,
+    projectionSafe: true,
+    canonicalRecordsOnly: true,
+  };
+}
+
 function finalizeBootstrapJob(input: {
   job: AdaptiveKnowledgeCollectionJob;
   result: ConnectorFetchResult | undefined;
@@ -509,11 +543,18 @@ export async function runAdaptiveKnowledgePipeline(
   let manifest: CorpusSnapshotManifest | null = null;
   let synthesisErrorMessage: string | null = null;
   let publishErrorMessage: string | null = null;
+  const qualityGateProjection = buildQualityGateProjection({
+    mode,
+    normalizedRecords,
+    cursorState,
+    bootstrapTelemetry,
+  });
   let qualityGateResult = evaluateCorpusQualityGate({
     now,
     records: [],
     threshold: input.qualityGateOverrides?.threshold,
     criticalContradictions: input.qualityGateOverrides?.criticalContradictions,
+    projection: qualityGateProjection,
   });
   if (candidateRecordsForSynthesis.length > 0 && recordsForSynthesis.length === 0) {
     stageReports.push({
@@ -532,6 +573,7 @@ export async function runAdaptiveKnowledgePipeline(
       validatedSynthesis,
       threshold: input.qualityGateOverrides?.threshold,
       criticalContradictions: input.qualityGateOverrides?.criticalContradictions,
+      projection: qualityGateProjection,
     });
   } else if (recordsForSynthesis.length === 0) {
     stageReports.push({
@@ -550,6 +592,7 @@ export async function runAdaptiveKnowledgePipeline(
       validatedSynthesis,
       threshold: input.qualityGateOverrides?.threshold,
       criticalContradictions: input.qualityGateOverrides?.criticalContradictions,
+      projection: qualityGateProjection,
     });
   } else {
     try {
@@ -579,6 +622,7 @@ export async function runAdaptiveKnowledgePipeline(
         validatedSynthesis,
         threshold: input.qualityGateOverrides?.threshold,
         criticalContradictions: input.qualityGateOverrides?.criticalContradictions,
+        projection: qualityGateProjection,
       });
     } catch (error) {
       if (error instanceof CorpusRemoteSynthesisError) {
@@ -601,11 +645,13 @@ export async function runAdaptiveKnowledgePipeline(
 
   stageReports.push({
     stage: 'publish',
-    status: 'skipped',
+    status: synthesisErrorMessage ? 'skipped' : qualityGateResult.status === 'progressing' ? 'succeeded' : 'skipped',
     message: synthesisErrorMessage
       ? 'blocked-by-synthesis-failure'
       : qualityGateResult.publishable
         ? 'pending-artifact-write'
+        : qualityGateResult.status === 'progressing'
+          ? `progressing:${qualityGateResult.reasons.join(',')}`
         : `blocked:${qualityGateResult.reasons.join(',')}`,
   });
 

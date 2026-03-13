@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, mkdtemp, readFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -221,6 +221,260 @@ test('quality gate blocks snapshots with insufficient thematic diversity', async
 
   assert.equal(gate.publishable, false);
   assert.equal(gate.reasons.includes('insufficient_topic_diversity'), true);
+});
+
+test('quality gate distinguishes no progress, progressive library growth, and blocked runtime publication', () => {
+  const now = new Date('2026-03-05T00:00:00.000Z');
+
+  const noProgress = evaluateCorpusQualityGate({
+    now,
+    records: [],
+    projection: {
+      libraryRecordCount: 0,
+      projectionRecordCount: 0,
+      backlogRecordCount: 0,
+      projectionSafe: true,
+      canonicalRecordsOnly: true,
+    },
+  });
+
+  assert.equal(noProgress.status, 'blocked');
+  assert.deepEqual(noProgress.reasons, ['no_library_progress']);
+
+  const progressing = evaluateCorpusQualityGate({
+    now,
+    threshold: 0.2,
+    records: [
+      {
+        id: 'record-1',
+        sourceType: 'guideline',
+        sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/1/',
+        sourceDomain: 'pubmed.ncbi.nlm.nih.gov',
+        publishedAt: '2026-01-01',
+        title: 'Guideline',
+        summaryEn: 'Detailed guidance.',
+        tags: ['progression', 'fatigue-readiness'],
+        provenanceIds: ['record-1'],
+      },
+      {
+        id: 'record-2',
+        sourceType: 'review',
+        sourceUrl: 'https://doi.org/2',
+        sourceDomain: 'doi.org',
+        publishedAt: '2026-01-02',
+        title: 'Review',
+        summaryEn: 'Detailed review.',
+        tags: ['hypertrophy-dose', 'progression'],
+        provenanceIds: ['record-2'],
+      },
+    ],
+    validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+      records: [
+        {
+          id: 'record-1',
+          sourceType: 'guideline',
+          sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/1/',
+          sourceDomain: 'pubmed.ncbi.nlm.nih.gov',
+          publishedAt: '2026-01-01',
+          title: 'Guideline',
+          summaryEn: 'Detailed guidance.',
+          tags: ['progression', 'fatigue-readiness'],
+          provenanceIds: ['record-1'],
+        },
+        {
+          id: 'record-2',
+          sourceType: 'review',
+          sourceUrl: 'https://doi.org/2',
+          sourceDomain: 'doi.org',
+          publishedAt: '2026-01-02',
+          title: 'Review',
+          summaryEn: 'Detailed review.',
+          tags: ['hypertrophy-dose', 'progression'],
+          provenanceIds: ['record-2'],
+        },
+      ],
+      principles: [
+        {
+          id: 'p_safe',
+          title: 'Safe progression',
+          summaryFr: 'Conserver une progression prudente.',
+          guidanceFr: 'Monter progressivement.',
+          provenanceRecordIds: ['record-1', 'record-2'],
+          evidenceLevel: 'review',
+          guardrail: 'SAFE-03',
+        },
+      ],
+    }),
+    projection: {
+      libraryRecordCount: 12,
+      projectionRecordCount: 2,
+      backlogRecordCount: 10,
+      projectionSafe: true,
+      canonicalRecordsOnly: true,
+    },
+  });
+
+  assert.equal(progressing.status, 'progressing');
+  assert.equal(progressing.publishable, false);
+  assert.equal(progressing.reasons.includes('backfill_incomplete'), true);
+  assert.equal(progressing.reasons.includes('library_growth_detected'), true);
+
+  const blocked = evaluateCorpusQualityGate({
+    now,
+    threshold: 0.2,
+    records: [
+      {
+        id: 'record-1',
+        sourceType: 'guideline',
+        sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/1/',
+        sourceDomain: 'pubmed.ncbi.nlm.nih.gov',
+        publishedAt: '2026-01-01',
+        title: 'Guideline',
+        summaryEn: 'Detailed guidance.',
+        tags: ['progression', 'fatigue-readiness'],
+        provenanceIds: ['record-1'],
+      },
+      {
+        id: 'record-2',
+        sourceType: 'review',
+        sourceUrl: 'https://doi.org/2',
+        sourceDomain: 'doi.org',
+        publishedAt: '2026-01-02',
+        title: 'Review',
+        summaryEn: 'Detailed review.',
+        tags: ['hypertrophy-dose', 'progression'],
+        provenanceIds: ['record-2'],
+      },
+    ],
+    validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+      records: [
+        {
+          id: 'record-1',
+          sourceType: 'guideline',
+          sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/1/',
+          sourceDomain: 'pubmed.ncbi.nlm.nih.gov',
+          publishedAt: '2026-01-01',
+          title: 'Guideline',
+          summaryEn: 'Detailed guidance.',
+          tags: ['progression', 'fatigue-readiness'],
+          provenanceIds: ['record-1'],
+        },
+        {
+          id: 'record-2',
+          sourceType: 'review',
+          sourceUrl: 'https://doi.org/2',
+          sourceDomain: 'doi.org',
+          publishedAt: '2026-01-02',
+          title: 'Review',
+          summaryEn: 'Detailed review.',
+          tags: ['hypertrophy-dose', 'progression'],
+          provenanceIds: ['record-2'],
+        },
+      ],
+      principles: [
+        {
+          id: 'p_safe',
+          title: 'Safe progression',
+          summaryFr: 'Conserver une progression prudente.',
+          guidanceFr: 'Monter progressivement.',
+          provenanceRecordIds: ['record-1', 'record-2'],
+          evidenceLevel: 'review',
+          guardrail: 'SAFE-03',
+        },
+      ],
+    }),
+    projection: {
+      libraryRecordCount: 12,
+      projectionRecordCount: 2,
+      backlogRecordCount: 10,
+      projectionSafe: false,
+      canonicalRecordsOnly: false,
+    },
+  });
+
+  assert.equal(blocked.status, 'blocked');
+  assert.equal(blocked.reasons.includes('unsafe_runtime_projection'), true);
+  assert.equal(blocked.reasons.includes('non_canonical_projection'), true);
+});
+
+test('bootstrap campaign can stay in-progress without failing while publication remains deferred', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-publish-'));
+  await writeFile(
+    path.join(outputRootDir, 'bootstrap-jobs.json'),
+    JSON.stringify(
+      [
+        {
+          id: 'pubmed:progression-load',
+          source: 'pubmed',
+          query: 'resistance training load progression hypertrophy strength',
+          queryFamily: 'progression-load',
+          topicKey: 'progression',
+          topicLabel: 'Progression et surcharge progressive',
+          subtopicKey: 'load-progression',
+          subtopicLabel: 'Progression de charge',
+          priority: 1,
+          status: 'pending',
+          targetPopulation: null,
+          cursor: null,
+          pagesFetched: 0,
+          recordsFetched: 0,
+          canonicalRecords: 0,
+          lastError: null,
+        },
+        {
+          id: 'crossref:progression-split',
+          source: 'crossref',
+          query: 'strength programming weekly split resistance training',
+          queryFamily: 'progression-split',
+          topicKey: 'progression',
+          topicLabel: 'Progression et surcharge progressive',
+          subtopicKey: 'weekly-split',
+          subtopicLabel: 'Organisation hebdomadaire',
+          priority: 2,
+          status: 'pending',
+          targetPopulation: null,
+          cursor: null,
+          pagesFetched: 0,
+          recordsFetched: 0,
+          canonicalRecords: 0,
+          lastError: null,
+        },
+      ],
+      null,
+      2,
+    ) + '\n',
+    'utf8',
+  );
+
+  const result = await runPipelineWithDeterministicSynthesis({
+    runId: 'run-bootstrap-progressing',
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    mode: 'bootstrap',
+    outputRootDir,
+    configOverrides: {
+      bootstrapMaxJobsPerRun: 1,
+    },
+    qualityGateOverrides: {
+      threshold: 0.2,
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  assert.equal(result.publish.status, 'progressing');
+  assert.equal(result.publish.publishable, false);
+
+  const report = (await loadJson(
+    path.join(outputRootDir, 'snapshots', 'run-bootstrap-progressing', 'candidate', 'run-report.json'),
+  )) as {
+    stageReports: Array<{ stage: string; status: string; message?: string }>;
+  };
+  const publishStage = report.stageReports.find((stage) => stage.stage === 'publish');
+  assert.equal(publishStage?.status, 'succeeded');
+  assert.equal(publishStage?.message?.includes('progressing:'), true);
 });
 
 test('run report includes deterministic publish-block reason codes', async () => {

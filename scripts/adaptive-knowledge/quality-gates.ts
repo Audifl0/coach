@@ -1,13 +1,20 @@
 import type { NormalizedEvidenceRecord, ValidatedSynthesis } from './contracts';
 
 export type QualityGateReason =
+  | 'no_library_progress'
+  | 'backfill_incomplete'
+  | 'library_growth_detected'
   | 'score_below_threshold'
   | 'critical_contradiction'
   | 'insufficient_provenance'
   | 'insufficient_coverage'
   | 'insufficient_topic_diversity'
   | 'insufficient_source_diversity'
-  | 'unresolved_contradiction';
+  | 'unresolved_contradiction'
+  | 'unsafe_runtime_projection'
+  | 'non_canonical_projection';
+
+export type CorpusQualityGateStatus = 'publishable' | 'progressing' | 'blocked';
 
 export type QualityGateContradiction = {
   code: string;
@@ -20,10 +27,18 @@ export type EvaluateCorpusQualityGateInput = {
   validatedSynthesis?: ValidatedSynthesis;
   threshold?: number;
   criticalContradictions?: QualityGateContradiction[];
+  projection?: {
+    libraryRecordCount: number;
+    projectionRecordCount: number;
+    backlogRecordCount: number;
+    projectionSafe: boolean;
+    canonicalRecordsOnly: boolean;
+  };
 };
 
 export type CorpusQualityGateResult = {
   publishable: boolean;
+  status: CorpusQualityGateStatus;
   reasons: QualityGateReason[];
   compositeScore: number;
   threshold: number;
@@ -172,12 +187,28 @@ export function evaluateCorpusQualityGate(input: EvaluateCorpusQualityGateInput)
   const sourceClassScore = computeSourceClassScore(input.records);
   const recencyScore = computeRecencyScore(input.now, input.records);
   const completenessScore = computeCompletenessScore(input.records);
+  const projection = input.projection ?? {
+    libraryRecordCount: input.records.length,
+    projectionRecordCount: input.records.length,
+    backlogRecordCount: 0,
+    projectionSafe: true,
+    canonicalRecordsOnly: true,
+  };
 
   const compositeScore = round3(sourceClassScore * 0.45 + recencyScore * 0.35 + completenessScore * 0.2);
   const criticalContradictions = countCriticalContradictions(input.criticalContradictions, input.validatedSynthesis);
 
   const reasons: QualityGateReason[] = [];
-  if (compositeScore < threshold) {
+  if (projection.libraryRecordCount === 0) {
+    reasons.push('no_library_progress');
+  }
+  if (!projection.projectionSafe) {
+    reasons.push('unsafe_runtime_projection');
+  }
+  if (!projection.canonicalRecordsOnly) {
+    reasons.push('non_canonical_projection');
+  }
+  if (compositeScore < threshold && projection.projectionRecordCount > 0) {
     reasons.push('score_below_threshold');
   }
   if (hasInsufficientCoverage(input.records, input.validatedSynthesis)) {
@@ -199,9 +230,23 @@ export function evaluateCorpusQualityGate(input: EvaluateCorpusQualityGateInput)
     reasons.push('unresolved_contradiction');
   }
 
+  const uniqueReasons = [...new Set(reasons)];
+  const blockingReasons = new Set<QualityGateReason>(
+    uniqueReasons.filter((reason) => reason !== 'library_growth_detected' && reason !== 'backfill_incomplete'),
+  );
+
+  let status: CorpusQualityGateStatus = 'publishable';
+  if (blockingReasons.size > 0) {
+    status = 'blocked';
+  } else if (projection.backlogRecordCount > 0) {
+    status = 'progressing';
+    uniqueReasons.push('library_growth_detected', 'backfill_incomplete');
+  }
+
   return {
-    publishable: reasons.length === 0,
-    reasons: [...new Set(reasons)],
+    publishable: status === 'publishable',
+    status,
+    reasons: [...new Set(uniqueReasons)],
     compositeScore,
     threshold,
     criticalContradictions,
