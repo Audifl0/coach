@@ -812,3 +812,266 @@ test('pipeline dedupes cross-source records that collapse to the same canonical 
   assert.equal(result.normalizedRecords[0]?.canonicalId?.length ? true : false, true);
   assert.deepEqual(result.normalizedRecords[0]?.provenanceIds.sort(), ['crossref-doi-1', 'pubmed-1']);
 });
+
+test('bootstrap reports expose queue depth, pages consumed, and exhaustion reasons', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+
+  const existingJobs = [
+    {
+      id: 'pubmed:progression-load',
+      source: 'pubmed',
+      query: 'resistance training load progression hypertrophy strength',
+      queryFamily: 'progression-load',
+      topicKey: 'progression',
+      topicLabel: 'Progression et surcharge progressive',
+      subtopicKey: 'load-progression',
+      subtopicLabel: 'Progression de charge',
+      priority: 1,
+      status: 'pending',
+      targetPopulation: null,
+      cursor: 'cursor-pubmed-3',
+      pagesFetched: 3,
+      recordsFetched: 24,
+      canonicalRecords: 12,
+      lastError: null,
+    },
+    {
+      id: 'crossref:progression-split',
+      source: 'crossref',
+      query: 'strength programming weekly split resistance training',
+      queryFamily: 'progression-split',
+      topicKey: 'progression',
+      topicLabel: 'Progression et surcharge progressive',
+      subtopicKey: 'weekly-split',
+      subtopicLabel: 'Organisation hebdomadaire',
+      priority: 2,
+      status: 'pending',
+      targetPopulation: null,
+      cursor: null,
+      pagesFetched: 0,
+      recordsFetched: 0,
+      canonicalRecords: 0,
+      lastError: null,
+    },
+  ];
+  await writeFile(path.join(outputRootDir, 'bootstrap-jobs.json'), JSON.stringify(existingJobs, null, 2) + '\n', 'utf8');
+
+  const result = await runPipelineWithDeterministicSynthesis({
+    runId: 'run-bootstrap-progress-report',
+    mode: 'bootstrap',
+    now: new Date('2026-03-15T11:00:00.000Z'),
+    outputRootDir,
+    configOverrides: {
+      bootstrapMaxJobsPerRun: 1,
+    },
+    connectors: {
+      pubmed: async () => ({
+        source: 'pubmed',
+        skipped: false,
+        records: [],
+        recordsFetched: 0,
+        recordsSkipped: 20,
+        telemetry: {
+          attempts: 1,
+          rawResults: 20,
+          skipReasons: {
+            disallowedDomain: 0,
+            stalePublication: 0,
+            alreadySeen: 20,
+            invalidUrl: 0,
+          },
+        },
+      }),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  assert.deepEqual(result.runReport.bootstrap?.queueDepth, {
+    pending: 1,
+    running: 0,
+    blocked: 0,
+    completed: 0,
+    exhausted: 1,
+    total: 2,
+  });
+  assert.equal(result.runReport.bootstrap?.jobsProcessed, 1);
+  assert.equal(result.runReport.bootstrap?.pagesConsumed, 1);
+  assert.deepEqual(result.runReport.bootstrap?.exhaustionReasons, {
+    sourceExhausted: 1,
+    blocked: 0,
+    deferred: 1,
+  });
+  assert.equal(result.runReport.stageReports.find((stage) => stage.stage === 'ingest')?.status, 'succeeded');
+});
+
+test('bootstrap tick can leave pending jobs without being considered a failure', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+
+  await writeFile(
+    path.join(outputRootDir, 'bootstrap-jobs.json'),
+    JSON.stringify(
+      [
+        {
+          id: 'pubmed:progression-load',
+          source: 'pubmed',
+          query: 'resistance training load progression hypertrophy strength',
+          queryFamily: 'progression-load',
+          topicKey: 'progression',
+          topicLabel: 'Progression et surcharge progressive',
+          subtopicKey: 'load-progression',
+          subtopicLabel: 'Progression de charge',
+          priority: 1,
+          status: 'pending',
+          targetPopulation: null,
+          cursor: null,
+          pagesFetched: 0,
+          recordsFetched: 0,
+          canonicalRecords: 0,
+          lastError: null,
+        },
+        {
+          id: 'crossref:progression-split',
+          source: 'crossref',
+          query: 'strength programming weekly split resistance training',
+          queryFamily: 'progression-split',
+          topicKey: 'progression',
+          topicLabel: 'Progression et surcharge progressive',
+          subtopicKey: 'weekly-split',
+          subtopicLabel: 'Organisation hebdomadaire',
+          priority: 2,
+          status: 'pending',
+          targetPopulation: null,
+          cursor: null,
+          pagesFetched: 0,
+          recordsFetched: 0,
+          canonicalRecords: 0,
+          lastError: null,
+        },
+      ],
+      null,
+      2,
+    ) + '\n',
+    'utf8',
+  );
+
+  const result = await runPipelineWithDeterministicSynthesis({
+    runId: 'run-bootstrap-short-tick',
+    mode: 'bootstrap',
+    now: new Date('2026-03-15T12:00:00.000Z'),
+    outputRootDir,
+    configOverrides: {
+      bootstrapMaxJobsPerRun: 1,
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const persistedJobs = ((await loadJson(path.join(outputRootDir, 'bootstrap-jobs.json'))) as unknown[]).map((job) =>
+    parseAdaptiveKnowledgeCollectionJob(job),
+  );
+
+  assert.equal(result.runReport.stageReports.some((stage) => stage.status === 'failed'), false);
+  assert.equal(result.runReport.bootstrap?.queueDepth.pending, 1);
+  assert.equal(result.runReport.bootstrap?.queueDepth.total, 2);
+  assert.deepEqual(
+    persistedJobs.map((job) => `${job.id}:${job.status}`),
+    ['pubmed:progression-load:completed', 'crossref:progression-split:pending'],
+  );
+});
+
+test('bootstrap resumes pending queue without duplicating work units', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+
+  await writeFile(
+    path.join(outputRootDir, 'bootstrap-jobs.json'),
+    JSON.stringify(
+      [
+        {
+          id: 'pubmed:progression-load',
+          source: 'pubmed',
+          query: 'resistance training load progression hypertrophy strength',
+          queryFamily: 'progression-load',
+          topicKey: 'progression',
+          topicLabel: 'Progression et surcharge progressive',
+          subtopicKey: 'load-progression',
+          subtopicLabel: 'Progression de charge',
+          priority: 1,
+          status: 'completed',
+          targetPopulation: null,
+          cursor: 'cursor-pubmed-4',
+          pagesFetched: 4,
+          recordsFetched: 32,
+          canonicalRecords: 16,
+          lastError: null,
+        },
+        {
+          id: 'crossref:progression-split',
+          source: 'crossref',
+          query: 'strength programming weekly split resistance training',
+          queryFamily: 'progression-split',
+          topicKey: 'progression',
+          topicLabel: 'Progression et surcharge progressive',
+          subtopicKey: 'weekly-split',
+          subtopicLabel: 'Organisation hebdomadaire',
+          priority: 2,
+          status: 'pending',
+          targetPopulation: null,
+          cursor: null,
+          pagesFetched: 0,
+          recordsFetched: 0,
+          canonicalRecords: 0,
+          lastError: null,
+        },
+      ],
+      null,
+      2,
+    ) + '\n',
+    'utf8',
+  );
+
+  await runPipelineWithDeterministicSynthesis({
+    runId: 'run-bootstrap-resume-a',
+    mode: 'bootstrap',
+    now: new Date('2026-03-16T12:00:00.000Z'),
+    outputRootDir,
+    configOverrides: {
+      bootstrapMaxJobsPerRun: 1,
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  await runPipelineWithDeterministicSynthesis({
+    runId: 'run-bootstrap-resume-b',
+    mode: 'bootstrap',
+    now: new Date('2026-03-17T12:00:00.000Z'),
+    outputRootDir,
+    configOverrides: {
+      bootstrapMaxJobsPerRun: 1,
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const persistedJobs = ((await loadJson(path.join(outputRootDir, 'bootstrap-jobs.json'))) as unknown[]).map((job) =>
+    parseAdaptiveKnowledgeCollectionJob(job),
+  );
+  const persistedJobIds = persistedJobs.map((job) => job.id);
+
+  assert.equal(new Set(persistedJobIds).size, persistedJobIds.length);
+  assert.deepEqual(persistedJobIds, ['pubmed:progression-load', 'crossref:progression-split']);
+  assert.deepEqual(
+    persistedJobs.map((job) => job.status),
+    ['completed', 'completed'],
+  );
+});
