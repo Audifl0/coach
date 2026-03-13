@@ -1,7 +1,9 @@
 import {
   parseAdaptiveKnowledgeCollectionJob,
+  parseDocumentaryRecordStagingArtifact,
   parseNormalizedEvidenceRecord,
   type AdaptiveKnowledgeCollectionJob,
+  type DocumentaryRecordState,
   type NormalizedEvidenceRecord,
 } from '../contracts';
 import { parseAdaptiveKnowledgePipelineConfig, type AdaptiveKnowledgePipelineConfig } from '../config';
@@ -140,6 +142,48 @@ function normalizeRecord(raw: RawRecord): NormalizedEvidenceRecord {
     summaryEn: raw.summary,
     tags: raw.tags?.length ? raw.tags : ['adaptive-coaching'],
     provenanceIds: [raw.id],
+    documentary: {
+      status: 'metadata-only',
+      acquisition: {
+        sourceKind: 'metadata',
+        rejectionReason: null,
+      },
+    },
+  });
+}
+
+function defaultDocumentaryState(): DocumentaryRecordState {
+  return {
+    status: 'metadata-only',
+    acquisition: {
+      sourceKind: 'metadata',
+      rejectionReason: null,
+    },
+  };
+}
+
+export function ensureDocumentaryState(record: NormalizedEvidenceRecord): NormalizedEvidenceRecord {
+  return parseNormalizedEvidenceRecord({
+    ...record,
+    documentary: record.documentary ?? defaultDocumentaryState(),
+  });
+}
+
+export function buildDocumentaryRecordStagingArtifact(input: {
+  runId: string;
+  generatedAt: string;
+  recordIds: readonly string[];
+  promotedRecordIds?: readonly string[];
+  records: readonly NormalizedEvidenceRecord[];
+}) {
+  return parseDocumentaryRecordStagingArtifact({
+    runId: input.runId,
+    generatedAt: input.generatedAt,
+    runtimeProjection: {
+      recordIds: [...input.recordIds],
+      promotedRecordIds: [...(input.promotedRecordIds ?? input.recordIds)],
+    },
+    records: input.records.map((record) => ensureDocumentaryState(record)),
   });
 }
 
@@ -281,17 +325,18 @@ export function dedupeNormalizedEvidenceRecords(records: NormalizedEvidenceRecor
     const seenIndex = seen.get(canonicalId);
     if (seenIndex !== undefined) {
       const existing = deduped[seenIndex]!;
-      deduped[seenIndex] = parseNormalizedEvidenceRecord({
+      deduped[seenIndex] = ensureDocumentaryState({
         ...existing,
         canonicalId,
         provenanceIds: [...new Set([...normalizeProvenanceIds(existing), ...normalizeProvenanceIds(record)])],
         tags: [...new Set([...existing.tags, ...record.tags])],
+        documentary: existing.documentary ?? record.documentary ?? defaultDocumentaryState(),
       });
       continue;
     }
     seen.set(canonicalId, deduped.length);
     deduped.push(
-      parseNormalizedEvidenceRecord({
+      ensureDocumentaryState({
         ...record,
         canonicalId,
         provenanceIds: normalizeProvenanceIds(record),

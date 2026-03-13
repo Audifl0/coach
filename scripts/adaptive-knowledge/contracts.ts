@@ -11,6 +11,30 @@ const DISCOVERY_GAP_STATUS_VALUES = ['covered', 'partial', 'uncovered'] as const
 const RANKING_REASON_DIRECTION_VALUES = ['boost', 'penalty', 'reject'] as const;
 const BOOTSTRAP_CAMPAIGN_STATUS_VALUES = ['idle', 'running', 'paused', 'completed', 'failed'] as const;
 const COLLECTION_JOB_STATUS_VALUES = ['pending', 'running', 'completed', 'blocked', 'exhausted'] as const;
+const DOCUMENTARY_STATUS_VALUES = ['metadata-only', 'abstract-ready', 'full-text-ready', 'blocked'] as const;
+const DOCUMENTARY_SOURCE_KIND_VALUES = ['metadata', 'abstract', 'full-text'] as const;
+
+export const documentaryRejectionReasonSchema = z
+  .object({
+    code: z.string().min(1),
+    reason: z.string().min(1),
+  })
+  .strict();
+
+export const documentaryAcquisitionSchema = z
+  .object({
+    attemptedAt: z.string().datetime().optional(),
+    sourceKind: z.enum(DOCUMENTARY_SOURCE_KIND_VALUES),
+    rejectionReason: documentaryRejectionReasonSchema.nullable().optional(),
+  })
+  .strict();
+
+export const documentaryRecordStateSchema = z
+  .object({
+    status: z.enum(DOCUMENTARY_STATUS_VALUES),
+    acquisition: documentaryAcquisitionSchema,
+  })
+  .strict();
 
 export const evidenceRankingReasonSchema = z
   .object({
@@ -111,6 +135,7 @@ export const normalizedEvidenceRecordSchema = z
     tags: z.array(z.string().min(1)).min(1),
     provenanceIds: z.array(z.string().min(1)).min(1),
     ranking: evidenceScientificRankingSchema.optional(),
+    documentary: documentaryRecordStateSchema.optional(),
   })
   .strict();
 
@@ -285,8 +310,36 @@ const artifactPointerSchema = z
     reportPath: z.string().min(1),
     validatedSynthesisPath: z.string().min(1).optional(),
     studyExtractionsPath: z.string().min(1).optional(),
+    documentStagingPath: z.string().min(1).optional(),
   })
   .strict();
+
+export const documentaryRecordStagingArtifactSchema = z
+  .object({
+    runId: z.string().min(1),
+    generatedAt: z.string().datetime(),
+    runtimeProjection: z
+      .object({
+        recordIds: z.array(z.string().min(1)),
+        promotedRecordIds: z.array(z.string().min(1)),
+      })
+      .strict(),
+    records: z.array(normalizedEvidenceRecordSchema),
+  })
+  .strict()
+  .transform((artifact) => ({
+    ...artifact,
+    records: artifact.records.map((record) => ({
+      ...record,
+      documentary: record.documentary ?? {
+        status: 'metadata-only' as const,
+        acquisition: {
+          sourceKind: 'metadata' as const,
+          rejectionReason: null,
+        },
+      },
+    })),
+  }));
 
 export const corpusSnapshotManifestSchema = z
   .object({
@@ -346,6 +399,9 @@ export type NormalizedEvidenceRecord = z.infer<typeof normalizedEvidenceRecordSc
 export type AdaptiveKnowledgeDiscoveryQuery = z.infer<typeof adaptiveKnowledgeDiscoveryQuerySchema>;
 export type AdaptiveKnowledgeCoverageGap = z.infer<typeof adaptiveKnowledgeCoverageGapSchema>;
 export type AdaptiveKnowledgeDiscoveryTelemetry = z.infer<typeof adaptiveKnowledgeDiscoveryTelemetrySchema>;
+export type DocumentaryRejectionReason = z.infer<typeof documentaryRejectionReasonSchema>;
+export type DocumentaryAcquisition = z.infer<typeof documentaryAcquisitionSchema>;
+export type DocumentaryRecordState = z.infer<typeof documentaryRecordStateSchema>;
 export type EvidenceRankingReason = z.infer<typeof evidenceRankingReasonSchema>;
 export type EvidenceScientificRanking = z.infer<typeof evidenceScientificRankingSchema>;
 export type StructuredStudyExtraction = z.infer<typeof structuredStudyExtractionSchema>;
@@ -361,6 +417,7 @@ export type SourceSynthesisBatch = z.infer<typeof sourceSynthesisBatchSchema>;
 export type ValidatedSynthesis = z.infer<typeof validatedSynthesisSchema>;
 export type CorpusRunReport = z.infer<typeof corpusRunReportSchema>;
 export type CorpusSnapshotManifest = z.infer<typeof corpusSnapshotManifestSchema>;
+export type DocumentaryRecordStagingArtifact = z.infer<typeof documentaryRecordStagingArtifactSchema>;
 
 export function parseNormalizedEvidenceRecord(input: unknown): NormalizedEvidenceRecord {
   return normalizedEvidenceRecordSchema.parse(input);
@@ -416,4 +473,8 @@ export function parseCorpusRunReport(input: unknown): CorpusRunReport {
 
 export function parseCorpusSnapshotManifest(input: unknown): CorpusSnapshotManifest {
   return corpusSnapshotManifestSchema.parse(input);
+}
+
+export function parseDocumentaryRecordStagingArtifact(input: unknown): DocumentaryRecordStagingArtifact {
+  return documentaryRecordStagingArtifactSchema.parse(input);
 }

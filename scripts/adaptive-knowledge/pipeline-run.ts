@@ -28,6 +28,7 @@ import { buildAdaptiveKnowledgeBootstrapCollectionJobs, buildAdaptiveKnowledgeDi
 import { fetchOpenAlexEvidenceBatch } from './connectors/openalex';
 import { fetchPubmedEvidenceBatch } from './connectors/pubmed';
 import {
+  buildDocumentaryRecordStagingArtifact,
   dedupeNormalizedEvidenceRecords,
   parseConnectorCursorState,
   type ConnectorFetchInput,
@@ -608,6 +609,7 @@ export async function runAdaptiveKnowledgePipeline(
       reportPath: path.join('snapshots', runId, 'candidate', 'run-report.json'),
       validatedSynthesisPath: path.join('snapshots', runId, 'candidate', 'validated-synthesis.json'),
       studyExtractionsPath: path.join('snapshots', runId, 'candidate', 'study-extractions.json'),
+      documentStagingPath: path.join('snapshots', runId, 'candidate', 'document-staging.json'),
     },
   });
   const previousManifest = await loadPreviousManifest(outputRootDir);
@@ -664,6 +666,21 @@ export async function runAdaptiveKnowledgePipeline(
         sources: sourceResults,
         records: rankedRecords,
       },
+      null,
+      2,
+    ) + '\n',
+    'utf8',
+  );
+  await writeFile(
+    path.join(candidateDir, 'document-staging.json'),
+    JSON.stringify(
+      buildDocumentaryRecordStagingArtifact({
+        runId,
+        generatedAt: now.toISOString(),
+        recordIds: rankedRecords.map((record) => record.id),
+        promotedRecordIds: normalizedRecords.map((record) => record.id),
+        records: rankedRecords,
+      }),
       null,
       2,
     ) + '\n',
