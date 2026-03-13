@@ -30,6 +30,7 @@ import {
   type ConnectorFetchResult,
 } from './connectors/shared';
 import { promoteCandidateSnapshot } from './publish';
+import { upsertAdaptiveKnowledgeBootstrapCampaignState } from './worker-state';
 import {
   evaluateCorpusQualityGate,
   type CorpusQualityGateResult,
@@ -61,7 +62,7 @@ type PipelineStage = {
   message?: string;
 };
 
-type PipelineMode = 'refresh' | 'check';
+type PipelineMode = 'bootstrap' | 'refresh' | 'check';
 
 export type RunAdaptiveKnowledgePipelineInput = {
   runId?: string;
@@ -429,6 +430,30 @@ export async function runAdaptiveKnowledgePipeline(
     outputRootDir,
     [...cursorState.seenRecordIds, ...normalizedRecords.map((record) => record.id)],
   );
+  if (mode === 'bootstrap') {
+    const canonicalRecordIds = [...new Set([...cursorState.seenRecordIds, ...normalizedRecords.map((record) => record.id)])];
+    await upsertAdaptiveKnowledgeBootstrapCampaignState({
+      outputRootDir,
+      runId,
+      now: new Date(now.getTime() + 500),
+      status: 'completed',
+      backlog: {
+        pending: 0,
+        running: 0,
+        blocked: 0,
+        completed: discoveryPlan.length,
+      },
+      progress: {
+        discoveredQueryFamilies: new Set(discoveryPlan.map((query) => query.queryFamily)).size,
+        canonicalRecordCount: canonicalRecordIds.length,
+        extractionBacklogCount:
+          validatedSynthesis.studyExtractions.length > 0
+            ? Math.max(recordsForSynthesis.length - validatedSynthesis.studyExtractions.length, 0)
+            : recordsForSynthesis.length,
+        publicationCandidateCount: principles.length,
+      },
+    });
+  }
   await writeFile(
     path.join(candidateDir, 'sources.json'),
     JSON.stringify(

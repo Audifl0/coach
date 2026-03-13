@@ -1,6 +1,11 @@
 import { mkdir, open, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import {
+  parseAdaptiveKnowledgeBootstrapCampaignState,
+  type AdaptiveKnowledgeBootstrapCampaignState,
+} from './contracts';
+
 export type AdaptiveKnowledgeWorkerStatus =
   | 'started'
   | 'heartbeat'
@@ -9,7 +14,7 @@ export type AdaptiveKnowledgeWorkerStatus =
   | 'blocked-by-lease'
   | 'stale';
 
-export type AdaptiveKnowledgeWorkerMode = 'refresh' | 'check';
+export type AdaptiveKnowledgeWorkerMode = 'bootstrap' | 'refresh' | 'check';
 
 export type AdaptiveKnowledgeWorkerState = {
   runId: string;
@@ -57,7 +62,18 @@ type ReleaseAdaptiveKnowledgeLeaseInput = {
   message?: string;
 };
 
+type UpsertAdaptiveKnowledgeBootstrapCampaignInput = {
+  outputRootDir: string;
+  runId: string;
+  now?: Date;
+  status: AdaptiveKnowledgeBootstrapCampaignState['status'];
+  activeJobId?: string | null;
+  backlog: AdaptiveKnowledgeBootstrapCampaignState['backlog'];
+  progress: AdaptiveKnowledgeBootstrapCampaignState['progress'];
+};
+
 const DEFAULT_LEASE_MS = 5 * 60 * 1000;
+const BOOTSTRAP_STATE_FILE = 'bootstrap-state.json';
 const WORKER_STATE_FILE = 'worker-state.json';
 const WORKER_LOCK_FILE = 'worker.lock';
 
@@ -71,6 +87,7 @@ function toIso(value: Date): string {
 
 function buildStatePaths(outputRootDir: string) {
   return {
+    bootstrapPath: path.join(outputRootDir, BOOTSTRAP_STATE_FILE),
     statePath: path.join(outputRootDir, WORKER_STATE_FILE),
     lockPath: path.join(outputRootDir, WORKER_LOCK_FILE),
   };
@@ -109,6 +126,24 @@ async function writeWorkerState(statePath: string, state: AdaptiveKnowledgeWorke
   await writeFile(statePath, JSON.stringify(state, null, 2) + '\n', 'utf8');
 }
 
+async function safeReadBootstrapCampaignState(
+  bootstrapPath: string,
+): Promise<AdaptiveKnowledgeBootstrapCampaignState | null> {
+  try {
+    const raw = await readFile(bootstrapPath, 'utf8');
+    return parseAdaptiveKnowledgeBootstrapCampaignState(JSON.parse(raw) as unknown);
+  } catch {
+    return null;
+  }
+}
+
+async function writeBootstrapCampaignState(
+  bootstrapPath: string,
+  state: AdaptiveKnowledgeBootstrapCampaignState,
+): Promise<void> {
+  await writeFile(bootstrapPath, JSON.stringify(state, null, 2) + '\n', 'utf8');
+}
+
 async function safeRemove(filePath: string): Promise<void> {
   await rm(filePath, { force: true });
 }
@@ -120,6 +155,36 @@ function isLeaseExpired(state: AdaptiveKnowledgeWorkerState, now: Date): boolean
 export async function readAdaptiveKnowledgeWorkerState(outputRootDir: string): Promise<AdaptiveKnowledgeWorkerState | null> {
   const { statePath } = buildStatePaths(outputRootDir);
   return safeReadWorkerState(statePath);
+}
+
+export async function readAdaptiveKnowledgeBootstrapCampaignState(
+  outputRootDir: string,
+): Promise<AdaptiveKnowledgeBootstrapCampaignState | null> {
+  const { bootstrapPath } = buildStatePaths(outputRootDir);
+  return safeReadBootstrapCampaignState(bootstrapPath);
+}
+
+export async function upsertAdaptiveKnowledgeBootstrapCampaignState(
+  input: UpsertAdaptiveKnowledgeBootstrapCampaignInput,
+): Promise<AdaptiveKnowledgeBootstrapCampaignState> {
+  const now = input.now ?? new Date();
+  const { bootstrapPath } = buildStatePaths(input.outputRootDir);
+  await mkdir(input.outputRootDir, { recursive: true });
+  const existing = await safeReadBootstrapCampaignState(bootstrapPath);
+  const next = parseAdaptiveKnowledgeBootstrapCampaignState({
+    schemaVersion: 'v1',
+    campaignId: existing?.campaignId ?? `bootstrap-${input.runId}`,
+    status: input.status,
+    mode: 'bootstrap',
+    startedAt: existing?.startedAt ?? now.toISOString(),
+    updatedAt: now.toISOString(),
+    lastRunId: input.runId,
+    activeJobId: input.activeJobId ?? null,
+    backlog: input.backlog,
+    progress: input.progress,
+  });
+  await writeBootstrapCampaignState(bootstrapPath, next);
+  return next;
 }
 
 export async function acquireAdaptiveKnowledgeLease(
