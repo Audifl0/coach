@@ -522,3 +522,61 @@ test('bootstrap campaign state and run reports accept durable bootstrap mode met
 
   assert.equal(report.mode, 'bootstrap');
 });
+
+test('bootstrap mode persists and reloads campaign progress across reruns', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+
+  await runPipelineWithDeterministicSynthesis({
+    runId: 'run-bootstrap-a',
+    mode: 'bootstrap',
+    now: new Date('2026-03-13T10:00:00.000Z'),
+    outputRootDir,
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const firstCampaign = parseAdaptiveKnowledgeBootstrapCampaignState(
+    await loadJson(path.join(outputRootDir, 'bootstrap-state.json')),
+  );
+  assert.equal(firstCampaign.status, 'completed');
+  assert.equal(firstCampaign.lastRunId, 'run-bootstrap-a');
+  assert.equal(firstCampaign.progress.canonicalRecordCount, 3);
+
+  await runPipelineWithDeterministicSynthesis({
+    runId: 'run-bootstrap-b',
+    mode: 'bootstrap',
+    now: new Date('2026-03-14T10:00:00.000Z'),
+    outputRootDir,
+    connectors: {
+      pubmed: async () => ({
+        ...buildConnectorSuccess('pubmed'),
+        records: [
+          {
+            ...buildConnectorSuccess('pubmed').records[0]!,
+            id: 'pubmed-2',
+            provenanceIds: ['pubmed-2'],
+          },
+        ],
+      }),
+      crossref: async (input) => ({
+        ...buildConnectorSuccess('crossref'),
+        records: input.cursorState?.seenRecordIds.includes('crossref-1') ? [] : buildConnectorSuccess('crossref').records,
+      }),
+      openalex: async (input) => ({
+        ...buildConnectorSuccess('openalex'),
+        records: input.cursorState?.seenRecordIds.includes('openalex-1') ? [] : buildConnectorSuccess('openalex').records,
+      }),
+    },
+  });
+
+  const secondCampaign = parseAdaptiveKnowledgeBootstrapCampaignState(
+    await loadJson(path.join(outputRootDir, 'bootstrap-state.json')),
+  );
+  assert.equal(secondCampaign.campaignId, firstCampaign.campaignId);
+  assert.equal(secondCampaign.startedAt, firstCampaign.startedAt);
+  assert.equal(secondCampaign.lastRunId, 'run-bootstrap-b');
+  assert.equal(secondCampaign.progress.canonicalRecordCount, 4);
+});
