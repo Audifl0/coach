@@ -12,7 +12,7 @@ async function buildDefaultDeps() {
   return {
     resolveSession: () => validateSessionFromCookies(repository),
     readControl: () => readWorkerControlState(),
-    startWorker: ({ mode }: { mode: 'refresh' | 'check' }) => startWorkerControl({ mode }),
+    startWorker: ({ mode }: { mode: 'bootstrap' | 'refresh' | 'check' }) => startWorkerControl({ mode }),
     pauseWorker: () => pauseWorkerControl(),
   };
 }

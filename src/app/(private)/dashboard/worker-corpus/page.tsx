@@ -27,6 +27,7 @@ function buildFallbackStatus(now: Date): WorkerCorpusStatusResponse {
       stoppedAt: null,
       pauseRequestedAt: null,
       message: null,
+      campaign: null,
     },
     live: {
       state: 'idle',

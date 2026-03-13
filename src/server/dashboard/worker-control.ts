@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-export type WorkerControlMode = 'refresh' | 'check';
+export type WorkerControlMode = 'bootstrap' | 'refresh' | 'check';
 export type WorkerControlState = {
   state: 'idle' | 'running' | 'paused' | 'failed';
   pid: number | null;
@@ -108,7 +108,8 @@ export async function startWorkerControl(
   const mode = input.mode ?? 'refresh';
   const scriptPath = path.join(process.cwd(), 'scripts', 'adaptive-knowledge', 'refresh-corpus.ts');
   const tsxPath = path.join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
-  const child = spawn(process.execPath, [tsxPath, scriptPath, ...(mode === 'check' ? ['--check'] : [])], {
+  const modeArgs = mode === 'check' ? ['--check'] : mode === 'bootstrap' ? ['--bootstrap'] : [];
+  const child = spawn(process.execPath, [tsxPath, scriptPath, ...modeArgs], {
     cwd: process.cwd(),
     detached: true,
     stdio: 'ignore',

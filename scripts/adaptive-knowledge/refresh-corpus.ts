@@ -17,7 +17,10 @@ type RunRefreshCorpusCommandDeps = {
   log?: Pick<Console, 'log' | 'error' | 'warn'>;
 };
 
-export function resolveMode(argv: string[]): 'refresh' | 'check' {
+export function resolveMode(argv: string[]): 'bootstrap' | 'refresh' | 'check' {
+  if (argv.includes('--bootstrap')) {
+    return 'bootstrap';
+  }
   return argv.includes('--check') ? 'check' : 'refresh';
 }
 
@@ -110,7 +113,12 @@ export async function runRefreshCorpusCommand(
       runId,
       status: 'completed',
       now: new Date(now.getTime() + 200),
-      message: mode === 'check' ? 'check completed without publishing' : 'refresh completed',
+      message:
+        mode === 'check'
+          ? 'check completed without publishing'
+          : mode === 'bootstrap'
+            ? 'bootstrap completed'
+            : 'refresh completed',
     });
     leaseReleased = true;
     log.log(`[OK] Adaptive knowledge worker completed (${mode}) - run=${result.runId} candidate=${result.candidateDir}`);
