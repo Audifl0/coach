@@ -126,6 +126,53 @@ async function buildWorkerFixture() {
       lastError: 'timeout',
     },
   ]);
+  await writeJson(path.join(rootDir, 'registry', 'work-queues.json'), {
+    version: 'v1',
+    generatedAt: '2026-03-11T10:01:00.000Z',
+    items: [
+      {
+        id: 'pubmed:progression-load',
+        queueName: 'collection',
+        logicalKey: 'progression-load',
+        status: 'running',
+        payload: {
+          source: 'pubmed',
+          subtopicLabel: 'progression-load',
+        },
+        createdAt: '2026-03-11T09:59:00.000Z',
+        updatedAt: '2026-03-11T10:01:00.000Z',
+        claimedBy: 'worker-live',
+        claimedAt: '2026-03-11T10:00:30.000Z',
+      },
+      {
+        id: 'crossref:progression-split',
+        queueName: 'collection',
+        logicalKey: 'progression-split',
+        status: 'blocked',
+        payload: {
+          source: 'crossref',
+        },
+        createdAt: '2026-03-11T09:58:00.000Z',
+        updatedAt: '2026-03-11T10:00:00.000Z',
+        blockedReason: 'timeout',
+      },
+    ],
+  });
+  await writeJson(path.join(rootDir, 'registry', 'document-library.json'), {
+    version: 'v1',
+    generatedAt: '2026-03-11T10:01:00.000Z',
+    items: [],
+  });
+  await writeJson(path.join(rootDir, 'registry', 'scientific-questions.json'), {
+    version: 'v1',
+    generatedAt: '2026-03-11T10:01:00.000Z',
+    items: [],
+  });
+  await writeJson(path.join(rootDir, 'registry', 'published-doctrine.json'), {
+    version: 'v1',
+    generatedAt: '2026-03-11T10:01:00.000Z',
+    principles: [],
+  });
   await writeJson(path.join(rootDir, 'active.json'), {
     snapshotId,
     snapshotDir,
@@ -476,6 +523,24 @@ test('worker dashboard overview projects live worker, publication and recent run
 
   assert.equal(section.data.live.state, 'heartbeat');
   assert.equal(section.data.live.isHeartbeatStale, false);
+  assert.deepEqual(section.data.liveRun, {
+    active: true,
+    runId: 'worker-live',
+    mode: 'bootstrap',
+    status: 'running',
+    currentStage: 'discover',
+    currentWorkItemLabel: 'PubMed · progression-load',
+    lastHeartbeatAt: '2026-03-11T10:01:00.000Z',
+    heartbeatAgeSec: 120,
+    startedAt: '2026-03-11T10:00:00.000Z',
+    liveMessage: 'Discovering new evidence',
+    progress: {
+      queue: 2,
+      documents: 0,
+      questions: 0,
+      doctrine: 0,
+    },
+  });
   assert.equal(section.data.control.mode, 'bootstrap');
   assert.equal(section.data.control.campaign?.campaignId, 'bootstrap-2026-03-11');
   assert.equal(section.data.control.campaign?.backlog.blocked, 1);
