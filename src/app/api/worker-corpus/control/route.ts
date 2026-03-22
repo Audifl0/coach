@@ -4,8 +4,6 @@ import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@
 import {
   pauseWorkerControl,
   readWorkerControlState,
-  resetWorkerControl,
-  resumeWorkerControl,
   startWorkerControl,
 } from '@/server/dashboard/worker-control';
 import {
@@ -20,8 +18,6 @@ async function buildDefaultDeps() {
     readControl: () => readWorkerControlState(),
     startWorker: ({ mode }: { mode: 'bootstrap' | 'refresh' | 'check' }) => startWorkerControl({ mode }),
     pauseWorker: () => pauseWorkerControl(),
-    resumeWorker: ({ mode }: { mode?: 'bootstrap' | 'refresh' | 'check' }) => resumeWorkerControl({ mode }),
-    resetWorker: () => resetWorkerControl(),
   };
 }
 

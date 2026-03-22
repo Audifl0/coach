@@ -221,7 +221,7 @@ export const workerCorpusStageValues = [
 export const workerCorpusStageStatusValues = ['succeeded', 'failed', 'skipped'] as const;
 export const workerCorpusModeValues = ['bootstrap', 'refresh', 'check'] as const;
 export const workerCorpusControlStateValues = ['idle', 'running', 'paused', 'failed'] as const;
-export const workerCorpusControlActionValues = ['start', 'pause', 'resume', 'reset'] as const;
+export const workerCorpusControlActionValues = ['start', 'pause'] as const;
 
 export const workerCorpusBootstrapCampaignSchema = z.object({
   campaignId: z.string().trim().min(1),
@@ -403,13 +403,6 @@ export const workerCorpusControlCommandSchema = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal('pause'),
-  }),
-  z.object({
-    action: z.literal('resume'),
-    mode: z.enum(workerCorpusModeValues).optional(),
-  }),
-  z.object({
-    action: z.literal('reset'),
   }),
 ]);
 

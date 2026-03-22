@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import type { SpawnOptions } from 'node:child_process';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -59,6 +60,14 @@ type WorkerControlInput = {
   now?: Date;
 };
 
+type WorkerLaunchInvocation = {
+  command: string;
+  args: string[];
+  options: SpawnOptions;
+};
+
+type WorkerLauncher = (invocation: WorkerLaunchInvocation) => { pid: number | null; unref(): void };
+
 const DEFAULT_ROOT_DIR = path.join(process.cwd(), '.planning', 'knowledge', 'adaptive-coaching');
 const CONTROL_STATE_FILE = 'worker-control.json';
 const BOOTSTRAP_JOBS_FILE = 'bootstrap-jobs.json';
@@ -66,6 +75,10 @@ const CONNECTOR_STATE_FILE = 'connector-state.json';
 const BOOTSTRAP_STATE_FILE = 'bootstrap-state.json';
 const WORKER_STATE_FILE = 'worker-state.json';
 const WORKER_LOCK_FILE = 'worker.lock';
+const COACH_ENV_FILE = '/opt/coach/.env';
+const WORKER_COMPOSE_SERVICE = 'worker-corpus';
+
+let workerLauncher: WorkerLauncher = ({ command, args, options }) => spawn(command, args, options);
 
 function resolveKnowledgeRootDir(input?: string): string {
   return input ?? DEFAULT_ROOT_DIR;
@@ -195,6 +208,41 @@ function createIdleState(now: Date, message: string | null = null): WorkerContro
   };
 }
 
+function buildStartWorkerInvocation(input: {
+  knowledgeRootDir: string;
+  mode: WorkerControlMode;
+}): WorkerLaunchInvocation {
+  return {
+    command: 'docker',
+    args: [
+      'compose',
+      '--env-file',
+      COACH_ENV_FILE,
+      'up',
+      '-d',
+      WORKER_COMPOSE_SERVICE,
+    ],
+    options: {
+      cwd: process.cwd(),
+      detached: true,
+      stdio: 'ignore',
+      env: {
+        ...process.env,
+        ADAPTIVE_KNOWLEDGE_OUTPUT_ROOT_DIR: input.knowledgeRootDir,
+        ADAPTIVE_KNOWLEDGE_WORKER_MODE: input.mode,
+      },
+    },
+  };
+}
+
+export function setWorkerLauncherForTests(nextLauncher: WorkerLauncher): void {
+  workerLauncher = nextLauncher;
+}
+
+export function resetWorkerLauncherForTests(): void {
+  workerLauncher = ({ command, args, options }) => spawn(command, args, options);
+}
+
 export async function readWorkerControlState(input: WorkerControlInput = {}): Promise<WorkerControlState> {
   const now = input.now ?? new Date();
   const filePath = buildControlStatePath(resolveKnowledgeRootDir(input.knowledgeRootDir));
@@ -234,22 +282,14 @@ export async function startWorkerControl(
   const filePath = buildControlStatePath(knowledgeRootDir);
   const current = await readWorkerControlState({ knowledgeRootDir, now });
   if (current.state === 'running' && isPidRunning(current.pid)) {
-    return current;
+    return {
+      ...current,
+      message: 'already-running',
+    };
   }
 
   const mode = input.mode ?? 'refresh';
-  const scriptPath = path.join(process.cwd(), 'scripts', 'adaptive-knowledge', 'refresh-corpus.ts');
-  const tsxPath = path.join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
-  const modeArgs = mode === 'check' ? ['--check'] : mode === 'bootstrap' ? ['--bootstrap'] : [];
-  const child = spawn(process.execPath, [tsxPath, scriptPath, ...modeArgs], {
-    cwd: process.cwd(),
-    detached: true,
-    stdio: 'ignore',
-    env: {
-      ...process.env,
-      ADAPTIVE_KNOWLEDGE_OUTPUT_ROOT_DIR: knowledgeRootDir,
-    },
-  });
+  const child = workerLauncher(buildStartWorkerInvocation({ knowledgeRootDir, mode }));
   child.unref();
 
   const nextState: WorkerControlState = {

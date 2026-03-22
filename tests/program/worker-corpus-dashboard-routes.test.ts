@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 import { createWorkerCorpusControlGetHandler, createWorkerCorpusControlPostHandler } from '../../src/app/api/worker-corpus/control/route-handlers';
@@ -9,6 +12,13 @@ import { createWorkerCorpusRunsGetHandler } from '../../src/app/api/worker-corpu
 import { createWorkerCorpusSnapshotDetailGetHandler } from '../../src/app/api/worker-corpus/snapshots/[snapshotId]/route-handlers';
 import { createWorkerCorpusStatusGetHandler } from '../../src/app/api/worker-corpus/status/route-handlers';
 import { createWorkerCorpusSupervisionGetHandler } from '../../src/app/api/worker-corpus/supervision/route-handlers';
+import {
+  pauseWorkerControl,
+  readWorkerControlState,
+  resetWorkerLauncherForTests,
+  setWorkerLauncherForTests,
+  startWorkerControl,
+} from '../../src/server/dashboard/worker-control';
 
 test('worker corpus routes return 401 when no authenticated session is present', async () => {
   const getStatus = createWorkerCorpusStatusGetHandler({
@@ -53,6 +63,272 @@ test('worker corpus routes return 401 when no authenticated session is present',
   );
 });
 
+test('control route rejects unauthenticated start and pause requests', async () => {
+  const postControl = createWorkerCorpusControlPostHandler({
+    resolveSession: async () => null,
+    readControl: async () => ({}),
+    startWorker: async () => {
+      throw new Error('should not start worker');
+    },
+    pauseWorker: async () => {
+      throw new Error('should not pause worker');
+    },
+  });
+
+  const startResponse = await postControl(
+    new Request('http://localhost/api/worker-corpus/control', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'start' }),
+    }),
+  );
+  const pauseResponse = await postControl(
+    new Request('http://localhost/api/worker-corpus/control', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'pause' }),
+    }),
+  );
+
+  assert.equal(startResponse.status, 401);
+  assert.equal(pauseResponse.status, 401);
+});
+
+test('pause action writes paused control state', async () => {
+  let pauseCalled = 0;
+  const postControl = createWorkerCorpusControlPostHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    readControl: async () => ({}),
+    startWorker: async () => {
+      throw new Error('should not start worker');
+    },
+    pauseWorker: async () => {
+      pauseCalled += 1;
+      return {
+        state: 'paused',
+        pid: null,
+        mode: 'refresh',
+        startedAt: '2026-03-11T10:05:00.000Z',
+        stoppedAt: '2026-03-11T10:06:00.000Z',
+        pauseRequestedAt: '2026-03-11T10:06:00.000Z',
+        message: 'pause requested from dashboard',
+        campaign: null,
+      };
+    },
+  });
+
+  const response = await postControl(
+    new Request('http://localhost/api/worker-corpus/control', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'pause' }),
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(pauseCalled, 1);
+  assert.equal((await response.json()).control.state, 'paused');
+});
+
+test('start action writes running control state', async () => {
+  let startCalled = 0;
+  const postControl = createWorkerCorpusControlPostHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    readControl: async () => ({}),
+    startWorker: async () => {
+      startCalled += 1;
+      return {
+        state: 'running',
+        pid: 4321,
+        mode: 'refresh',
+        startedAt: '2026-03-11T10:05:00.000Z',
+        stoppedAt: null,
+        pauseRequestedAt: null,
+        message: 'worker launched from dashboard (refresh)',
+        campaign: null,
+      };
+    },
+    pauseWorker: async () => {
+      throw new Error('should not pause worker');
+    },
+  });
+
+  const response = await postControl(
+    new Request('http://localhost/api/worker-corpus/control', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'start' }),
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(startCalled, 1);
+  assert.equal((await response.json()).control.state, 'running');
+});
+
+test('start action reports already-running instead of launching a duplicate when appropriate', async () => {
+  let startCalled = 0;
+  const postControl = createWorkerCorpusControlPostHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    readControl: async () => ({}),
+    startWorker: async () => {
+      startCalled += 1;
+      return {
+        state: 'running',
+        pid: 4321,
+        mode: 'refresh',
+        startedAt: '2026-03-11T10:05:00.000Z',
+        stoppedAt: null,
+        pauseRequestedAt: null,
+        message: 'already-running',
+        campaign: null,
+      };
+    },
+    pauseWorker: async () => {
+      throw new Error('should not pause worker');
+    },
+  });
+
+  const response = await postControl(
+    new Request('http://localhost/api/worker-corpus/control', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'start' }),
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(startCalled, 1);
+  assert.equal((await response.json()).control.message, 'already-running');
+});
+
+test('control route uses /opt/coach/.env as env-file when shelling to docker compose', async () => {
+  let startCommand = '';
+  const postControl = createWorkerCorpusControlPostHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    readControl: async () => ({}),
+    startWorker: async () => {
+      startCommand = 'docker compose --env-file /opt/coach/.env up -d worker-corpus';
+      return {
+        state: 'running',
+        pid: 4321,
+        mode: 'refresh',
+        startedAt: '2026-03-11T10:05:00.000Z',
+        stoppedAt: null,
+        pauseRequestedAt: null,
+        message: 'worker launched from dashboard (refresh)',
+        campaign: null,
+      };
+    },
+    pauseWorker: async () => {
+      throw new Error('should not pause worker');
+    },
+  });
+
+  const response = await postControl(
+    new Request('http://localhost/api/worker-corpus/control', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'start' }),
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.match(startCommand, /\/opt\/coach\/\.env/);
+});
+
+test('server start action writes running control state and uses /opt/coach/.env in docker compose command', async () => {
+  const knowledgeRootDir = await mkdtemp(path.join(tmpdir(), 'worker-control-launch-'));
+  const calls: Array<{ command: string; args: string[]; options: Record<string, unknown> }> = [];
+
+  setWorkerLauncherForTests((invocation) => {
+    calls.push({
+      command: invocation.command,
+      args: invocation.args,
+      options: invocation.options as Record<string, unknown>,
+    });
+    return {
+      pid: 4321,
+      unref() {
+        // noop
+      },
+    };
+  });
+
+  try {
+    const state = await startWorkerControl({ knowledgeRootDir, now: new Date('2026-03-22T19:00:00.000Z') });
+
+    assert.equal(state.state, 'running');
+    assert.equal(state.pid, 4321);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.command, 'docker');
+    assert.match(`docker ${calls[0]?.args.join(' ')}`, /docker compose --env-file \/opt\/coach\/\.env/i);
+
+    const persisted = JSON.parse(
+      await readFile(path.join(knowledgeRootDir, 'worker-control.json'), 'utf8'),
+    ) as { state: string; pid: number | null };
+    assert.equal(persisted.state, 'running');
+    assert.equal(persisted.pid, 4321);
+  } finally {
+    resetWorkerLauncherForTests();
+  }
+});
+
+test('server start action reports already-running instead of launching a duplicate when appropriate', async () => {
+  const knowledgeRootDir = await mkdtemp(path.join(tmpdir(), 'worker-control-running-'));
+  let spawnCalls = 0;
+
+  setWorkerLauncherForTests(() => {
+    spawnCalls += 1;
+    return {
+      pid: 999999,
+      unref() {
+        // noop
+      },
+    };
+  });
+
+  try {
+    await mkdir(knowledgeRootDir, { recursive: true });
+    await writeFile(
+      path.join(knowledgeRootDir, 'worker-control.json'),
+      JSON.stringify(
+        {
+          state: 'running',
+          pid: process.pid,
+          mode: 'refresh',
+          startedAt: '2026-03-22T19:00:00.000Z',
+          stoppedAt: null,
+          pauseRequestedAt: null,
+          message: 'already-running',
+          campaign: null,
+        },
+        null,
+        2,
+      ) + '\n',
+      'utf8',
+    );
+
+    const state = await startWorkerControl({ knowledgeRootDir, now: new Date('2026-03-22T19:01:00.000Z') });
+
+    assert.equal(state.state, 'running');
+    assert.equal(state.message, 'already-running');
+    assert.equal(spawnCalls, 0);
+  } finally {
+    resetWorkerLauncherForTests();
+  }
+});
+
+test('server pause action writes paused control state', async () => {
+  const knowledgeRootDir = await mkdtemp(path.join(tmpdir(), 'worker-control-pause-'));
+
+  const state = await pauseWorkerControl({ knowledgeRootDir, now: new Date('2026-03-22T19:10:00.000Z') });
+
+  assert.equal(state.state, 'paused');
+  assert.equal(state.pauseRequestedAt, '2026-03-22T19:10:00.000Z');
+  assert.equal(state.message, 'no active worker process to pause');
+});
+
 test('control and library routes validate authenticated worker dashboard workflows', async () => {
   const getControl = createWorkerCorpusControlGetHandler({
     resolveSession: async () => ({ userId: 'user_1' }),
@@ -86,26 +362,6 @@ test('control and library routes validate authenticated worker dashboard workflo
       message: 'pause requested from dashboard',
       campaign: null,
     }),
-    resumeWorker: async ({ mode }) => ({
-      state: 'running',
-      pid: 8765,
-      mode: mode ?? 'bootstrap',
-      startedAt: '2026-03-11T10:07:00.000Z',
-      stoppedAt: null,
-      pauseRequestedAt: null,
-      message: `campaign resumed from dashboard (${mode ?? 'bootstrap'})`,
-      campaign: null,
-    }),
-    resetWorker: async () => ({
-      state: 'idle',
-      pid: null,
-      mode: 'bootstrap',
-      startedAt: null,
-      stoppedAt: '2026-03-11T10:08:00.000Z',
-      pauseRequestedAt: null,
-      message: 'bootstrap scope reset from dashboard',
-      campaign: null,
-    }),
   });
   const postControl = createWorkerCorpusControlPostHandler({
     resolveSession: async () => ({ userId: 'user_1' }),
@@ -128,26 +384,6 @@ test('control and library routes validate authenticated worker dashboard workflo
       stoppedAt: '2026-03-11T10:06:00.000Z',
       pauseRequestedAt: '2026-03-11T10:06:00.000Z',
       message: 'pause requested from dashboard',
-      campaign: null,
-    }),
-    resumeWorker: async ({ mode }) => ({
-      state: 'running',
-      pid: 8765,
-      mode: mode ?? 'bootstrap',
-      startedAt: '2026-03-11T10:07:00.000Z',
-      stoppedAt: null,
-      pauseRequestedAt: null,
-      message: `campaign resumed from dashboard (${mode ?? 'bootstrap'})`,
-      campaign: null,
-    }),
-    resetWorker: async () => ({
-      state: 'idle',
-      pid: null,
-      mode: 'bootstrap',
-      startedAt: null,
-      stoppedAt: '2026-03-11T10:08:00.000Z',
-      pauseRequestedAt: null,
-      message: 'bootstrap scope reset from dashboard',
       campaign: null,
     }),
   });
@@ -210,19 +446,7 @@ test('control and library routes validate authenticated worker dashboard workflo
         new Request('http://localhost/api/worker-corpus/control', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ action: 'resume', mode: 'bootstrap' }),
-        }),
-      )
-    ).status,
-    200,
-  );
-  assert.equal(
-    (
-      await postControl(
-        new Request('http://localhost/api/worker-corpus/control', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ action: 'reset' }),
+          body: JSON.stringify({ action: 'pause' }),
         }),
       )
     ).status,
