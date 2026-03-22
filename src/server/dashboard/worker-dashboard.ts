@@ -547,6 +547,9 @@ export async function loadWorkerCorpusOverview(
 
     const overview = parseWorkerCorpusOverviewResponse({
       generatedAt: now.toISOString(),
+      operatorMode: controlState.state === 'paused' ? 'paused' : 'running',
+      operatorUpdatedAt: controlState.pauseRequestedAt ?? controlState.startedAt ?? controlState.stoppedAt ?? null,
+      runActive: Boolean(workerState) && (deriveLiveState(workerState, now).state === 'started' || deriveLiveState(workerState, now).state === 'heartbeat'),
       control: controlState,
       live: deriveLiveState(workerState, now),
       publication: {

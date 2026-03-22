@@ -331,6 +331,9 @@ export const workerCorpusSnapshotDetailSchema = z.object({
 
 export const workerCorpusOverviewResponseSchema = z.object({
   generatedAt: z.iso.datetime(),
+  operatorMode: z.enum(['running', 'paused']),
+  operatorUpdatedAt: z.iso.datetime().nullable(),
+  runActive: z.boolean(),
   control: z.object({
     state: z.enum(workerCorpusControlStateValues),
     pid: z.number().int().positive().nullable(),

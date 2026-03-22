@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import type {
   WorkerCorpusLibraryDetail,
   WorkerCorpusOverviewSection,
@@ -15,6 +17,7 @@ type WorkerCorpusDashboardClientProps = {
   initialRunDetail: WorkerCorpusRunDetail | null;
   initialSnapshotDetail: WorkerCorpusSnapshotDetail | null;
   initialLibraryDetail: WorkerCorpusLibraryDetail | null;
+  onRefresh?: () => void;
 };
 
 function formatMaybe(value: string | number | null | undefined, fallback = 'n/a'): string {
@@ -34,6 +37,8 @@ export function resolveWorkerCorpusRefreshInterval(): number {
 }
 
 export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientProps) {
+  const [pendingAction, setPendingAction] = useState<'start' | 'pause' | null>(null);
+  const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const supervision = props.initialSupervision;
   const sectionReady = props.initialSection.status === 'ready';
   const sectionSummary =
@@ -45,6 +50,41 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
       : props.initialSection.status === 'empty'
         ? 'No published worker artifacts yet.'
         : 'Worker overview unavailable.';
+
+  const operatorMode = sectionReady ? props.initialSection.data.operatorMode : 'running';
+  const operatorUpdatedAt = sectionReady ? props.initialSection.data.operatorUpdatedAt : null;
+  const runActive = sectionReady ? props.initialSection.data.runActive : false;
+  const startDisabled = pendingAction !== null || (sectionReady && operatorMode === 'running' && runActive);
+  const pauseDisabled = pendingAction !== null || !sectionReady || operatorMode === 'paused';
+
+  async function submitControl(action: 'start' | 'pause') {
+    setPendingAction(action);
+    setFeedback(null);
+
+    try {
+      const response = await fetch('/api/worker-corpus/control', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(action === 'start' ? { action, mode: 'refresh' } : { action }),
+      });
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+
+      if (!response.ok) {
+        setFeedback({ kind: 'error', message: body?.error ?? 'Commande impossible.' });
+        return;
+      }
+
+      setFeedback({
+        kind: 'success',
+        message: action === 'start' ? 'Démarrage demandé.' : 'Pause opérateur activée.',
+      });
+      props.onRefresh?.();
+    } catch {
+      setFeedback({ kind: 'error', message: 'Erreur réseau. Réessayez.' });
+    } finally {
+      setPendingAction(null);
+    }
+  }
 
   return (
     <div className={styles.shell}>
@@ -78,6 +118,41 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
 
         <section className={styles.statsGrid}>
           <article className={`${styles.metricCard} ${styles.metricFeature}`}>
+            <div className={styles.metaLabel}>Contrôle opérateur</div>
+            <h2 className={styles.metricTitle}>État du worker</h2>
+            <div className={styles.controlHeaderRow}>
+              <span className={styles.statValue}>{operatorMode === 'paused' ? 'En pause' : 'En marche'}</span>
+              <span className={styles.badge}>{operatorUpdatedAt ?? 'mise à jour inconnue'}</span>
+            </div>
+            <div className={styles.muted}>
+              {runActive ? 'Run actif détecté.' : 'Aucun run actif détecté.'}
+            </div>
+            {operatorMode === 'paused' ? (
+              <div className={styles.operatorHint}>Le worker n’acceptera pas de nouveau run tant qu’il reste en pause.</div>
+            ) : null}
+            {feedback ? (
+              <div className={styles.messageBar} role="status">{feedback.message}</div>
+            ) : null}
+            <div className={styles.actions}>
+              <button
+                type="button"
+                className={styles.actionButton}
+                onClick={() => void submitControl('start')}
+                disabled={startDisabled}
+              >
+                {pendingAction === 'start' ? 'Démarrage...' : 'Démarrer'}
+              </button>
+              <button
+                type="button"
+                className={`${styles.actionButton} ${styles.secondaryButton}`}
+                onClick={() => void submitControl('pause')}
+                disabled={pauseDisabled}
+              >
+                {pendingAction === 'pause' ? 'Pause...' : 'Mettre en pause'}
+              </button>
+            </div>
+          </article>
+          <article className={styles.metricCard}>
             <div className={styles.metaLabel}>Workflow status</div>
             <h2 className={styles.metricTitle}>Queue depth</h2>
             <div className={styles.statValue}>{supervision.workflow.queueDepth}</div>

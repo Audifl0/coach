@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation';
 
+import { WorkerCorpusDashboardClientShell } from './_components/worker-corpus-dashboard-client-shell';
+
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
 import {
   type WorkerCorpusLibraryDetail,
@@ -15,7 +17,7 @@ import {
 } from '@/server/dashboard/worker-dashboard';
 import { loadWorkerCorpusSupervision } from '@/server/services/worker-corpus-supervision';
 import { loadWorkerCorpusOverviewSection } from './loaders/overview';
-import { WorkerCorpusDashboardClient } from './_components/worker-corpus-dashboard-client';
+import { WorkerCorpusDashboardClientShell } from './_components/worker-corpus-dashboard-client-shell';
 
 function buildFallbackSupervision(now: Date): WorkerCorpusSupervisionResponse {
   return {
@@ -99,7 +101,7 @@ export default async function WorkerCorpusDashboardPage(_props: PageProps<'/dash
       : { status: 'error' };
 
   return (
-    <WorkerCorpusDashboardClient
+    <WorkerCorpusDashboardClientShell
       initialSection={safeSection}
       initialSupervision={supervision}
       initialRunDetail={runDetail}

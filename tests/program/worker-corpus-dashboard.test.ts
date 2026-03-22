@@ -271,6 +271,9 @@ async function buildWorkerFixture() {
 test('worker corpus contracts parse overview, run detail and snapshot detail payloads', () => {
   const overview = parseWorkerCorpusOverviewResponse({
     generatedAt: '2026-03-11T10:00:00.000Z',
+    operatorMode: 'running',
+    operatorUpdatedAt: '2026-03-11T10:00:00.000Z',
+    runActive: true,
     control: {
       state: 'running',
       pid: 1234,
@@ -309,6 +312,8 @@ test('worker corpus contracts parse overview, run detail and snapshot detail pay
     recentRuns: [],
   });
   assert.equal(overview.live.state, 'heartbeat');
+  assert.equal(overview.operatorMode, 'running');
+  assert.equal(overview.runActive, true);
   assert.equal(
     parseWorkerCorpusOverviewSection({
       status: 'ready',
@@ -354,6 +359,9 @@ test('worker corpus contracts parse overview, run detail and snapshot detail pay
 
   const emptyOverview = parseWorkerCorpusOverviewResponse({
     generatedAt: '2026-03-11T10:00:00.000Z',
+    operatorMode: 'running',
+    operatorUpdatedAt: null,
+    runActive: false,
     control: {
       state: 'idle',
       pid: null,
@@ -392,6 +400,8 @@ test('worker corpus contracts parse overview, run detail and snapshot detail pay
     recentRuns: [],
   });
   assert.equal(emptyOverview.publication.activeSnapshotId, null);
+  assert.equal(emptyOverview.operatorMode, 'running');
+  assert.equal(emptyOverview.runActive, false);
 });
 
 test('worker dashboard overview projects live worker, publication and recent runs', async () => {

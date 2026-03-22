@@ -26,6 +26,9 @@ function buildClientProps() {
       status: 'ready' as const,
       data: {
         generatedAt: '2026-03-11T10:00:00.000Z',
+        operatorMode: 'paused' as const,
+        operatorUpdatedAt: '2026-03-11T10:10:00.000Z',
+        runActive: false,
         control: {
           state: 'paused' as const,
           pid: null,
@@ -352,6 +355,22 @@ test('worker corpus dashboard client renders scientific supervision sections', a
   assert.match(html, /queue depth/i);
   assert.match(html, /question maturity/i);
   assert.match(html, /recent revisions/i);
+  assert.match(html, /En pause/i);
+  assert.match(html, /Démarrer/i);
+  assert.match(html, /Mettre en pause/i);
+  assert.match(html, /Le worker n’acceptera pas de nouveau run tant qu’il reste en pause/i);
+});
+
+test('worker corpus dashboard client renders running operator badge when operator mode is running', async () => {
+  const { WorkerCorpusDashboardClient } = await import(
+    '../../src/app/(private)/dashboard/worker-corpus/_components/worker-corpus-dashboard-client'
+  );
+  const props = buildClientProps();
+  props.initialSection.data.operatorMode = 'running';
+  props.initialSection.data.operatorUpdatedAt = '2026-03-11T10:05:00.000Z';
+  const html = renderToStaticMarkup(<WorkerCorpusDashboardClient {...props} />);
+
+  assert.match(html, /En marche/i);
 });
 
 test('run detail panel stays readable for progressing bootstrap runs', () => {
