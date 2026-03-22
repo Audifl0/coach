@@ -206,10 +206,10 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
               <span>{formatHeartbeatAge(liveRun?.heartbeatAgeSec)}</span>
             </div>
             <div className={styles.liveRunCounters}>
-              <span className={styles.chip}>pending {liveRun?.progress.pending ?? 0}</span>
-              <span className={styles.chip}>running {liveRun?.progress.running ?? 0}</span>
-              <span className={styles.chip}>completed {liveRun?.progress.completed ?? 0}</span>
-              <span className={styles.chip}>failed {liveRun?.progress.failed ?? 0}</span>
+              <span className={styles.chip}>pending {liveRun?.progress.queue ?? 0}</span>
+              <span className={styles.chip}>documents {liveRun?.progress.documents ?? 0}</span>
+              <span className={styles.chip}>questions {liveRun?.progress.questions ?? 0}</span>
+              <span className={styles.chip}>doctrine {liveRun?.progress.doctrine ?? 0}</span>
             </div>
           </article>
           <article className={styles.metricCard}>

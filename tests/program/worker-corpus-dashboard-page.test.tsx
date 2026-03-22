@@ -432,10 +432,10 @@ test('worker corpus dashboard client renders running live run state with stage a
     heartbeatAgeSec: 8,
     liveMessage: 'Analyse en cours',
     progress: {
-      pending: 2,
-      running: 1,
-      completed: 5,
-      failed: 0,
+      queue: 2,
+      documents: 1,
+      questions: 5,
+      doctrine: 0,
     },
   };
   const html = renderToStaticMarkup(<WorkerCorpusDashboardClient {...props} />);
@@ -448,9 +448,9 @@ test('worker corpus dashboard client renders running live run state with stage a
   assert.match(html, /Heartbeat 2026-03-11T10:09:30.000Z/i);
   assert.match(html, /8s/i);
   assert.match(html, /pending 2/i);
-  assert.match(html, /running 1/i);
-  assert.match(html, /completed 5/i);
-  assert.match(html, /failed 0/i);
+  assert.match(html, /documents 1/i);
+  assert.match(html, /questions 5/i);
+  assert.match(html, /doctrine 0/i);
 });
 
 test('worker corpus dashboard client renders stale live run warning state', async () => {
@@ -467,10 +467,10 @@ test('worker corpus dashboard client renders stale live run warning state', asyn
     heartbeatAgeSec: 720,
     liveMessage: 'Heartbeat en retard',
     progress: {
-      pending: 1,
-      running: 1,
-      completed: 6,
-      failed: 1,
+      queue: 1,
+      documents: 1,
+      questions: 6,
+      doctrine: 1,
     },
   };
   const html = renderToStaticMarkup(<WorkerCorpusDashboardClient {...props} />);
@@ -481,7 +481,8 @@ test('worker corpus dashboard client renders stale live run warning state', asyn
   assert.match(html, /Question Q-42 · Recovery pacing/i);
   assert.match(html, /Heartbeat en retard/i);
   assert.match(html, /720s/i);
-  assert.match(html, /failed 1/i);
+  assert.match(html, /pending 1/i);
+  assert.match(html, /doctrine 1/i);
 });
 
 test('run detail panel stays readable for progressing bootstrap runs', () => {

@@ -77,8 +77,11 @@ function deriveStatus(input: {
   message: string | undefined;
   heartbeatAgeSec: number | null;
 }): WorkerCorpusLiveRun['status'] {
-  if (input.workerStatus === 'completed' || input.workerStatus === 'failed' || input.workerStatus === 'blocked-by-lease') {
-    return 'inactive';
+  if (input.workerStatus === 'failed') {
+    return 'failed';
+  }
+  if (input.workerStatus === 'completed' || input.workerStatus === 'blocked-by-lease') {
+    return 'completed';
   }
   if (input.workerStatus === 'stale' || (input.heartbeatAgeSec !== null && input.heartbeatAgeSec > HEARTBEAT_STALE_SEC)) {
     return 'stale';
@@ -257,7 +260,7 @@ export async function loadWorkerCorpusLiveRun(
   });
 
   return workerCorpusLiveRunSchema.parse({
-    active: status !== 'idle' && status !== 'inactive',
+    active: status !== 'idle' && status !== 'completed' && status !== 'failed',
     runId: workerState.runId,
     mode: workerState.mode,
     status,
