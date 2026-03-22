@@ -107,12 +107,15 @@ test('snapshot manifest and run report schemas reject unknown fields and invalid
     stageReports: [
       { stage: 'discover', status: 'succeeded' },
       { stage: 'ingest', status: 'succeeded' },
+      { stage: 'fulltext', status: 'skipped' },
+      { stage: 'extract-study-cards', status: 'skipped' },
+      { stage: 'thematic-synthesis', status: 'skipped' },
       { stage: 'synthesize', status: 'succeeded' },
       { stage: 'validate', status: 'succeeded' },
       { stage: 'publish', status: 'succeeded' },
     ],
   });
-  assert.equal(runReport.stageReports.length, 5);
+  assert.equal(runReport.stageReports.length, 8);
 
   assert.throws(() =>
     parseCorpusRunReport({
