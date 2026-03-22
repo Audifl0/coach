@@ -59,7 +59,9 @@ import { synthesizeThematicPrinciples } from './thematic-synthesis';
 import { renderBookletMarkdown } from './booklet-renderer';
 import { buildDocumentRegistryRecordFromNormalizedRecord, upsertDocumentRegistryRecords } from './registry/doc-library';
 import { buildStudyDossierFromStudyCard, upsertStudyDossiers } from './registry/study-dossiers';
+import { loadScientificQuestions, upsertScientificQuestions } from './registry/scientific-questions';
 import { enqueueWorkItems } from './registry/work-queues';
+import { linkStudiesToScientificQuestions } from './question-linking';
 
 type PipelineConnectorFn = (input: ConnectorFetchInput) => Promise<ConnectorFetchResult>;
 
@@ -946,11 +948,18 @@ export async function runAdaptiveKnowledgePipeline(
     now,
   );
   if (studyCards.length > 0) {
-    await upsertStudyDossiers(
+    const persistedDossiers = await upsertStudyDossiers(
       outputRootDir,
       studyCards.map((card) => buildStudyDossierFromStudyCard(card, now)),
       now,
     );
+    const scientificQuestions = await loadScientificQuestions(outputRootDir);
+    const questionLinking = linkStudiesToScientificQuestions({
+      studyDossiers: persistedDossiers.items,
+      questions: scientificQuestions.items,
+      now,
+    });
+    await upsertScientificQuestions(outputRootDir, questionLinking.questions, now);
     await enqueueWorkItems(
       outputRootDir,
       'question-linking',

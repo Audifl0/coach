@@ -18,6 +18,7 @@ import { parseAdaptiveKnowledgePipelineConfig } from '../../scripts/adaptive-kno
 import { buildAdaptiveKnowledgeBootstrapCollectionJobs } from '../../scripts/adaptive-knowledge/discovery';
 import { loadDocumentRegistry } from '../../scripts/adaptive-knowledge/registry/doc-library';
 import { loadStudyDossierRegistry } from '../../scripts/adaptive-knowledge/registry/study-dossiers';
+import { loadScientificQuestions } from '../../scripts/adaptive-knowledge/registry/scientific-questions';
 import { loadWorkQueues } from '../../scripts/adaptive-knowledge/registry/work-queues';
 import { runAdaptiveKnowledgePipeline } from '../../scripts/adaptive-knowledge/pipeline-run';
 import {
@@ -1781,6 +1782,106 @@ test('pipeline persists study cards to dossier registry when extraction succeeds
   const registry = await loadStudyDossierRegistry(outputRootDir);
   assert.equal(registry.items.length > 0, true);
   assert.equal(registry.items.every((item) => item.status === 'validated-structure'), true);
+});
+
+test('pipeline links study dossiers to scientific questions and persists question state', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-question-registry-'));
+
+  await runAdaptiveKnowledgePipeline({
+    runId: 'run-question-registry',
+    now: new Date('2026-03-22T00:00:00.000Z'),
+    outputRootDir,
+    remoteSynthesisClient: {
+      async extractStudyCards(input) {
+        return input.records.map((record) => ({
+          recordId: record.id,
+          title: record.title,
+          authors: 'Doe et al.',
+          year: 2024,
+          journal: 'Journal of Strength Research',
+          doi: null,
+          studyType: 'rct' as const,
+          population: {
+            description: 'Adult lifters',
+            size: 30,
+            trainingLevel: 'intermediate' as const,
+          },
+          protocol: {
+            duration: '8 semaines',
+            intervention: 'Progression encadree',
+            comparison: 'Charge fixe',
+          },
+          results: {
+            primary: 'Amelioration de la force et de l hypertrophie.',
+            secondary: ['Le volume hebdomadaire plus eleve aide la progression.'],
+          },
+          practicalTakeaways: ['Monter la charge progressivement et ajuster le volume hebdomadaire.'],
+          limitations: ['Petit echantillon.'],
+          safetySignals: ['Pas d evenement grave.'],
+          evidenceLevel: 'moderate' as const,
+          topicKeys: record.tags,
+          extractionSource: input.payloadByRecordId.get(record.id)?.extractionSource ?? 'abstract',
+          langueFr: {
+            titreFr: `FR ${record.title}`,
+            resumeFr: 'Le volume hebdomadaire et la progression autoregulee semblent utiles.',
+            conclusionFr: 'Conclusion francaise.',
+          },
+        }));
+      },
+      async synthesizeThematicPrinciples(input) {
+        return {
+          topicKey: input.topicKey,
+          topicLabel: input.topicLabel,
+          principlesFr: [
+            {
+              id: `${input.topicKey}-1`,
+              title: 'Principe thematique',
+              statement: 'Adapter la progression au contexte du pratiquant.',
+              conditions: ['Tolerance de charge stable'],
+              guardrail: 'SAFE-03' as const,
+              evidenceLevel: 'moderate' as const,
+              sourceCardIds: input.studyCards.map((card) => card.recordId),
+            },
+          ],
+          summaryFr: `Synthese pour ${input.topicLabel}`,
+          gapsFr: ['Davantage de donnees a long terme necessaires.'],
+          studyCount: input.studyCards.length,
+          lastUpdated: '2026-03-22T00:00:00.000Z',
+        };
+      },
+      async synthesizeLot() {
+        throw new Error('not used');
+      },
+      async consolidate() {
+        throw new Error('not used');
+      },
+    },
+    synthesizeImpl: async (records) => {
+      const principles = synthesizeCorpusPrinciples(records);
+      return {
+        principles,
+        validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+          records,
+          principles,
+          modelRun: {
+            provider: 'deterministic',
+            model: 'test-remote-synthesis',
+            promptVersion: 'test-v1',
+          },
+        }),
+      };
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const registry = await loadScientificQuestions(outputRootDir);
+  assert.equal(registry.items.length >= 5, true);
+  assert.equal(registry.items.some((item) => item.linkedStudyIds.length > 0), true);
+  assert.equal(registry.items.some((item) => item.coverageStatus === 'partial' && item.linkedStudyIds.length > 0), true);
 });
 
 test('pipeline enqueues downstream work items instead of losing unfinished work', async () => {

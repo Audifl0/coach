@@ -37,6 +37,8 @@ const DOCUMENT_REGISTRY_STATUS_VALUES = [
   'linked',
 ] as const;
 const STUDY_DOSSIER_REGISTRY_STATUS_VALUES = ['draft', 'validated-structure', 'linked-to-question', 'needs-review'] as const;
+const SCIENTIFIC_QUESTION_COVERAGE_VALUES = ['empty', 'partial', 'developing', 'mature', 'blocked'] as const;
+const SCIENTIFIC_QUESTION_PUBLICATION_STATUS_VALUES = ['not-ready', 'candidate', 'published', 'reopened'] as const;
 const DURABLE_WORK_QUEUE_STATUS_VALUES = ['pending', 'running', 'blocked', 'completed', 'failed'] as const;
 
 export const documentaryRejectionReasonSchema = z
@@ -225,6 +227,57 @@ export const studyDossierRegistryStateSchema = z
     version: z.string().min(1),
     generatedAt: z.string().datetime(),
     items: z.array(studyDossierRegistryRecordSchema),
+  })
+  .strict();
+
+export const scientificQuestionSchema = z
+  .object({
+    questionId: z.string().min(1),
+    labelFr: z.string().min(1),
+    promptFr: z.string().min(1),
+    topicKeys: z.array(z.string().min(1)).min(1),
+    inclusionCriteria: z.array(z.string().min(1)),
+    exclusionCriteria: z.array(z.string().min(1)),
+    linkedStudyIds: z.array(z.string().min(1)),
+    coverageStatus: z.enum(SCIENTIFIC_QUESTION_COVERAGE_VALUES),
+    publicationStatus: z.enum(SCIENTIFIC_QUESTION_PUBLICATION_STATUS_VALUES),
+    updatedAt: z.string().datetime(),
+  })
+  .strict();
+
+export const scientificQuestionStudyLinkSchema = z
+  .object({
+    questionId: z.string().min(1),
+    studyId: z.string().min(1),
+    matchedTopicKeys: z.array(z.string().min(1)),
+    matchedSignals: z.array(z.string().min(1)),
+    linkedAt: z.string().datetime(),
+  })
+  .strict();
+
+export const scientificQuestionCoverageSchema = z
+  .object({
+    questionId: z.string().min(1),
+    linkedStudyCount: z.number().int().nonnegative(),
+    coverageStatus: z.enum(SCIENTIFIC_QUESTION_COVERAGE_VALUES),
+    updatedAt: z.string().datetime(),
+  })
+  .strict();
+
+export const scientificQuestionStatusSchema = z
+  .object({
+    questionId: z.string().min(1),
+    coverageStatus: z.enum(SCIENTIFIC_QUESTION_COVERAGE_VALUES),
+    publicationStatus: z.enum(SCIENTIFIC_QUESTION_PUBLICATION_STATUS_VALUES),
+    updatedAt: z.string().datetime(),
+  })
+  .strict();
+
+export const scientificQuestionRegistryStateSchema = z
+  .object({
+    version: z.string().min(1),
+    generatedAt: z.string().datetime(),
+    items: z.array(scientificQuestionSchema),
   })
   .strict();
 
@@ -587,6 +640,11 @@ export type DocumentRegistryRecord = z.infer<typeof documentRegistryRecordSchema
 export type DocumentRegistryState = z.infer<typeof documentRegistryStateSchema>;
 export type StudyDossierRegistryRecord = z.infer<typeof studyDossierRegistryRecordSchema>;
 export type StudyDossierRegistryState = z.infer<typeof studyDossierRegistryStateSchema>;
+export type ScientificQuestion = z.infer<typeof scientificQuestionSchema>;
+export type ScientificQuestionStudyLink = z.infer<typeof scientificQuestionStudyLinkSchema>;
+export type ScientificQuestionCoverage = z.infer<typeof scientificQuestionCoverageSchema>;
+export type ScientificQuestionStatus = z.infer<typeof scientificQuestionStatusSchema>;
+export type ScientificQuestionRegistryState = z.infer<typeof scientificQuestionRegistryStateSchema>;
 export type DurableWorkQueueItem = z.infer<typeof durableWorkQueueItemSchema>;
 export type DurableWorkQueueState = z.infer<typeof durableWorkQueueStateSchema>;
 export type AdaptiveKnowledgeRankingTelemetry = z.infer<typeof adaptiveKnowledgeRankingTelemetrySchema>;
@@ -649,6 +707,26 @@ export function parseStudyDossierRegistryRecord(input: unknown): StudyDossierReg
 
 export function parseStudyDossierRegistryState(input: unknown): StudyDossierRegistryState {
   return studyDossierRegistryStateSchema.parse(input);
+}
+
+export function parseScientificQuestion(input: unknown): ScientificQuestion {
+  return scientificQuestionSchema.parse(input);
+}
+
+export function parseScientificQuestionStudyLink(input: unknown): ScientificQuestionStudyLink {
+  return scientificQuestionStudyLinkSchema.parse(input);
+}
+
+export function parseScientificQuestionCoverage(input: unknown): ScientificQuestionCoverage {
+  return scientificQuestionCoverageSchema.parse(input);
+}
+
+export function parseScientificQuestionStatus(input: unknown): ScientificQuestionStatus {
+  return scientificQuestionStatusSchema.parse(input);
+}
+
+export function parseScientificQuestionRegistryState(input: unknown): ScientificQuestionRegistryState {
+  return scientificQuestionRegistryStateSchema.parse(input);
 }
 
 export function parseDurableWorkQueueItem(input: unknown): DurableWorkQueueItem {
