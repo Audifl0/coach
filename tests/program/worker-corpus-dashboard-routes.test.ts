@@ -355,6 +355,15 @@ test('server start action can queue a host-bridge launch request without shellin
     assert.equal(persisted.pid, null);
     assert.equal(persisted.mode, 'refresh');
     assert.equal(persisted.message, 'worker start requested from dashboard (refresh)');
+
+    const workerControl = JSON.parse(await readFile(path.join(knowledgeRootDir, 'control.json'), 'utf8')) as {
+      mode: string;
+      reason: string | null;
+      lastCommand: string | null;
+    };
+    assert.equal(workerControl.mode, 'running');
+    assert.equal(workerControl.reason, 'operator requested worker start');
+    assert.equal(workerControl.lastCommand, 'start');
   } finally {
     if (previousMode === undefined) {
       delete process.env.WORKER_CONTROL_BRIDGE_MODE;
@@ -373,6 +382,15 @@ test('server pause action writes paused control state', async () => {
   assert.equal(state.state, 'paused');
   assert.equal(state.pauseRequestedAt, '2026-03-22T19:10:00.000Z');
   assert.equal(state.message, 'pause requested from dashboard');
+
+  const workerControl = JSON.parse(await readFile(path.join(knowledgeRootDir, 'control.json'), 'utf8')) as {
+    mode: string;
+    reason: string | null;
+    lastCommand: string | null;
+  };
+  assert.equal(workerControl.mode, 'paused');
+  assert.equal(workerControl.reason, 'operator requested pause');
+  assert.equal(workerControl.lastCommand, 'pause');
 });
 
 test('control and library routes validate authenticated worker dashboard workflows', async () => {

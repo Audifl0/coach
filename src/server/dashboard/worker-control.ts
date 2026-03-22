@@ -4,6 +4,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { parseAdaptiveKnowledgePipelineConfig } from '../../../scripts/adaptive-knowledge/config';
+import { setWorkerControlMode } from '../../../scripts/adaptive-knowledge/control-state';
 import {
   parseAdaptiveKnowledgeCollectionJob,
   type AdaptiveKnowledgeBootstrapCampaignState,
@@ -295,6 +296,12 @@ export async function startWorkerControl(
 
   const mode = input.mode ?? 'refresh';
   if (resolveWorkerControlBridgeMode() === 'host-file') {
+    await setWorkerControlMode(knowledgeRootDir, {
+      mode: 'running',
+      reason: 'operator requested worker start',
+      lastCommand: 'start',
+      now,
+    });
     const nextState: WorkerControlState = {
       state: 'running',
       pid: null,
@@ -329,6 +336,13 @@ export async function pauseWorkerControl(input: WorkerControlInput = {}): Promis
   const knowledgeRootDir = resolveKnowledgeRootDir(input.knowledgeRootDir);
   const filePath = buildControlStatePath(knowledgeRootDir);
   const current = await readWorkerControlState({ knowledgeRootDir, now });
+
+  await setWorkerControlMode(knowledgeRootDir, {
+    mode: 'paused',
+    reason: 'operator requested pause',
+    lastCommand: 'pause',
+    now,
+  });
 
   const nextState: WorkerControlState = {
     state: 'paused',
