@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import type { ConnectorFetchResult } from '../../scripts/adaptive-knowledge/connectors/shared';
+import { setWorkerControlMode } from '../../scripts/adaptive-knowledge/control-state';
 import { runAdaptiveKnowledgePipeline } from '../../scripts/adaptive-knowledge/pipeline-run';
 import { runRefreshCorpusCommand } from '../../scripts/adaptive-knowledge/refresh-corpus';
 import { buildValidatedSynthesisFromPrinciples, synthesizeCorpusPrinciples } from '../../scripts/adaptive-knowledge/synthesis';
@@ -143,6 +144,31 @@ test('heartbeat updates lease metadata for the active run', async () => {
   assert.equal(Date.parse(heartbeat.leaseExpiresAt) > Date.parse(heartbeat.heartbeatAt), true);
 });
 
+test('worker command returns paused-by-operator when control state is paused', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-worker-'));
+  const activePointerPath = path.join(outputRootDir, 'active.json');
+  await writeFile(activePointerPath, JSON.stringify({ snapshotId: 'existing' }, null, 2) + '\n', 'utf8');
+
+  await setWorkerControlMode(outputRootDir, {
+    mode: 'paused',
+    reason: 'operator pause',
+    lastCommand: 'pause',
+    now: new Date('2026-03-11T10:00:00.000Z'),
+  });
+
+  const result = await runRefreshCorpusCommand(['node', 'refresh-corpus.ts'], {
+    outputRootDir,
+    now: new Date('2026-03-11T10:00:10.000Z'),
+  });
+
+  assert.equal(result.status, 'paused-by-operator');
+  assert.equal(result.exitCode, 3);
+  const state = await readAdaptiveKnowledgeWorkerState(outputRootDir);
+  assert.equal(state, null);
+  const activePointer = JSON.parse(await readFile(activePointerPath, 'utf8')) as { snapshotId: string };
+  assert.equal(activePointer.snapshotId, 'existing');
+});
+
 test('worker command returns blocked-by-lease without mutating active snapshot', async () => {
   const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-worker-'));
   const activePointerPath = path.join(outputRootDir, 'active.json');
@@ -243,6 +269,38 @@ test('check mode completes without promoting a new active snapshot', async () =>
   assert.equal(activePointer.snapshotId, 'baseline');
 });
 
+
+test('worker command still runs normally when control state is running', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-worker-running-'));
+
+  await setWorkerControlMode(outputRootDir, {
+    mode: 'running',
+    reason: 'resume worker',
+    lastCommand: 'start',
+    now: new Date('2026-03-11T10:59:00.000Z'),
+  });
+
+  const result = await runRefreshCorpusCommand(['node', 'refresh-corpus.ts'], {
+    outputRootDir,
+    now: new Date('2026-03-11T11:00:00.000Z'),
+    runPipeline: async () => ({
+      runId: 'run-running',
+      candidateDir: path.join(outputRootDir, 'candidates', 'run-running'),
+      candidatePath: path.join(outputRootDir, 'candidates', 'run-running'),
+      published: true,
+      reportPath: path.join(outputRootDir, 'reports', 'run-running.json'),
+      summary: {
+        snapshotId: 'snapshot-running',
+        evidenceRecordCount: 0,
+        principleCount: 0,
+        sourceDomains: [],
+      },
+    }),
+  });
+
+  assert.equal(result.status, 'completed');
+  assert.equal(result.exitCode, 0);
+});
 
 test('worker command preserves registries across runs', async () => {
   const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-worker-persistent-'));

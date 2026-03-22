@@ -45,6 +45,17 @@ const QUESTION_SYNTHESIS_PUBLICATION_READINESS_VALUES = ['insufficient', 'candid
 const DOCTRINE_CONFIDENCE_LEVEL_VALUES = ['low', 'moderate', 'high'] as const;
 const DOCTRINE_REVISION_STATUS_VALUES = ['active', 'reopened', 'superseded'] as const;
 const DOCTRINE_CHANGE_TYPE_VALUES = ['published', 'reopened', 'superseded', 'reaffirmed'] as const;
+const WORKER_CONTROL_MODE_VALUES = ['running', 'paused'] as const;
+const WORKER_CONTROL_COMMAND_VALUES = ['start', 'pause'] as const;
+
+export const adaptiveKnowledgeWorkerControlStateSchema = z
+  .object({
+    mode: z.enum(WORKER_CONTROL_MODE_VALUES),
+    updatedAt: z.string().datetime(),
+    reason: z.string().min(1).nullable(),
+    lastCommand: z.enum(WORKER_CONTROL_COMMAND_VALUES).nullable(),
+  })
+  .strict();
 
 export const documentaryRejectionReasonSchema = z
   .object({
@@ -693,6 +704,7 @@ export const corpusRunReportSchema = z
     }
   });
 
+export type AdaptiveKnowledgeWorkerControlState = z.infer<typeof adaptiveKnowledgeWorkerControlStateSchema>;
 export type NormalizedEvidenceRecord = z.infer<typeof normalizedEvidenceRecordSchema>;
 export type AdaptiveKnowledgeDiscoveryQuery = z.infer<typeof adaptiveKnowledgeDiscoveryQuerySchema>;
 export type AdaptiveKnowledgeCoverageGap = z.infer<typeof adaptiveKnowledgeCoverageGapSchema>;
@@ -735,6 +747,10 @@ export type ValidatedSynthesis = z.infer<typeof validatedSynthesisSchema>;
 export type CorpusRunReport = z.infer<typeof corpusRunReportSchema>;
 export type CorpusSnapshotManifest = z.infer<typeof corpusSnapshotManifestSchema>;
 export type DocumentaryRecordStagingArtifact = z.infer<typeof documentaryRecordStagingArtifactSchema>;
+
+export function parseAdaptiveKnowledgeWorkerControlState(input: unknown): AdaptiveKnowledgeWorkerControlState {
+  return adaptiveKnowledgeWorkerControlStateSchema.parse(input);
+}
 
 export function parseNormalizedEvidenceRecord(input: unknown): NormalizedEvidenceRecord {
   return normalizedEvidenceRecordSchema.parse(input);

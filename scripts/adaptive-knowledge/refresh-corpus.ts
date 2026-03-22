@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import { runAdaptiveKnowledgePipeline, type AdaptivePipelineRunResult, type RunAdaptiveKnowledgePipelineInput } from './pipeline-run';
+import { loadWorkerControlState } from './control-state';
 import {
   acquireAdaptiveKnowledgeLease,
   heartbeatAdaptiveKnowledgeLease,
@@ -8,7 +9,7 @@ import {
 } from './worker-state';
 
 type ExitCode = 0 | 1 | 3;
-type WorkerCommandStatus = 'completed' | 'failed' | 'blocked-by-lease';
+type WorkerCommandStatus = 'completed' | 'failed' | 'blocked-by-lease' | 'paused-by-operator';
 
 type RunRefreshCorpusCommandDeps = {
   outputRootDir?: string;
@@ -42,6 +43,17 @@ export async function runRefreshCorpusCommand(
   const runPipeline = deps.runPipeline ?? runAdaptiveKnowledgePipeline;
   const log = deps.log ?? console;
   const runId = now.toISOString().replace(/[:.]/g, '-');
+  const controlState = await loadWorkerControlState(outputRootDir);
+
+  if (controlState.mode === 'paused') {
+    log.warn(
+      `[WARN] adaptive knowledge worker start blocked by operator pause: updatedAt=${controlState.updatedAt} reason=${controlState.reason ?? 'none'}`,
+    );
+    return {
+      status: 'paused-by-operator',
+      exitCode: 3,
+    };
+  }
 
   const lease = await acquireAdaptiveKnowledgeLease({
     outputRootDir,
