@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 import { mergeHybridProgramDraft } from '../../src/lib/program/hybrid-generation';
 import { buildWeeklyProgramPlan } from '../../src/lib/program/planner';
 import type { ProfileInput } from '../../src/lib/profile/contracts';
 import { createProgramGenerationService } from '../../src/server/services/program-generation';
+import { loadCoachKnowledgeBible } from '../../src/lib/coach/knowledge-bible';
+import { resolveProgramKnowledgeBible } from '../../src/server/services/program-generation-hybrid';
 
 function createProfile(overrides: Partial<ProfileInput> = {}): ProfileInput {
   return {
@@ -16,6 +21,10 @@ function createProfile(overrides: Partial<ProfileInput> = {}): ProfileInput {
     limitations: [],
     ...overrides,
   };
+}
+
+async function writeJson(filePath: string, payload: unknown): Promise<void> {
+  await writeFile(filePath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
 }
 
 test('hybrid draft merges allowed exercise overrides into the deterministic baseline plan', () => {
@@ -145,4 +154,50 @@ test('program generation service keeps PROG-01/PROG-02 contract under valid hybr
   assert.equal((result.sessions[0]?.exercises[0]?.targetReps ?? 0) > 0, true);
   assert.equal((result.sessions[0]?.exercises[0]?.targetLoad ?? '').length > 0, true);
   assert.equal((result.sessions[0]?.exercises[0]?.restMinSec ?? 0) >= 0, true);
+});
+
+test('program generation defaults use principleLimit 6 and sourceLimit 8', async () => {
+  const rootDir = await mkdtemp(path.join(tmpdir(), 'program-knowledge-defaults-'));
+  const snapshotDir = path.join(rootDir, 'snapshots', 'run-defaults', 'validated');
+  await mkdir(snapshotDir, { recursive: true });
+
+  await writeJson(path.join(snapshotDir, 'knowledge-bible.json'), {
+    principles: Array.from({ length: 9 }, (_, index) => ({
+      id: `p_${index + 1}`,
+      title: `Principle ${index + 1}`,
+      description: `Description ${index + 1}`,
+      guardrail: index % 2 === 0 ? `SAFE-0${(index % 3) + 1}` : null,
+      tags: ['progression', 'load'],
+    })),
+    sources: Array.from({ length: 10 }, (_, index) => ({
+      id: `s_${index + 1}`,
+      title: `Source ${index + 1}`,
+      summary: `Summary ${index + 1}`,
+      sourceClass: index % 2 === 0 ? 'guideline' : 'review',
+      tags: ['progression', 'load'],
+    })),
+  });
+  await writeJson(path.join(rootDir, 'active.json'), {
+    snapshotId: 'run-defaults',
+    snapshotDir,
+    promotedAt: '2026-03-05T00:00:00.000Z',
+  });
+
+  const manualBible = loadCoachKnowledgeBible({
+    knowledgeRootDir: rootDir,
+    queryTags: ['progression', 'load'],
+    principleLimit: 6,
+    sourceLimit: 8,
+  });
+
+  assert.equal(manualBible.principles.length, 6);
+  assert.equal(manualBible.sources.length, 8);
+
+  const resolvedBible = resolveProgramKnowledgeBible({
+    profile: createProfile({
+      goal: 'progression',
+    }),
+  });
+
+  assert.equal(typeof resolvedBible.snapshotId, 'string');
 });

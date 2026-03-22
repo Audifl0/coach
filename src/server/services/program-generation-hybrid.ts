@@ -262,8 +262,8 @@ export function resolveProgramKnowledgeBible(input: {
 
   return loadCoachKnowledgeBible({
     queryTags,
-    principleLimit: 4,
-    sourceLimit: 4,
+    principleLimit: 6,
+    sourceLimit: 8,
   });
 }
 
