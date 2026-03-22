@@ -115,96 +115,97 @@ function buildClientProps() {
         ],
       },
     },
-    initialStatus: {
+    initialSupervision: {
       generatedAt: '2026-03-11T10:00:00.000Z',
-      control: {
-        state: 'paused' as const,
-        pid: null,
-        mode: 'bootstrap' as const,
-        startedAt: '2026-03-11T08:00:00.000Z',
-        stoppedAt: '2026-03-11T10:10:00.000Z',
-        pauseRequestedAt: '2026-03-11T10:10:00.000Z',
-        message: 'pause requested from dashboard',
-        campaign: {
-          campaignId: 'bootstrap-2026-03-11',
-          status: 'paused' as const,
-          startedAt: '2026-03-11T08:00:00.000Z',
-          updatedAt: '2026-03-11T10:10:00.000Z',
-          lastRunId: 'run-bootstrap-1',
-          activeJobId: 'pubmed:progression-load',
-          backlog: {
+      workflow: {
+        queueDepth: 10,
+        blockedItems: 1,
+        byStatus: {
+          pending: 4,
+          running: 0,
+          blocked: 1,
+          completed: 3,
+          failed: 0,
+        },
+        queues: [
+          {
+            queueName: 'bootstrap',
+            total: 10,
             pending: 4,
             running: 0,
             blocked: 1,
             completed: 3,
-            exhausted: 2,
+            failed: 0,
           },
-          progress: {
-            discoveredQueryFamilies: 12,
-            canonicalRecordCount: 48,
-            extractionBacklogCount: 9,
-            publicationCandidateCount: 6,
-          },
-          cursors: {
-            resumableJobCount: 5,
-            activeCursorCount: 2,
-            sampleJobIds: ['pubmed:progression-load', 'crossref:progression-split'],
-          },
-          budgets: {
-            maxJobsPerRun: 12,
-            maxPagesPerJob: 5,
-            maxCanonicalRecordsPerRun: 250,
-            maxRuntimeMs: 900000,
-          },
+        ],
+      },
+      documents: {
+        total: 4,
+        byState: {
+          discovered: 1,
+          'metadata-ready': 0,
+          'abstract-ready': 0,
+          'full-text-ready': 0,
+          extractible: 1,
+          extracted: 0,
+          linked: 2,
         },
       },
-      live: {
-        state: 'completed' as const,
-        severity: 'healthy' as const,
-        runId: 'run-bootstrap-1',
-        mode: 'bootstrap' as const,
-        startedAt: '2026-03-11T09:59:00.000Z',
-        heartbeatAt: '2026-03-11T10:00:00.000Z',
-        leaseExpiresAt: '2026-03-11T10:05:00.000Z',
-        message: 'bootstrap completed',
-        isHeartbeatStale: false,
+      questions: {
+        total: 3,
+        contradictionCount: 1,
+        blockingContradictionCount: 1,
+        byCoverage: {
+          empty: 0,
+          partial: 0,
+          developing: 1,
+          mature: 1,
+          blocked: 1,
+        },
+        byPublication: {
+          'not-ready': 0,
+          candidate: 1,
+          published: 1,
+          reopened: 1,
+        },
+        notableQuestions: [
+          {
+            questionId: 'q-rest',
+            label: 'Temps de repos',
+            coverageStatus: 'developing' as const,
+            publicationStatus: 'candidate' as const,
+            publicationReadiness: 'blocked' as const,
+            contradictionCount: 1,
+            blockingContradictionCount: 1,
+            linkedStudyCount: 2,
+            updatedAt: '2026-03-11T10:00:00.000Z',
+          },
+        ],
       },
-      publication: {
-        severity: 'healthy' as const,
-        activeSnapshotId: 'run-ready',
-        activeSnapshotDir: '/tmp/run-ready',
-        promotedAt: '2026-03-11T10:02:00.000Z',
-        rollbackSnapshotId: 'run-previous',
-        rollbackSnapshotDir: '/tmp/run-previous',
-        rollbackAvailable: true,
-        snapshotAgeHours: 1.5,
-        evidenceRecordCount: 5,
-        principleCount: 2,
-        sourceDomains: ['doi.org', 'pubmed.ncbi.nlm.nih.gov'],
-        qualityGateReasons: [],
-        lastRunAgeHours: 0.4,
+      doctrine: {
+        activePrinciples: 1,
+        reopenedPrinciples: 1,
+        supersededPrinciples: 0,
+        recentRevisions: [
+          {
+            revisionId: 'rev-1',
+            principleId: 'p1',
+            changedAt: '2026-03-11T10:00:00.000Z',
+            changeType: 'published' as const,
+            reason: 'Evidence threshold met.',
+          },
+        ],
       },
+      recentResearchJournal: [
+        {
+          kind: 'doctrine',
+          id: 'rev-1',
+          title: 'p1',
+          at: '2026-03-11T10:00:00.000Z',
+          detail: 'published · Evidence threshold met.',
+        },
+      ],
     },
-    initialRuns: [
-      {
-        runId: 'run-bootstrap-1',
-        snapshotId: 'run-bootstrap-1',
-        mode: 'bootstrap' as const,
-        startedAt: '2026-03-11T09:59:00.000Z',
-        completedAt: '2026-03-11T10:01:00.000Z',
-        artifactState: 'candidate' as const,
-        outcome: 'running' as const,
-        severity: 'healthy' as const,
-        finalStage: 'publish' as const,
-        finalMessage: 'progressing:library_growth_detected,backfill_incomplete',
-        evidenceRecordCount: 5,
-        principleCount: 2,
-        sourceDomains: ['doi.org'],
-        qualityGateReasons: [],
-        isActiveSnapshot: false,
-        isRollbackSnapshot: false,
-      },
-    ],
     initialRunDetail: {
       runId: 'run-bootstrap-1',
       snapshotId: 'run-bootstrap-1',
@@ -263,29 +264,6 @@ function buildClientProps() {
       },
       contradictionCount: 0,
       coverageRecordCount: 5,
-    },
-    initialLibrary: {
-      generatedAt: '2026-03-11T10:00:00.000Z',
-      entries: [
-        {
-          snapshotId: 'run-ready',
-          runId: 'run-ready',
-          mode: 'refresh' as const,
-          artifactState: 'validated' as const,
-          outcome: 'succeeded' as const,
-          severity: 'healthy' as const,
-          generatedAt: '2026-03-11T10:01:00.000Z',
-          promotedAt: '2026-03-11T10:02:00.000Z',
-          evidenceRecordCount: 5,
-          principleCount: 2,
-          contradictionCount: 0,
-          sourceDomains: ['doi.org'],
-          coveredTags: ['progression'],
-          qualityGateReasons: [],
-          isActiveSnapshot: true,
-          isRollbackSnapshot: false,
-        },
-      ],
     },
     initialLibraryDetail: {
       entry: {
@@ -360,21 +338,20 @@ function buildClientProps() {
   };
 }
 
-test('worker corpus dashboard client renders bootstrap campaign controls and diagnostics', async () => {
+test('worker corpus dashboard client renders scientific supervision sections', async () => {
   const { WorkerCorpusDashboardClient } = await import(
     '../../src/app/(private)/dashboard/worker-corpus/_components/worker-corpus-dashboard-client'
   );
   const html = renderToStaticMarkup(<WorkerCorpusDashboardClient {...buildClientProps()} />);
 
-  assert.match(html, /Bootstrap longue duree/);
-  assert.match(html, /Mode de lancement/);
-  assert.match(html, /Bootstrap/);
-  assert.match(html, /Reprendre/);
-  assert.match(html, /Reset scope/);
-  assert.match(html, /Campaign progress/);
-  assert.match(html, /cursor jobs 2/);
-  assert.match(html, /budget canonical 250/);
-  assert.match(html, /off-topic 4/);
+  assert.match(html, /Workflow status/i);
+  assert.match(html, /Document library status/i);
+  assert.match(html, /Scientific questions/i);
+  assert.match(html, /Published doctrine/i);
+  assert.match(html, /Recent research activity/i);
+  assert.match(html, /queue depth/i);
+  assert.match(html, /question maturity/i);
+  assert.match(html, /recent revisions/i);
 });
 
 test('run detail panel stays readable for progressing bootstrap runs', () => {

@@ -2,66 +2,74 @@ import { redirect } from 'next/navigation';
 
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
 import {
-  type WorkerCorpusLibraryResponse,
+  type WorkerCorpusLibraryDetail,
   type WorkerCorpusOverviewSection,
-  type WorkerCorpusStatusResponse,
+  type WorkerCorpusRunDetail,
+  type WorkerCorpusSnapshotDetail,
+  type WorkerCorpusSupervisionResponse,
 } from '@/lib/program/contracts';
 import {
   getWorkerCorpusLibraryDetail,
   getWorkerCorpusRunDetail,
   getWorkerCorpusSnapshotDetail,
-  listWorkerCorpusLibrary,
-  loadWorkerCorpusStatus,
 } from '@/server/dashboard/worker-dashboard';
+import { loadWorkerCorpusSupervision } from '@/server/services/worker-corpus-supervision';
 import { loadWorkerCorpusOverviewSection } from './loaders/overview';
 import { WorkerCorpusDashboardClient } from './_components/worker-corpus-dashboard-client';
 
-function buildFallbackStatus(now: Date): WorkerCorpusStatusResponse {
+function buildFallbackSupervision(now: Date): WorkerCorpusSupervisionResponse {
   return {
     generatedAt: now.toISOString(),
-    control: {
-      state: 'idle',
-      pid: null,
-      mode: null,
-      startedAt: null,
-      stoppedAt: null,
-      pauseRequestedAt: null,
-      message: null,
-      campaign: null,
+    workflow: {
+      queueDepth: 0,
+      blockedItems: 0,
+      byStatus: {
+        pending: 0,
+        running: 0,
+        blocked: 0,
+        completed: 0,
+        failed: 0,
+      },
+      queues: [],
     },
-    live: {
-      state: 'idle',
-      severity: 'degraded',
-      runId: null,
-      mode: null,
-      startedAt: null,
-      heartbeatAt: null,
-      leaseExpiresAt: null,
-      message: null,
-      isHeartbeatStale: false,
+    documents: {
+      total: 0,
+      byState: {
+        discovered: 0,
+        'metadata-ready': 0,
+        'abstract-ready': 0,
+        'full-text-ready': 0,
+        extractible: 0,
+        extracted: 0,
+        linked: 0,
+      },
     },
-    publication: {
-      severity: 'degraded',
-      activeSnapshotId: null,
-      activeSnapshotDir: null,
-      promotedAt: null,
-      rollbackSnapshotId: null,
-      rollbackSnapshotDir: null,
-      rollbackAvailable: false,
-      snapshotAgeHours: null,
-      evidenceRecordCount: null,
-      principleCount: null,
-      sourceDomains: [],
-      qualityGateReasons: [],
-      lastRunAgeHours: null,
+    questions: {
+      total: 0,
+      contradictionCount: 0,
+      blockingContradictionCount: 0,
+      byCoverage: {
+        empty: 0,
+        partial: 0,
+        developing: 0,
+        mature: 0,
+        blocked: 0,
+      },
+      byPublication: {
+        'not-ready': 0,
+        candidate: 0,
+        published: 0,
+        reopened: 0,
+      },
+      notableQuestions: [],
     },
-  };
-}
-
-function buildFallbackLibrary(now: Date): WorkerCorpusLibraryResponse {
-  return {
-    generatedAt: now.toISOString(),
-    entries: [],
+    doctrine: {
+      activePrinciples: 0,
+      reopenedPrinciples: 0,
+      supersededPrinciples: 0,
+      recentRevisions: [],
+    },
+    recentResearchJournal: [],
   };
 }
 
@@ -74,13 +82,10 @@ export default async function WorkerCorpusDashboardPage(_props: PageProps<'/dash
 
   const now = new Date();
   const overviewSection = await loadWorkerCorpusOverviewSection({});
-  const statusPayload = (await loadWorkerCorpusStatus()) ?? buildFallbackStatus(now);
-  const library = await listWorkerCorpusLibrary().catch(() => buildFallbackLibrary(now));
+  const supervision = (await loadWorkerCorpusSupervision().catch(() => null)) ?? buildFallbackSupervision(now);
 
   const leadRunId = overviewSection.status === 'ready' ? overviewSection.data.recentRuns[0]?.runId ?? null : null;
-  const focusSnapshotId =
-    library.entries[0]?.snapshotId ??
-    (overviewSection.status === 'ready' ? overviewSection.data.publication.activeSnapshotId ?? null : null);
+  const focusSnapshotId = overviewSection.status === 'ready' ? overviewSection.data.publication.activeSnapshotId ?? null : null;
 
   const [runDetail, snapshotDetail, libraryDetail] = await Promise.all([
     leadRunId ? getWorkerCorpusRunDetail(leadRunId).catch(() => null) : Promise.resolve(null),
@@ -96,11 +101,9 @@ export default async function WorkerCorpusDashboardPage(_props: PageProps<'/dash
   return (
     <WorkerCorpusDashboardClient
       initialSection={safeSection}
-      initialStatus={statusPayload}
-      initialRuns={safeSection.status === 'ready' ? safeSection.data.recentRuns : []}
+      initialSupervision={supervision}
       initialRunDetail={runDetail}
       initialSnapshotDetail={snapshotDetail}
-      initialLibrary={library}
       initialLibraryDetail={libraryDetail}
     />
   );

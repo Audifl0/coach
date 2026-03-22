@@ -432,6 +432,106 @@ export const workerCorpusLibraryResponseSchema = z.object({
   entries: z.array(workerCorpusLibraryEntrySchema).default([]),
 });
 
+export const workerCorpusSupervisionWorkflowSchema = z.object({
+  queueDepth: z.number().int().nonnegative(),
+  blockedItems: z.number().int().nonnegative(),
+  byStatus: z.object({
+    pending: z.number().int().nonnegative(),
+    running: z.number().int().nonnegative(),
+    blocked: z.number().int().nonnegative(),
+    completed: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+  }),
+  queues: z.array(
+    z.object({
+      queueName: z.string().trim().min(1),
+      total: z.number().int().nonnegative(),
+      blocked: z.number().int().nonnegative(),
+      pending: z.number().int().nonnegative(),
+      running: z.number().int().nonnegative(),
+      completed: z.number().int().nonnegative(),
+      failed: z.number().int().nonnegative(),
+    }),
+  ).default([]),
+});
+
+export const workerCorpusSupervisionDocumentsSchema = z.object({
+  total: z.number().int().nonnegative(),
+  byState: z.object({
+    discovered: z.number().int().nonnegative(),
+    'metadata-ready': z.number().int().nonnegative(),
+    'abstract-ready': z.number().int().nonnegative(),
+    'full-text-ready': z.number().int().nonnegative(),
+    extractible: z.number().int().nonnegative(),
+    extracted: z.number().int().nonnegative(),
+    linked: z.number().int().nonnegative(),
+  }),
+});
+
+export const workerCorpusSupervisionQuestionSummarySchema = z.object({
+  questionId: z.string().trim().min(1),
+  label: z.string().trim().min(1),
+  coverageStatus: z.enum(['empty', 'partial', 'developing', 'mature', 'blocked']),
+  publicationStatus: z.enum(['not-ready', 'candidate', 'published', 'reopened']),
+  publicationReadiness: z.enum(['insufficient', 'candidate', 'ready', 'blocked']).nullable(),
+  contradictionCount: z.number().int().nonnegative(),
+  blockingContradictionCount: z.number().int().nonnegative(),
+  linkedStudyCount: z.number().int().nonnegative(),
+  updatedAt: z.iso.datetime().nullable(),
+});
+
+export const workerCorpusSupervisionQuestionsSchema = z.object({
+  total: z.number().int().nonnegative(),
+  contradictionCount: z.number().int().nonnegative(),
+  blockingContradictionCount: z.number().int().nonnegative(),
+  byCoverage: z.object({
+    empty: z.number().int().nonnegative(),
+    partial: z.number().int().nonnegative(),
+    developing: z.number().int().nonnegative(),
+    mature: z.number().int().nonnegative(),
+    blocked: z.number().int().nonnegative(),
+  }),
+  byPublication: z.object({
+    'not-ready': z.number().int().nonnegative(),
+    candidate: z.number().int().nonnegative(),
+    published: z.number().int().nonnegative(),
+    reopened: z.number().int().nonnegative(),
+  }),
+  notableQuestions: z.array(workerCorpusSupervisionQuestionSummarySchema).default([]),
+});
+
+export const workerCorpusSupervisionDoctrineRevisionSchema = z.object({
+  revisionId: z.string().trim().min(1),
+  principleId: z.string().trim().min(1),
+  changedAt: z.iso.datetime(),
+  changeType: z.enum(['published', 'reopened', 'superseded', 'reaffirmed']),
+  reason: z.string().trim().min(1),
+});
+
+export const workerCorpusSupervisionDoctrineSchema = z.object({
+  activePrinciples: z.number().int().nonnegative(),
+  reopenedPrinciples: z.number().int().nonnegative(),
+  supersededPrinciples: z.number().int().nonnegative(),
+  recentRevisions: z.array(workerCorpusSupervisionDoctrineRevisionSchema).default([]),
+});
+
+export const workerCorpusResearchJournalEntrySchema = z.object({
+  kind: z.string().trim().min(1),
+  id: z.string().trim().min(1),
+  title: z.string().trim().min(1),
+  at: z.iso.datetime(),
+  detail: z.string().trim().min(1),
+});
+
+export const workerCorpusSupervisionResponseSchema = z.object({
+  generatedAt: z.iso.datetime(),
+  workflow: workerCorpusSupervisionWorkflowSchema,
+  documents: workerCorpusSupervisionDocumentsSchema,
+  questions: workerCorpusSupervisionQuestionsSchema,
+  doctrine: workerCorpusSupervisionDoctrineSchema,
+  recentResearchJournal: z.array(workerCorpusResearchJournalEntrySchema).default([]),
+});
+
 export const workerCorpusCorpusPrincipleSchema = z.object({
   id: z.string().trim().min(1),
   title: z.string().trim().min(1),
@@ -653,6 +753,7 @@ export type WorkerCorpusStatusResponse = z.infer<typeof workerCorpusStatusRespon
 export type WorkerCorpusRunsResponse = z.infer<typeof workerCorpusRunsResponseSchema>;
 export type WorkerCorpusLibraryEntry = z.infer<typeof workerCorpusLibraryEntrySchema>;
 export type WorkerCorpusLibraryResponse = z.infer<typeof workerCorpusLibraryResponseSchema>;
+export type WorkerCorpusSupervisionResponse = z.infer<typeof workerCorpusSupervisionResponseSchema>;
 export type WorkerCorpusLibraryDetail = z.infer<typeof workerCorpusLibraryDetailSchema>;
 export type WorkerCorpusRunDetailSection = z.infer<typeof workerCorpusRunDetailSectionSchema>;
 export type WorkerCorpusSnapshotDetailSection = z.infer<typeof workerCorpusSnapshotDetailSectionSchema>;
@@ -747,6 +848,10 @@ export function parseWorkerCorpusControlResponse(input: unknown): WorkerCorpusCo
 
 export function parseWorkerCorpusLibraryResponse(input: unknown): WorkerCorpusLibraryResponse {
   return workerCorpusLibraryResponseSchema.parse(input);
+}
+
+export function parseWorkerCorpusSupervisionResponse(input: unknown): WorkerCorpusSupervisionResponse {
+  return workerCorpusSupervisionResponseSchema.parse(input);
 }
 
 export function parseWorkerCorpusLibraryDetail(input: unknown): WorkerCorpusLibraryDetail {

@@ -8,11 +8,16 @@ import { createWorkerCorpusRunDetailGetHandler } from '../../src/app/api/worker-
 import { createWorkerCorpusRunsGetHandler } from '../../src/app/api/worker-corpus/runs/route-handlers';
 import { createWorkerCorpusSnapshotDetailGetHandler } from '../../src/app/api/worker-corpus/snapshots/[snapshotId]/route-handlers';
 import { createWorkerCorpusStatusGetHandler } from '../../src/app/api/worker-corpus/status/route-handlers';
+import { createWorkerCorpusSupervisionGetHandler } from '../../src/app/api/worker-corpus/supervision/route-handlers';
 
 test('worker corpus routes return 401 when no authenticated session is present', async () => {
   const getStatus = createWorkerCorpusStatusGetHandler({
     resolveSession: async () => null,
     loadStatus: async () => ({}),
+  });
+  const getSupervision = createWorkerCorpusSupervisionGetHandler({
+    resolveSession: async () => null,
+    loadSupervision: async () => ({}),
   });
   const getRuns = createWorkerCorpusRunsGetHandler({
     resolveSession: async () => null,
@@ -28,6 +33,7 @@ test('worker corpus routes return 401 when no authenticated session is present',
   });
 
   assert.equal((await getStatus()).status, 401);
+  assert.equal((await getSupervision()).status, 401);
   assert.equal((await getRuns(new Request('http://localhost/api/worker-corpus/runs'))).status, 401);
   assert.equal(
     (
@@ -233,7 +239,7 @@ test('control and library routes validate authenticated worker dashboard workflo
   );
 });
 
-test('status and runs routes return parse-validated payloads for authenticated users', async () => {
+test('status, supervision and runs routes return parse-validated payloads for authenticated users', async () => {
   const getStatus = createWorkerCorpusStatusGetHandler({
     resolveSession: async () => ({ userId: 'user_1' }),
     loadStatus: async () => ({
@@ -244,41 +250,41 @@ test('status and runs routes return parse-validated payloads for authenticated u
         mode: null,
         startedAt: null,
         stoppedAt: null,
-      pauseRequestedAt: null,
-      message: null,
-      campaign: {
-        campaignId: 'bootstrap-1',
-        status: 'running',
-        startedAt: '2026-03-11T08:00:00.000Z',
-        updatedAt: '2026-03-11T10:00:00.000Z',
-        lastRunId: 'run-live',
-        activeJobId: 'pubmed:progression-load',
-        backlog: {
-          pending: 4,
-          running: 1,
-          blocked: 1,
-          completed: 3,
-          exhausted: 2,
-        },
-        progress: {
-          discoveredQueryFamilies: 12,
-          canonicalRecordCount: 48,
-          extractionBacklogCount: 9,
-          publicationCandidateCount: 6,
-        },
-        cursors: {
-          resumableJobCount: 5,
-          activeCursorCount: 3,
-          sampleJobIds: ['pubmed:progression-load'],
-        },
-        budgets: {
-          maxJobsPerRun: 12,
-          maxPagesPerJob: 5,
-          maxCanonicalRecordsPerRun: 250,
-          maxRuntimeMs: 900000,
+        pauseRequestedAt: null,
+        message: null,
+        campaign: {
+          campaignId: 'bootstrap-1',
+          status: 'running',
+          startedAt: '2026-03-11T08:00:00.000Z',
+          updatedAt: '2026-03-11T10:00:00.000Z',
+          lastRunId: 'run-live',
+          activeJobId: 'pubmed:progression-load',
+          backlog: {
+            pending: 4,
+            running: 1,
+            blocked: 1,
+            completed: 3,
+            exhausted: 2,
+          },
+          progress: {
+            discoveredQueryFamilies: 12,
+            canonicalRecordCount: 48,
+            extractionBacklogCount: 9,
+            publicationCandidateCount: 6,
+          },
+          cursors: {
+            resumableJobCount: 5,
+            activeCursorCount: 3,
+            sampleJobIds: ['pubmed:progression-load'],
+          },
+          budgets: {
+            maxJobsPerRun: 12,
+            maxPagesPerJob: 5,
+            maxCanonicalRecordsPerRun: 250,
+            maxRuntimeMs: 900000,
+          },
         },
       },
-    },
       live: {
         state: 'heartbeat',
         severity: 'healthy',
@@ -305,6 +311,100 @@ test('status and runs routes return parse-validated payloads for authenticated u
         qualityGateReasons: [],
         lastRunAgeHours: 0.1,
       },
+    }),
+  });
+  const getSupervision = createWorkerCorpusSupervisionGetHandler({
+    resolveSession: async () => ({ userId: 'user_1' }),
+    loadSupervision: async () => ({
+      generatedAt: '2026-03-11T10:00:00.000Z',
+      workflow: {
+        queueDepth: 4,
+        blockedItems: 1,
+        byStatus: {
+          pending: 1,
+          running: 1,
+          blocked: 1,
+          completed: 1,
+          failed: 0,
+        },
+        queues: [
+          {
+            queueName: 'scientific-questions',
+            total: 4,
+            pending: 1,
+            running: 1,
+            blocked: 1,
+            completed: 1,
+            failed: 0,
+          },
+        ],
+      },
+      documents: {
+        total: 3,
+        byState: {
+          discovered: 1,
+          'metadata-ready': 0,
+          'abstract-ready': 0,
+          'full-text-ready': 0,
+          extractible: 1,
+          extracted: 0,
+          linked: 1,
+        },
+      },
+      questions: {
+        total: 2,
+        contradictionCount: 1,
+        blockingContradictionCount: 1,
+        byCoverage: {
+          empty: 0,
+          partial: 0,
+          developing: 1,
+          mature: 1,
+          blocked: 0,
+        },
+        byPublication: {
+          'not-ready': 0,
+          candidate: 1,
+          published: 1,
+          reopened: 0,
+        },
+        notableQuestions: [
+          {
+            questionId: 'q-rest',
+            label: 'Temps de repos',
+            coverageStatus: 'developing',
+            publicationStatus: 'candidate',
+            publicationReadiness: 'blocked',
+            contradictionCount: 1,
+            blockingContradictionCount: 1,
+            linkedStudyCount: 2,
+            updatedAt: '2026-03-11T10:00:00.000Z',
+          },
+        ],
+      },
+      doctrine: {
+        activePrinciples: 1,
+        reopenedPrinciples: 0,
+        supersededPrinciples: 0,
+        recentRevisions: [
+          {
+            revisionId: 'rev-1',
+            principleId: 'p-1',
+            changedAt: '2026-03-11T10:00:00.000Z',
+            changeType: 'published',
+            reason: 'Evidence threshold met.',
+          },
+        ],
+      },
+      recentResearchJournal: [
+        {
+          kind: 'doctrine',
+          id: 'rev-1',
+          title: 'p-1',
+          at: '2026-03-11T10:00:00.000Z',
+          detail: 'published · Evidence threshold met.',
+        },
+      ],
     }),
   });
   const getRuns = createWorkerCorpusRunsGetHandler({
@@ -335,12 +435,16 @@ test('status and runs routes return parse-validated payloads for authenticated u
   });
 
   const statusResponse = await getStatus();
+  const supervisionResponse = await getSupervision();
   const runsResponse = await getRuns(new Request('http://localhost/api/worker-corpus/runs?limit=1'));
   assert.equal(statusResponse.status, 200);
+  assert.equal(supervisionResponse.status, 200);
   assert.equal(runsResponse.status, 200);
   assert.equal((await statusResponse.clone().json()).control.state, 'idle');
   assert.equal((await statusResponse.clone().json()).control.campaign.cursors.activeCursorCount, 3);
   assert.equal((await statusResponse.json()).live.runId, 'run-live');
+  assert.equal((await supervisionResponse.clone().json()).workflow.queueDepth, 4);
+  assert.equal((await supervisionResponse.json()).questions.notableQuestions.length, 1);
   assert.equal((await runsResponse.json()).runs.length, 1);
 });
 
