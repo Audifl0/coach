@@ -126,12 +126,36 @@ export function resolveConnectorConfig(input: ConnectorFetchInput): AdaptiveKnow
   });
 }
 
+function deriveContentTags(title: string, summary: string): string[] {
+  const text = `${title} ${summary}`.toLowerCase();
+  const tags: string[] = [];
+  const checks: [string, string[]][] = [
+    ['progression', ['progression', 'overload', 'progressive']],
+    ['hypertrophy', ['hypertrophy', 'muscle growth', 'muscle mass']],
+    ['volume', ['volume', 'sets', 'dose-response', 'dose response']],
+    ['fatigue', ['fatigue', 'overreaching', 'recovery']],
+    ['readiness', ['readiness', 'deload', 'autoregulation']],
+    ['strength', ['strength', '1rm', 'maximal strength', 'force production']],
+    ['frequency', ['frequency', 'training frequency']],
+    ['rpe', ['rpe', 'rir', 'perceived exertion', 'rating of perceived']],
+    ['exercise-selection', ['exercise selection', 'exercise variation', 'compound']],
+    ['pain', ['pain', 'injury', 'limitation']],
+    ['substitution', ['substitution', 'modification', 'alternative exercise']],
+    ['adherence', ['adherence', 'compliance', 'dropout']],
+  ];
+  for (const [tag, keywords] of checks) {
+    if (keywords.some((kw) => text.includes(kw))) tags.push(tag);
+  }
+  return tags.length > 0 ? tags : ['adaptive-coaching'];
+}
+
 function normalizeRecord(raw: RawRecord): NormalizedEvidenceRecord {
   const canonicalId = buildCanonicalRecordId({
     id: raw.id,
     title: raw.title,
     url: raw.url,
   });
+  const tags = raw.tags?.length ? raw.tags : deriveContentTags(raw.title, raw.summary);
   return parseNormalizedEvidenceRecord({
     id: raw.id,
     canonicalId,
@@ -141,7 +165,7 @@ function normalizeRecord(raw: RawRecord): NormalizedEvidenceRecord {
     publishedAt: raw.publishedAt,
     title: raw.title,
     summaryEn: raw.summary,
-    tags: raw.tags?.length ? raw.tags : ['adaptive-coaching'],
+    tags,
     provenanceIds: [raw.id],
     documentary:
       raw.summary.trim().length > 0

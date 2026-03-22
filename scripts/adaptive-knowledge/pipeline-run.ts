@@ -381,12 +381,22 @@ export async function runAdaptiveKnowledgePipeline(
   };
   const synthesize =
     input.synthesizeImpl ??
-    (async (records: NormalizedEvidenceRecord[]) =>
-      synthesizeCorpusWithRemoteModel({
-        records,
-        runId,
-        client: createConfiguredOpenAiCorpusSynthesisClient(),
-      }));
+    (async (records: NormalizedEvidenceRecord[]) => {
+      try {
+        const client = createConfiguredOpenAiCorpusSynthesisClient();
+        return await synthesizeCorpusWithRemoteModel({
+          records,
+          runId,
+          client,
+        });
+      } catch (configError) {
+        // Fall back to local deterministic synthesis when remote client is not configured
+        if (configError instanceof Error && configError.message.includes('not configured')) {
+          return synthesizeCorpusPrinciples(records);
+        }
+        throw configError;
+      }
+    });
   const cursorState = await loadCursorState(outputRootDir);
   const existingBootstrapJobs = mode === 'bootstrap' ? await loadBootstrapCollectionJobs(outputRootDir) : [];
   const plannedBootstrapJobs =

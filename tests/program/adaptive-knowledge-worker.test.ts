@@ -15,19 +15,24 @@ import {
 } from '../../scripts/adaptive-knowledge/worker-state';
 
 function buildConnectorSuccess(source: 'pubmed' | 'crossref' | 'openalex'): ConnectorFetchResult {
+  const tagsBySource = {
+    pubmed: ['progression', 'strength'],
+    crossref: ['hypertrophy', 'volume'],
+    openalex: ['fatigue', 'readiness'],
+  } as const;
   return {
     source,
     skipped: false,
     records: [
       {
         id: `${source}-1`,
-        sourceType: 'review',
+        sourceType: source === 'pubmed' ? 'guideline' : source === 'crossref' ? 'review' : 'expertise',
         sourceUrl: `https://${source === 'openalex' ? 'openalex.org' : source === 'crossref' ? 'doi.org' : 'pubmed.ncbi.nlm.nih.gov'}/${source}-1`,
         sourceDomain: source === 'openalex' ? 'openalex.org' : source === 'crossref' ? 'doi.org' : 'pubmed.ncbi.nlm.nih.gov',
         publishedAt: '2025-11-02',
-        title: `${source} title`,
-        summaryEn: `${source} summary`,
-        tags: ['progression'],
+        title: `${source} resistance training progression study`,
+        summaryEn: `${source} study on progressive overload and hypertrophy volume in strength training`,
+        tags: [...tagsBySource[source]],
         provenanceIds: [`${source}-1`],
       },
     ],

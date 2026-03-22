@@ -21,6 +21,7 @@ type CrossrefApiResponse = {
       DOI?: string;
       title?: string[];
       abstract?: string;
+      type?: string;
       created?: {
         'date-parts'?: number[][] | undefined;
       };
@@ -30,12 +31,29 @@ type CrossrefApiResponse = {
 
 const CROSSREF_ENDPOINT = 'https://api.crossref.org/works';
 
+function stripJatsXml(text: string): string {
+  return text.replace(/<[^>]+>/g, '').trim();
+}
+
+function inferSourceType(crossrefType: string | undefined): 'guideline' | 'review' | 'expertise' {
+  switch (crossrefType) {
+    case 'journal-article':
+      return 'review';
+    case 'monograph':
+    case 'book-chapter':
+      return 'expertise';
+    default:
+      return 'review';
+  }
+}
+
 function buildCrossrefUrl(query: string): string {
   const params = new URLSearchParams({
     query,
     rows: '20',
-    sort: 'published',
+    sort: 'relevance',
     order: 'desc',
+    'query.bibliographic': query,
   });
   return `${CROSSREF_ENDPOINT}?${params.toString()}`;
 }
@@ -61,6 +79,7 @@ export async function fetchCrossrefEvidenceBatch(input: ConnectorFetchInput): Pr
       throw new Error(`Crossref request failed with status ${response.status}`);
     }
     const payload = (await response.json()) as CrossrefApiResponse;
+    // If test harness returns preformed results, use directly
     if (Array.isArray(payload.results)) {
       return payload.results;
     }
@@ -71,15 +90,20 @@ export async function fetchCrossrefEvidenceBatch(input: ConnectorFetchInput): Pr
         String(publishedParts[1] ?? 1).padStart(2, '0'),
         String(publishedParts[2] ?? 1).padStart(2, '0'),
       ].join('-');
+      const rawTitle = item.title?.[0] ?? '';
+      const cleanTitle = stripJatsXml(rawTitle);
+      const rawAbstract = item.abstract ?? '';
+      const cleanAbstract = stripJatsXml(rawAbstract);
+      const doi = item.DOI ?? `crossref-${index}`;
 
       return {
-        id: item.DOI ?? `crossref-${index}`,
-        sourceType: 'review' as const,
-        title: item.title?.[0] ?? `Crossref record ${index + 1}`,
-        url: `https://doi.org/${item.DOI ?? `crossref-${index}`}`,
+        id: doi,
+        sourceType: inferSourceType(item.type),
+        title: cleanTitle || `Crossref record ${index + 1}`,
+        url: `https://doi.org/${doi}`,
         publishedAt,
-        summary: item.abstract ?? `Crossref result for ${input.query}`,
-        tags: ['hypertrophy'],
+        summary: cleanAbstract || cleanTitle || `Crossref record ${doi}`,
+        tags: [] as string[],
       };
     });
   }, config.maxRetries);

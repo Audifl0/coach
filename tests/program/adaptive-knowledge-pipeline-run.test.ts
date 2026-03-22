@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, access, writeFile } from 'node:fs/promises';
-import { constants } from 'node:fs';
+import { constants, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -55,6 +55,20 @@ function buildConnectorSuccess(source: 'pubmed' | 'crossref' | 'openalex'): Conn
 async function loadJson(filePath: string): Promise<unknown> {
   const raw = await readFile(filePath, 'utf8');
   return JSON.parse(raw) as unknown;
+}
+
+/**
+ * Resolve the snapshot directory — candidate/ if unpublished, validated/ if promoted.
+ */
+function resolveSnapshotDir(outputRootDir: string, runId: string): string {
+  const candidate = path.join(outputRootDir, 'snapshots', runId, 'candidate');
+  const validated = path.join(outputRootDir, 'snapshots', runId, 'validated');
+  try {
+    readFileSync(path.join(validated, 'manifest.json'));
+    return validated;
+  } catch {
+    return candidate;
+  }
 }
 
 async function runPipelineWithDeterministicSynthesis(
@@ -226,7 +240,7 @@ test('documentary staging persists acquisition statuses and rejection reasons se
     },
   });
 
-  const snapshotDir = path.join(outputRootDir, 'snapshots', 'run-document-staging', 'candidate');
+  const snapshotDir = resolveSnapshotDir(outputRootDir, 'run-document-staging');
   const documentaryArtifact = parseDocumentaryRecordStagingArtifact(
     await loadJson(path.join(snapshotDir, 'document-staging.json')),
   );
@@ -371,7 +385,7 @@ test('pipeline triages documentary staging before synthesis and defers non-extra
     },
   });
 
-  const snapshotDir = path.join(outputRootDir, 'snapshots', 'run-document-triage', 'candidate');
+  const snapshotDir = resolveSnapshotDir(outputRootDir, 'run-document-triage');
   const documentaryArtifact = parseDocumentaryRecordStagingArtifact(
     await loadJson(path.join(snapshotDir, 'document-staging.json')),
   );

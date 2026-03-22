@@ -15,62 +15,115 @@ import {
 import type { CorpusRemoteSynthesisClient } from './remote-synthesis';
 import { CorpusRemoteSynthesisError } from './remote-synthesis';
 
-type PrincipleBlueprint = {
+/**
+ * Topic-based blueprint mapping for deterministic synthesis.
+ * Records are assigned to topics by keyword overlap with their title+summary.
+ * Each topic can produce one principle if at least one record matches.
+ */
+
+type TopicBlueprint = {
   id: string;
   title: string;
   summaryFr: string;
   guidanceFr: string;
   evidenceLevel: string;
   guardrail: 'SAFE-01' | 'SAFE-02' | 'SAFE-03';
+  keywords: string[];
 };
 
-const BLUEPRINTS_BY_SOURCE_TYPE: Record<NormalizedEvidenceRecord['sourceType'], PrincipleBlueprint> = {
-  guideline: {
+const TOPIC_BLUEPRINTS: TopicBlueprint[] = [
+  {
     id: 'principle-safe-progression',
     title: 'Progression Securisee',
     summaryFr: 'La progression reste graduelle et conditionnee par la qualite technique et la recuperation.',
     guidanceFr: 'Augmenter la charge par paliers, uniquement si execution et recuperation restent stables.',
     evidenceLevel: 'guideline',
     guardrail: 'SAFE-01',
+    keywords: ['progression', 'overload', 'load', 'intensity', 'progressive'],
   },
-  review: {
+  {
     id: 'principle-readiness-fatigue',
     title: 'Readiness et Fatigue',
     summaryFr: 'Les ajustements de seance doivent prioriser la readiness et limiter les derivees de fatigue.',
     guidanceFr: 'Maintenir ou reduire l intensite quand les signaux de fatigue persistent sur plusieurs seances.',
     evidenceLevel: 'review',
     guardrail: 'SAFE-03',
+    keywords: ['fatigue', 'recovery', 'readiness', 'deload', 'rest', 'overreaching'],
   },
-  expertise: {
+  {
     id: 'principle-limitation-aware-substitution',
     title: 'Substitution selon limitations',
     summaryFr: 'Les substitutions doivent conserver l intention du mouvement sans surcharger une zone sensible.',
     guidanceFr: 'Choisir une variante biomecaniquement proche qui respecte les limitations et la douleur du moment.',
     evidenceLevel: 'expertise',
     guardrail: 'SAFE-02',
+    keywords: ['substitution', 'pain', 'limitation', 'injury', 'modification', 'adaptation'],
   },
-};
+  {
+    id: 'principle-volume-dose',
+    title: 'Volume et Dose d Entrainement',
+    summaryFr: 'Le volume d entrainement doit rester dans les bornes connues pour maximiser l hypertrophie sans depasser la dose utile.',
+    guidanceFr: 'Ajuster le nombre de series par muscle en fonction de la tolerance individuelle et des signaux de performance.',
+    evidenceLevel: 'review',
+    guardrail: 'SAFE-01',
+    keywords: ['volume', 'sets', 'dose', 'hypertrophy', 'frequency', 'muscle'],
+  },
+  {
+    id: 'principle-autoregulation',
+    title: 'Autoregulation et RPE',
+    summaryFr: 'L autoregulation par RPE ou RIR permet d ajuster la charge en temps reel selon la capacite du jour.',
+    guidanceFr: 'Utiliser des indicateurs subjectifs de difficulte pour moduler charge et volume intra-seance.',
+    evidenceLevel: 'review',
+    guardrail: 'SAFE-03',
+    keywords: ['autoregulation', 'rpe', 'rir', 'perceived', 'exertion', 'failure', 'proximity'],
+  },
+  {
+    id: 'principle-exercise-selection',
+    title: 'Selection d Exercices',
+    summaryFr: 'Le choix des exercices doit privilegier les mouvements adaptes au profil et aux objectifs, avec variantes si necessaire.',
+    guidanceFr: 'Prioriser les mouvements composes prouves et utiliser les variantes pour cibler des faiblesses ou contourner des limitations.',
+    evidenceLevel: 'expertise',
+    guardrail: 'SAFE-02',
+    keywords: ['exercise', 'selection', 'compound', 'movement', 'variation', 'specificity'],
+  },
+];
+
+function tokenizeForMatching(text: string): Set<string> {
+  return new Set(
+    text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((t) => t.length >= 3)
+  );
+}
+
+function matchRecordToTopics(record: NormalizedEvidenceRecord): string[] {
+  const bodyTokens = tokenizeForMatching(`${record.title} ${record.summaryEn}`);
+  return TOPIC_BLUEPRINTS
+    .filter((bp) => bp.keywords.some((kw) => bodyTokens.has(kw)))
+    .map((bp) => bp.id);
+}
 
 export function synthesizeCorpusPrinciples(records: NormalizedEvidenceRecord[]): CorpusPrinciple[] {
-  const groups = new Map<NormalizedEvidenceRecord['sourceType'], NormalizedEvidenceRecord[]>();
+  const topicRecords = new Map<string, NormalizedEvidenceRecord[]>();
 
   for (const record of records) {
-    const existing = groups.get(record.sourceType);
-    if (existing) {
-      existing.push(record);
-      continue;
+    const matchedTopicIds = matchRecordToTopics(record);
+    // If no topic matches, assign to the most general one
+    const topicIds = matchedTopicIds.length > 0 ? matchedTopicIds : ['principle-safe-progression'];
+    for (const topicId of topicIds) {
+      const existing = topicRecords.get(topicId);
+      if (existing) {
+        existing.push(record);
+      } else {
+        topicRecords.set(topicId, [record]);
+      }
     }
-    groups.set(record.sourceType, [record]);
   }
 
   const principles: CorpusPrinciple[] = [];
-  for (const [sourceType, sourceRecords] of groups.entries()) {
-    const blueprint = BLUEPRINTS_BY_SOURCE_TYPE[sourceType];
-    const provenanceRecordIds = [...new Set(sourceRecords.map((record) => record.id))].sort();
-    if (provenanceRecordIds.length === 0) {
-      continue;
-    }
+  for (const blueprint of TOPIC_BLUEPRINTS) {
+    const matchedRecords = topicRecords.get(blueprint.id);
+    if (!matchedRecords || matchedRecords.length === 0) continue;
 
+    const provenanceRecordIds = [...new Set(matchedRecords.map((record) => record.id))].sort();
     principles.push(
       parseCorpusPrinciple({
         id: blueprint.id,
