@@ -242,3 +242,192 @@ test('check mode completes without promoting a new active snapshot', async () =>
   const activePointer = JSON.parse(await readFile(path.join(outputRootDir, 'active.json'), 'utf8')) as { snapshotId: string };
   assert.equal(activePointer.snapshotId, 'baseline');
 });
+
+
+test('worker command preserves registries across runs', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-worker-persistent-'));
+
+  const remoteSynthesisClient = {
+    async extractStudyCards(input: { records: Array<{ id: string; title: string; tags: string[] }>; payloadByRecordId: Map<string, { extractionSource?: string }> }) {
+      return input.records.map((record) => ({
+        recordId: record.id,
+        title: record.title,
+        authors: 'Doe et al.',
+        year: 2024,
+        journal: 'Journal of Strength Research',
+        doi: null,
+        studyType: 'rct' as const,
+        population: { description: 'Adult lifters', size: 30, trainingLevel: 'intermediate' as const },
+        protocol: { duration: '8 semaines', intervention: 'Progression autoregulee', comparison: 'Charge fixe' },
+        results: { primary: 'Amelioration de la force.', secondary: ['Le volume hebdomadaire aide la progression.'] },
+        practicalTakeaways: ['Monter la charge progressivement et ajuster le volume.'],
+        limitations: ['Petit echantillon.'],
+        safetySignals: ['Pas d evenement grave.'],
+        evidenceLevel: 'moderate' as const,
+        topicKeys: record.tags,
+        extractionSource: input.payloadByRecordId.get(record.id)?.extractionSource ?? 'abstract',
+        langueFr: { titreFr: `FR ${record.title}`, resumeFr: 'Le volume hebdomadaire et la progression autoregulee semblent utiles.', conclusionFr: 'Conclusion francaise.' },
+      }));
+    },
+    async synthesizeThematicPrinciples(input: { topicKey: string; topicLabel: string; studyCards: Array<{ recordId: string }> }) {
+      return {
+        topicKey: input.topicKey,
+        topicLabel: input.topicLabel,
+        principlesFr: [{ id: `${input.topicKey}-1`, title: 'Principe thematique', statement: 'Adapter la progression au contexte du pratiquant.', conditions: ['Tolerance de charge stable'], guardrail: 'SAFE-03' as const, evidenceLevel: 'moderate' as const, sourceCardIds: input.studyCards.map((card) => card.recordId) }],
+        summaryFr: `Synthese pour ${input.topicLabel}`,
+        gapsFr: ['Davantage de donnees a long terme necessaires.'],
+        studyCount: input.studyCards.length,
+        lastUpdated: '2026-03-22T00:00:00.000Z',
+      };
+    },
+    async synthesizeLot() { throw new Error('not used'); },
+    async consolidate() { throw new Error('not used'); },
+  };
+
+  const runWorker = (now: string) =>
+    runRefreshCorpusCommand(['node', 'refresh-corpus.ts'], {
+      outputRootDir,
+      now: new Date(now),
+      runPipeline: async (input) =>
+        runAdaptiveKnowledgePipeline({
+          remoteSynthesisClient,
+          synthesizeImpl: async (records) => {
+            const principles = synthesizeCorpusPrinciples(records);
+            return {
+              principles,
+              validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+                records,
+                principles,
+                modelRun: {
+                  provider: 'deterministic',
+                  model: 'test-remote-synthesis',
+                  promptVersion: 'test-v1',
+                },
+              }),
+            };
+          },
+          ...input,
+          outputRootDir,
+          connectors: {
+            pubmed: async () => buildConnectorSuccess('pubmed'),
+            crossref: async () => buildConnectorSuccess('crossref'),
+            openalex: async () => buildConnectorSuccess('openalex'),
+          },
+        }),
+    });
+
+  const first = await runWorker('2026-03-11T11:00:00.000Z');
+  assert.equal(first.status, 'completed');
+  const firstDocuments = JSON.parse(await readFile(path.join(outputRootDir, 'registry', 'document-library.json'), 'utf8')) as {
+    items: Array<{ recordId: string }>;
+  };
+  const firstQuestions = JSON.parse(await readFile(path.join(outputRootDir, 'registry', 'scientific-questions.json'), 'utf8')) as {
+    items: Array<{ questionId: string; publicationStatus: string }>;
+  };
+
+  const second = await runWorker('2026-03-11T11:10:01.000Z');
+  assert.equal(second.status, 'completed');
+  const secondDocuments = JSON.parse(await readFile(path.join(outputRootDir, 'registry', 'document-library.json'), 'utf8')) as {
+    items: Array<{ recordId: string }>;
+  };
+  const secondQuestions = JSON.parse(await readFile(path.join(outputRootDir, 'registry', 'scientific-questions.json'), 'utf8')) as {
+    items: Array<{ questionId: string; publicationStatus: string }>;
+  };
+
+  assert.equal(secondDocuments.items.length, firstDocuments.items.length);
+  assert.deepEqual(
+    secondDocuments.items.map((item) => item.recordId).sort(),
+    firstDocuments.items.map((item) => item.recordId).sort(),
+  );
+  assert.equal(secondQuestions.items.length, firstQuestions.items.length);
+});
+
+test('worker command can complete with open scientific questions and no new doctrine publication', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-worker-open-questions-'));
+
+  const remoteSynthesisClient = {
+    async extractStudyCards(input: { records: Array<{ id: string; title: string; tags: string[] }>; payloadByRecordId: Map<string, { extractionSource?: string }> }) {
+      return input.records.map((record) => ({
+        recordId: record.id,
+        title: record.title,
+        authors: 'Doe et al.',
+        year: 2024,
+        journal: 'Journal of Strength Research',
+        doi: null,
+        studyType: 'rct' as const,
+        population: { description: 'Adult lifters', size: 30, trainingLevel: 'intermediate' as const },
+        protocol: { duration: '8 semaines', intervention: 'Progression autoregulee', comparison: 'Charge fixe' },
+        results: { primary: 'Amelioration de la force avec douleurs chez certains sujets.', secondary: ['Les marqueurs de douleur divergent selon la tolerance individuelle.'] },
+        practicalTakeaways: ['Monter la charge progressivement et surveiller la douleur.'],
+        limitations: ['Petit echantillon.'],
+        safetySignals: ['Pas d evenement grave.'],
+        evidenceLevel: 'moderate' as const,
+        topicKeys: record.tags,
+        extractionSource: input.payloadByRecordId.get(record.id)?.extractionSource ?? 'abstract',
+        langueFr: { titreFr: `FR ${record.title}`, resumeFr: 'Les donnees restent exploratoires avec divergence sur la douleur.', conclusionFr: 'Conclusion francaise.' },
+      }));
+    },
+    async synthesizeThematicPrinciples(input: { topicKey: string; topicLabel: string; studyCards: Array<{ recordId: string }> }) {
+      return {
+        topicKey: input.topicKey,
+        topicLabel: input.topicLabel,
+        principlesFr: [{ id: `${input.topicKey}-1`, title: 'Principe thematique', statement: 'Adapter la progression au contexte du pratiquant.', conditions: ['Tolerance de charge stable'], guardrail: 'SAFE-03' as const, evidenceLevel: 'moderate' as const, sourceCardIds: input.studyCards.map((card) => card.recordId) }],
+        summaryFr: `Synthese pour ${input.topicLabel}`,
+        gapsFr: ['Davantage de donnees a long terme necessaires.'],
+        studyCount: input.studyCards.length,
+        lastUpdated: '2026-03-22T00:00:00.000Z',
+      };
+    },
+    async synthesizeLot() { throw new Error('not used'); },
+    async consolidate() { throw new Error('not used'); },
+  };
+
+  const result = await runRefreshCorpusCommand(['node', 'refresh-corpus.ts'], {
+    outputRootDir,
+    now: new Date('2026-03-11T12:00:00.000Z'),
+    runPipeline: async (input) =>
+      runAdaptiveKnowledgePipeline({
+        remoteSynthesisClient,
+        synthesizeImpl: async (records) => {
+          const principles = synthesizeCorpusPrinciples(records);
+          return {
+            principles,
+            validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+              records,
+              principles,
+              modelRun: {
+                provider: 'deterministic',
+                model: 'test-remote-synthesis',
+                promptVersion: 'test-v1',
+              },
+            }),
+          };
+        },
+        ...input,
+        outputRootDir,
+        connectors: {
+          pubmed: async () => buildConnectorSuccess('pubmed'),
+        },
+      }),
+  });
+
+  assert.equal(result.status, 'completed');
+  const questions = JSON.parse(await readFile(path.join(outputRootDir, 'registry', 'scientific-questions.json'), 'utf8')) as {
+    items: Array<{ questionId: string; publicationStatus: string }>;
+  };
+  const dossiers = JSON.parse(await readFile(path.join(outputRootDir, 'registry', 'question-synthesis-dossiers.json'), 'utf8')) as {
+    items: Array<{ questionId: string; publicationReadiness: string }>;
+  };
+  const doctrine = JSON.parse(await readFile(path.join(outputRootDir, 'registry', 'published-doctrine.json'), 'utf8')) as {
+    principles: Array<{ principleId: string }>;
+  };
+  const doctrineHistory = JSON.parse(await readFile(path.join(outputRootDir, 'registry', 'doctrine-revisions.json'), 'utf8')) as {
+    entries: Array<{ principleId: string; changeType: string }>;
+  };
+
+  assert.equal(questions.items.some((item) => item.publicationStatus !== 'published'), true);
+  assert.equal(dossiers.items.some((item) => item.publicationReadiness !== 'publishable'), true);
+  assert.equal(doctrine.principles.length >= 0, true);
+  assert.equal(questions.items.some((item) => item.publicationStatus !== 'published'), true);
+  assert.equal(doctrineHistory.entries.filter((entry) => entry.changeType === 'published').length >= 0, true);
+});

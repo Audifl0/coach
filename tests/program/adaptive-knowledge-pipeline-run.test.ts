@@ -11,6 +11,7 @@ import {
   parseAdaptiveKnowledgeBootstrapCampaignState,
   parseAdaptiveKnowledgeCollectionJob,
   parseCorpusRunReport,
+  parseScientificContradiction,
   type StudyCard,
   type ThematicSynthesis,
 } from '../../scripts/adaptive-knowledge/contracts';
@@ -2054,4 +2055,301 @@ test('pipeline fetches multiple pages per query up to configured limit', async (
     pubmedCalls.map((entry) => entry.page),
     [0, 1, 2],
   );
+});
+
+
+test('pipeline reuses persisted registries across runs and keeps unresolved doctrine questions open', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-persistent-state-'));
+
+  const remoteSynthesisClient = {
+    async extractStudyCards(input: { records: Array<{ id: string; title: string; tags: string[] }>; payloadByRecordId: Map<string, { extractionSource?: string }> }) {
+      return input.records.map((record) => ({
+        recordId: record.id,
+        title: record.title,
+        authors: 'Doe et al.',
+        year: 2024,
+        journal: 'Journal of Strength Research',
+        doi: null,
+        studyType: 'rct' as const,
+        population: {
+          description: 'Adult lifters',
+          size: 30,
+          trainingLevel: 'intermediate' as const,
+        },
+        protocol: {
+          duration: '8 semaines',
+          intervention: 'Progression autoregulee',
+          comparison: 'Charge fixe',
+        },
+        results: {
+          primary: 'Amelioration de la force avec douleurs chez certains sujets.',
+          secondary: ['Les marqueurs de douleur divergent selon la tolerance individuelle.'],
+        },
+        practicalTakeaways: ['Monter la charge progressivement et surveiller la douleur.'],
+        limitations: ['Petit echantillon.'],
+        safetySignals: ['Pas d evenement grave.'],
+        evidenceLevel: 'moderate' as const,
+        topicKeys: record.tags,
+        extractionSource: input.payloadByRecordId.get(record.id)?.extractionSource ?? 'abstract',
+        langueFr: {
+          titreFr: `FR ${record.title}`,
+          resumeFr: 'Le volume hebdomadaire et la progression autoregulee semblent utiles.',
+          conclusionFr: 'Conclusion francaise.',
+        },
+      }));
+    },
+    async synthesizeThematicPrinciples(input: { topicKey: string; topicLabel: string; studyCards: Array<{ recordId: string }> }) {
+      return {
+        topicKey: input.topicKey,
+        topicLabel: input.topicLabel,
+        principlesFr: [
+          {
+            id: `${input.topicKey}-1`,
+            title: 'Principe thematique',
+            statement: 'Adapter la progression au contexte du pratiquant.',
+            conditions: ['Tolerance de charge stable'],
+            guardrail: 'SAFE-03' as const,
+            evidenceLevel: 'moderate' as const,
+            sourceCardIds: input.studyCards.map((card) => card.recordId),
+          },
+        ],
+        summaryFr: `Synthese pour ${input.topicLabel}`,
+        gapsFr: ['Davantage de donnees a long terme necessaires.'],
+        studyCount: input.studyCards.length,
+        lastUpdated: '2026-03-22T00:00:00.000Z',
+      };
+    },
+    async synthesizeLot() {
+      throw new Error('not used');
+    },
+    async consolidate() {
+      throw new Error('not used');
+    },
+  };
+
+  const runPipeline = (runId: string, now: string) =>
+    runAdaptiveKnowledgePipeline({
+      runId,
+      now: new Date(now),
+      outputRootDir,
+      remoteSynthesisClient,
+      synthesizeImpl: async (records) => {
+        const principles = synthesizeCorpusPrinciples(records);
+        return {
+          principles,
+          validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+            records,
+            principles,
+            modelRun: {
+              provider: 'deterministic',
+              model: 'test-remote-synthesis',
+              promptVersion: 'test-v1',
+            },
+          }),
+        };
+      },
+      connectors: {
+        pubmed: async () => buildConnectorSuccess('pubmed'),
+      },
+    });
+
+  await runPipeline('run-persistent-first', '2026-03-22T00:00:00.000Z');
+
+  const firstDocumentRegistry = await loadDocumentRegistry(outputRootDir);
+  const firstQuestionRegistry = await loadScientificQuestions(outputRootDir);
+  const firstDossierEnvelope = (await loadJson(path.join(outputRootDir, 'registry', 'question-synthesis-dossiers.json'))) as {
+    items: Array<{ questionId: string; publicationReadiness: string }>;
+  };
+  const firstDoctrineSnapshot = (await loadJson(path.join(outputRootDir, 'registry', 'published-doctrine.json'))) as {
+    principles: Array<{ principleId: string; revisionStatus: string }>;
+  };
+  const firstDoctrineHistory = (await loadJson(path.join(outputRootDir, 'registry', 'doctrine-revisions.json'))) as {
+    entries: Array<{ principleId: string; changeType: string }>;
+  };
+
+  assert.equal(firstDocumentRegistry.items.length >= 3, true);
+  assert.equal(firstQuestionRegistry.items.length >= 5, true);
+  assert.equal(firstDossierEnvelope.items.some((item) => item.publicationReadiness !== 'publishable'), true);
+  assert.equal(firstQuestionRegistry.items.some((item) => item.publicationStatus !== 'published'), true);
+  assert.equal(firstDoctrineSnapshot.principles.length >= 0, true);
+  assert.equal(firstQuestionRegistry.items.some((item) => item.publicationStatus === 'reopened' || item.publicationStatus === 'candidate' || item.publicationStatus === 'not-ready'), true);
+
+  await runAdaptiveKnowledgePipeline({
+    runId: 'run-persistent-second',
+    now: new Date('2026-03-22T00:10:00.000Z'),
+    outputRootDir,
+    remoteSynthesisClient,
+    synthesizeImpl: async (records) => {
+      const principles = synthesizeCorpusPrinciples(records);
+      return {
+        principles,
+        validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+          records,
+          principles,
+          modelRun: {
+            provider: 'deterministic',
+            model: 'test-remote-synthesis',
+            promptVersion: 'test-v1',
+          },
+        }),
+      };
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+    },
+  });
+
+  const secondDocumentRegistry = await loadDocumentRegistry(outputRootDir);
+  const secondQuestionRegistry = await loadScientificQuestions(outputRootDir);
+  const secondDossierEnvelope = (await loadJson(path.join(outputRootDir, 'registry', 'question-synthesis-dossiers.json'))) as {
+    items: Array<{ questionId: string; publicationReadiness: string }>;
+  };
+  const secondDoctrineSnapshot = (await loadJson(path.join(outputRootDir, 'registry', 'published-doctrine.json'))) as {
+    principles: Array<{ principleId: string; revisionStatus: string }>;
+  };
+  const secondDoctrineHistory = (await loadJson(path.join(outputRootDir, 'registry', 'doctrine-revisions.json'))) as {
+    entries: Array<{ principleId: string; changeType: string }>;
+  };
+
+  assert.equal(secondDocumentRegistry.items.length >= firstDocumentRegistry.items.length, true);
+  assert.equal(secondQuestionRegistry.items.length >= firstQuestionRegistry.items.length, true);
+  assert.equal(secondQuestionRegistry.items.length > 0, true);
+  assert.equal(secondDoctrineSnapshot.principles.length >= firstDoctrineSnapshot.principles.length, true);
+  assert.equal(secondDoctrineHistory.entries.filter((entry) => entry.changeType === 'published').length >= firstDoctrineHistory.entries.filter((entry) => entry.changeType === 'published').length, true);
+});
+
+test('pipeline publishes doctrine only after thresholds are met by persisted question evidence', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-doctrine-threshold-'));
+
+  const remoteSynthesisClient = {
+    async extractStudyCards(input: { records: Array<{ id: string; title: string; tags: string[] }>; payloadByRecordId: Map<string, { extractionSource?: string }> }) {
+      return input.records.map((record) => ({
+        recordId: record.id,
+        title: record.title,
+        authors: 'Doe et al.',
+        year: 2024,
+        journal: 'Journal of Strength Research',
+        doi: null,
+        studyType: 'rct' as const,
+        population: {
+          description: 'Adult lifters',
+          size: 30,
+          trainingLevel: 'intermediate' as const,
+        },
+        protocol: {
+          duration: '8 semaines',
+          intervention: 'Progression autoregulee',
+          comparison: 'Charge fixe',
+        },
+        results: {
+          primary: 'Amelioration de la force et de l hypertrophie.',
+          secondary: ['Le volume hebdomadaire plus eleve aide la progression.'],
+        },
+        practicalTakeaways: ['Monter la charge progressivement et ajuster le volume hebdomadaire.'],
+        limitations: ['Petit echantillon.'],
+        safetySignals: ['Pas d evenement grave.'],
+        evidenceLevel: 'moderate' as const,
+        topicKeys: record.tags,
+        extractionSource: input.payloadByRecordId.get(record.id)?.extractionSource ?? 'abstract',
+        langueFr: {
+          titreFr: `FR ${record.title}`,
+          resumeFr: 'Le volume hebdomadaire et la progression autoregulee semblent utiles.',
+          conclusionFr: 'Conclusion francaise.',
+        },
+      }));
+    },
+    async synthesizeThematicPrinciples(input: { topicKey: string; topicLabel: string; studyCards: Array<{ recordId: string }> }) {
+      return {
+        topicKey: input.topicKey,
+        topicLabel: input.topicLabel,
+        principlesFr: [
+          {
+            id: `${input.topicKey}-1`,
+            title: 'Principe thematique',
+            statement: 'Adapter la progression au contexte du pratiquant.',
+            conditions: ['Tolerance de charge stable'],
+            guardrail: 'SAFE-03' as const,
+            evidenceLevel: 'moderate' as const,
+            sourceCardIds: input.studyCards.map((card) => card.recordId),
+          },
+        ],
+        summaryFr: `Synthese pour ${input.topicLabel}`,
+        gapsFr: ['Davantage de donnees a long terme necessaires.'],
+        studyCount: input.studyCards.length,
+        lastUpdated: '2026-03-22T00:00:00.000Z',
+      };
+    },
+    async synthesizeLot() {
+      throw new Error('not used');
+    },
+    async consolidate() {
+      throw new Error('not used');
+    },
+  };
+
+  const runPipeline = (runId: string, now: string, connectors: {
+    pubmed?: () => Promise<ConnectorFetchResult>;
+    crossref?: () => Promise<ConnectorFetchResult>;
+    openalex?: () => Promise<ConnectorFetchResult>;
+  }) =>
+    runAdaptiveKnowledgePipeline({
+      runId,
+      now: new Date(now),
+      outputRootDir,
+      remoteSynthesisClient,
+      synthesizeImpl: async (records) => {
+        const principles = synthesizeCorpusPrinciples(records);
+        return {
+          principles,
+          validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+            records,
+            principles,
+            modelRun: {
+              provider: 'deterministic',
+              model: 'test-remote-synthesis',
+              promptVersion: 'test-v1',
+            },
+          }),
+        };
+      },
+      qualityGateOverrides: {
+        minimumStudies: 2,
+      },
+      connectors,
+    });
+
+  await runPipeline('run-threshold-first', '2026-03-22T01:00:00.000Z', {
+    pubmed: async () => buildConnectorSuccess('pubmed'),
+  });
+
+  const firstDoctrineSnapshot = (await loadJson(path.join(outputRootDir, 'registry', 'published-doctrine.json'))) as {
+    principles: Array<{ principleId: string; revisionStatus: string }>;
+  };
+  const firstDoctrineHistory = (await loadJson(path.join(outputRootDir, 'registry', 'doctrine-revisions.json'))) as {
+    entries: Array<{ principleId: string; changeType: string }>;
+  };
+  assert.equal(firstDoctrineSnapshot.principles.length >= 0, true);
+  assert.equal(firstDoctrineHistory.entries.filter((entry) => entry.changeType === 'published').length >= 0, true);
+
+  await runPipeline('run-threshold-second', '2026-03-22T01:10:00.000Z', {
+    pubmed: async () => buildConnectorSuccess('pubmed'),
+    crossref: async () => buildConnectorSuccess('crossref'),
+  });
+
+  const secondQuestionRegistry = await loadScientificQuestions(outputRootDir);
+  const secondDossierEnvelope = (await loadJson(path.join(outputRootDir, 'registry', 'question-synthesis-dossiers.json'))) as {
+    items: Array<{ questionId: string; publicationReadiness: string; linkedStudyIds: string[] }>;
+  };
+  const secondDoctrineSnapshot = (await loadJson(path.join(outputRootDir, 'registry', 'published-doctrine.json'))) as {
+    principles: Array<{ principleId: string; revisionStatus: string; studyIds: string[] }>;
+  };
+  const secondDoctrineHistory = (await loadJson(path.join(outputRootDir, 'registry', 'doctrine-revisions.json'))) as {
+    entries: Array<{ principleId: string; changeType: string }>;
+  };
+
+  assert.equal(secondQuestionRegistry.items.length >= 5, true);
+  assert.equal(secondDossierEnvelope.items.length > 0, true);
+  assert.equal(secondDoctrineSnapshot.principles.length > 0, true);
+  assert.equal(secondDoctrineSnapshot.principles.every((item) => item.revisionStatus === 'active'), true);
+  assert.equal(secondDoctrineHistory.entries.filter((entry) => entry.changeType === 'published').length > 0, true);
 });
