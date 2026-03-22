@@ -11,6 +11,8 @@ import {
   parseAdaptiveKnowledgeBootstrapCampaignState,
   parseAdaptiveKnowledgeCollectionJob,
   parseCorpusRunReport,
+  type StudyCard,
+  type ThematicSynthesis,
 } from '../../scripts/adaptive-knowledge/contracts';
 import { parseAdaptiveKnowledgePipelineConfig } from '../../scripts/adaptive-knowledge/config';
 import { buildAdaptiveKnowledgeBootstrapCollectionJobs } from '../../scripts/adaptive-knowledge/discovery';
@@ -94,6 +96,253 @@ async function runPipelineWithDeterministicSynthesis(
   });
 }
 
+test('pipeline writes booklet-fr.md to the candidate snapshot directory', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-booklet-pipeline-'));
+
+  await runAdaptiveKnowledgePipeline({
+    runId: 'run-booklet-pipeline',
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    outputRootDir,
+    remoteSynthesisClient: {
+      async extractStudyCards(input) {
+        return input.records.map((record) => ({
+          recordId: record.id,
+          title: record.title,
+          authors: 'Doe et al.',
+          year: 2024,
+          journal: 'Journal of Strength Research',
+          doi: null,
+          studyType: 'rct' as const,
+          population: {
+            description: 'Adult lifters',
+            size: 30,
+            trainingLevel: 'intermediate' as const,
+          },
+          protocol: {
+            duration: '8 semaines',
+            intervention: 'Progression encadrée',
+            comparison: 'Charge fixe',
+          },
+          results: {
+            primary: 'Amélioration de la force.',
+            secondary: ['Amélioration légère de la masse maigre.'],
+          },
+          practicalTakeaways: ['Monter la charge progressivement.'],
+          limitations: ['Petit échantillon.'],
+          safetySignals: ['Pas d’événement grave.'],
+          evidenceLevel: 'moderate' as const,
+          topicKeys: record.tags,
+          extractionSource: input.payloadByRecordId.get(record.id)?.extractionSource ?? 'abstract',
+          langueFr: {
+            titreFr: `FR ${record.title}`,
+            resumeFr: 'Résumé français.',
+            conclusionFr: 'Conclusion française.',
+          },
+        }));
+      },
+      async synthesizeThematicPrinciples(input) {
+        return {
+          topicKey: input.topicKey,
+          topicLabel: input.topicLabel,
+          principlesFr: [
+            {
+              id: `${input.topicKey}-1`,
+              title: 'Principe thématique',
+              statement: 'Adapter la progression au contexte du pratiquant.',
+              conditions: ['Tolérance de charge stable'],
+              guardrail: 'SAFE-03' as const,
+              evidenceLevel: 'moderate' as const,
+              sourceCardIds: input.studyCards.map((card) => card.recordId),
+            },
+          ],
+          summaryFr: `Synthèse pour ${input.topicLabel}`,
+          gapsFr: ['Davantage de données à long terme nécessaires.'],
+          studyCount: input.studyCards.length,
+          lastUpdated: '2026-03-05T00:00:00.000Z',
+        };
+      },
+      async synthesizeLot() {
+        throw new Error('not used');
+      },
+      async consolidate() {
+        throw new Error('not used');
+      },
+    },
+    synthesizeImpl: async (records) => {
+      const principles = synthesizeCorpusPrinciples(records);
+      return {
+        principles,
+        validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+          records,
+          principles,
+          modelRun: {
+            provider: 'deterministic',
+            model: 'test-remote-synthesis',
+            promptVersion: 'test-v1',
+          },
+        }),
+      };
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const bookletPath = path.join(outputRootDir, 'snapshots', 'run-booklet-pipeline', 'validated', 'booklet-fr.md');
+  const booklet = await readFile(bookletPath, 'utf8');
+
+  assert.match(booklet, /^# Bibliothèque Scientifique — Coach Musculation IA/m);
+  assert.match(booklet, /^### Bibliographie complète$/m);
+});
+
+test('pipeline writes thematic-synthesis.json when study cards and remote synthesis are available', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-thematic-pipeline-'));
+
+  await runAdaptiveKnowledgePipeline({
+    runId: 'run-thematic-synthesis-pipeline',
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    outputRootDir,
+    remoteSynthesisClient: {
+      async extractStudyCards(input) {
+        return input.records.map((record) => ({
+          recordId: record.id,
+          title: record.title,
+          authors: 'Doe et al.',
+          year: 2024,
+          journal: 'Journal of Strength Research',
+          doi: null,
+          studyType: 'rct' as const,
+          population: {
+            description: 'Adult lifters',
+            size: 30,
+            trainingLevel: 'intermediate' as const,
+          },
+          protocol: {
+            duration: '8 semaines',
+            intervention: 'Progression encadrée',
+            comparison: 'Charge fixe',
+          },
+          results: {
+            primary: 'Amélioration de la force.',
+            secondary: ['Amélioration légère de la masse maigre.'],
+          },
+          practicalTakeaways: ['Monter la charge progressivement.'],
+          limitations: ['Petit échantillon.'],
+          safetySignals: ['Pas d’événement grave.'],
+          evidenceLevel: 'moderate' as const,
+          topicKeys: record.tags,
+          extractionSource: input.payloadByRecordId.get(record.id)?.extractionSource ?? 'abstract',
+          langueFr: {
+            titreFr: `FR ${record.title}`,
+            resumeFr: 'Résumé français.',
+            conclusionFr: 'Conclusion française.',
+          },
+        }));
+      },
+      async synthesizeThematicPrinciples(input) {
+        return {
+          topicKey: input.topicKey,
+          topicLabel: input.topicLabel,
+          principlesFr: [
+            {
+              id: `${input.topicKey}-1`,
+              title: 'Principe thématique',
+              statement: 'Adapter la progression au contexte du pratiquant.',
+              conditions: ['Tolérance de charge stable'],
+              guardrail: 'SAFE-03' as const,
+              evidenceLevel: 'moderate' as const,
+              sourceCardIds: input.studyCards.map((card) => card.recordId),
+            },
+          ],
+          summaryFr: `Synthèse pour ${input.topicLabel}`,
+          gapsFr: ['Davantage de données à long terme nécessaires.'],
+          studyCount: input.studyCards.length,
+          lastUpdated: '2026-03-05T00:00:00.000Z',
+        };
+      },
+      async synthesizeLot() {
+        throw new Error('not used');
+      },
+      async consolidate() {
+        throw new Error('not used');
+      },
+    },
+    synthesizeImpl: async (records) => {
+      const principles = synthesizeCorpusPrinciples(records);
+      return {
+        principles,
+        validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+          records,
+          principles,
+          modelRun: {
+            provider: 'deterministic',
+            model: 'test-remote-synthesis',
+            promptVersion: 'test-v1',
+          },
+        }),
+      };
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const artifact = (await loadJson(
+    path.join(outputRootDir, 'snapshots', 'run-thematic-synthesis-pipeline', 'validated', 'thematic-synthesis.json'),
+  )) as { thematicSyntheses: ThematicSynthesis[] };
+  const report = (await loadJson(
+    path.join(outputRootDir, 'snapshots', 'run-thematic-synthesis-pipeline', 'validated', 'run-report.json'),
+  )) as { stageReports: Array<{ stage: string; status: string }> };
+
+  assert.equal(Array.isArray(artifact.thematicSyntheses), true);
+  assert.equal(artifact.thematicSyntheses.length > 0, true);
+  assert.equal(report.stageReports.some((stage) => stage.stage === 'thematic-synthesis' && stage.status === 'succeeded'), true);
+});
+
+test('pipeline skips thematic synthesis when no study cards exist', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-thematic-skip-'));
+
+  await runAdaptiveKnowledgePipeline({
+    runId: 'run-thematic-synthesis-skipped',
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    outputRootDir,
+    synthesizeImpl: async (records) => {
+      const principles = synthesizeCorpusPrinciples(records);
+      return {
+        principles,
+        validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+          records,
+          principles,
+          modelRun: {
+            provider: 'deterministic',
+            model: 'test-remote-synthesis',
+            promptVersion: 'test-v1',
+          },
+        }),
+      };
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const artifact = (await loadJson(
+    path.join(outputRootDir, 'snapshots', 'run-thematic-synthesis-skipped', 'validated', 'thematic-synthesis.json'),
+  )) as { thematicSyntheses: ThematicSynthesis[] };
+  const report = (await loadJson(
+    path.join(outputRootDir, 'snapshots', 'run-thematic-synthesis-skipped', 'validated', 'run-report.json'),
+  )) as { stageReports: Array<{ stage: string; status: string }> };
+
+  assert.deepEqual(artifact.thematicSyntheses, []);
+  assert.equal(report.stageReports.some((stage) => stage.stage === 'thematic-synthesis' && stage.status === 'skipped'), true);
+});
+
 test('pipeline executes deterministic stage order and writes snapshot artifacts', async () => {
   const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
 
@@ -171,7 +420,7 @@ test('pipeline executes deterministic stage order and writes snapshot artifacts'
   assert.equal(sourcePayload.records.every((record) => typeof record.ranking?.compositeScore === 'number'), true);
   assert.deepEqual(
     report.stageReports.map((stage) => stage.stage),
-    ['discover', 'ingest', 'synthesize', 'validate', 'publish'],
+    ['discover', 'ingest', 'fulltext', 'extract-study-cards', 'thematic-synthesis', 'synthesize', 'validate', 'publish'],
   );
 });
 
@@ -827,6 +1076,9 @@ test('bootstrap campaign state and run reports accept durable bootstrap mode met
     stageReports: [
       { stage: 'discover', status: 'succeeded', message: 'ok' },
       { stage: 'ingest', status: 'succeeded', message: 'ok' },
+      { stage: 'fulltext', status: 'skipped', message: 'deferred-to-bootstrap' },
+      { stage: 'extract-study-cards', status: 'skipped', message: 'deferred-to-bootstrap' },
+      { stage: 'thematic-synthesis', status: 'skipped', message: 'deferred-to-bootstrap' },
       { stage: 'synthesize', status: 'skipped', message: 'deferred-to-bootstrap' },
       { stage: 'validate', status: 'skipped', message: 'deferred-to-bootstrap' },
       { stage: 'publish', status: 'skipped', message: 'deferred-to-bootstrap' },

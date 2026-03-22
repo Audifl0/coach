@@ -1,7 +1,8 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { parseAdaptiveKnowledgePipelineConfig } from './config';
+import {
+  parseAdaptiveKnowledgePipelineConfig } from './config';
 import {
   parseAdaptiveKnowledgeCollectionJob,
   parseAdaptiveKnowledgeBootstrapRunTelemetry,
@@ -21,6 +22,7 @@ import {
   type CorpusPrinciple,
   type CorpusRunReport,
   type NormalizedEvidenceRecord,
+  type ThematicSynthesis,
   type ValidatedSynthesis,
 } from './contracts';
 import { fetchCrossrefEvidenceBatch } from './connectors/crossref';
@@ -42,7 +44,7 @@ import {
   type QualityGateContradiction,
 } from './quality-gates';
 import { curateAdaptiveKnowledgeBible } from './curation';
-import { createConfiguredOpenAiCorpusSynthesisClient, CorpusRemoteSynthesisError } from './remote-synthesis';
+import { createConfiguredOpenAiCorpusSynthesisClient, CorpusRemoteSynthesisError, type CorpusRemoteSynthesisClient } from './remote-synthesis';
 import {
   buildStructuredExtractionPlan,
   buildValidatedSynthesisFromPrinciples,
@@ -52,6 +54,9 @@ import {
   type CorpusSynthesisOutput,
 } from './synthesis';
 import { acquireFullText, type FullTextAcquisitionResult } from './fulltext-acquisition';
+import { extractStudyCards } from './study-card-extraction';
+import { synthesizeThematicPrinciples } from './thematic-synthesis';
+import { renderBookletMarkdown } from './booklet-renderer';
 
 type PipelineConnectorFn = (input: ConnectorFetchInput) => Promise<ConnectorFetchResult>;
 
@@ -64,7 +69,15 @@ type PipelineConnectors = {
 type StageStatus = 'succeeded' | 'failed' | 'skipped';
 
 type PipelineStage = {
-  stage: 'discover' | 'ingest' | 'synthesize' | 'validate' | 'publish';
+  stage:
+    | 'discover'
+    | 'ingest'
+    | 'fulltext'
+    | 'extract-study-cards'
+    | 'thematic-synthesis'
+    | 'synthesize'
+    | 'validate'
+    | 'publish';
   status: StageStatus;
   message?: string;
 };
@@ -91,6 +104,7 @@ export type RunAdaptiveKnowledgePipelineInput = {
     bootstrapMaxRuntimeMs: number;
   }>;
   connectors?: Partial<PipelineConnectors>;
+  remoteSynthesisClient?: CorpusRemoteSynthesisClient;
   synthesizeImpl?: (
     records: NormalizedEvidenceRecord[],
   ) => CorpusPrinciple[] | CorpusSynthesisOutput | Promise<CorpusPrinciple[] | CorpusSynthesisOutput>;
@@ -387,7 +401,7 @@ export async function runAdaptiveKnowledgePipeline(
     input.synthesizeImpl ??
     (async (records: NormalizedEvidenceRecord[]) => {
       try {
-        const client = createConfiguredOpenAiCorpusSynthesisClient();
+        const client = input.remoteSynthesisClient ?? createConfiguredOpenAiCorpusSynthesisClient();
         return await synthesizeCorpusWithRemoteModel({
           records,
           runId,
@@ -546,6 +560,8 @@ export async function runAdaptiveKnowledgePipeline(
       }
     }
   }
+  const fulltextStageStatus: StageStatus =
+    fulltextTargets.length > 0 ? 'succeeded' : 'skipped';
   const fulltextStageMessage =
     `budget=${fulltextBudget}; targets=${fulltextTargets.length}; acquired=${fulltextAcquired}; ` +
     `abstractOnly=${fulltextTargets.length - fulltextAcquired}`;
@@ -604,7 +620,7 @@ export async function runAdaptiveKnowledgePipeline(
     status: 'succeeded',
     message:
       `sources=${sourceResults.length}; skippedSources=${skippedSources}; ` +
-      `fetched=${fetchedRecords}; incrementalSkipped=${incrementalSkipped}; deduped=${dedupedRecords}; skipped=${skippedRecords}; normalized=${normalizedRecords.length}; selected=${rankingTelemetry.selectedRecordCount}; rejected=${rankingTelemetry.rejectedRecordCount}; fulltext:${fulltextStageMessage}`,
+      `fetched=${fetchedRecords}; incrementalSkipped=${incrementalSkipped}; deduped=${dedupedRecords}; skipped=${skippedRecords}; normalized=${normalizedRecords.length}; selected=${rankingTelemetry.selectedRecordCount}; rejected=${rankingTelemetry.rejectedRecordCount}`,
   });
   if (extractionPlan.deferredRecordIds.length > 0) {
     stageReports[1]!.message +=
@@ -615,8 +631,15 @@ export async function runAdaptiveKnowledgePipeline(
       `; queue=${bootstrapTelemetry.queueDepth.total}; pending=${bootstrapTelemetry.queueDepth.pending}; ` +
       `processed=${bootstrapTelemetry.jobsProcessed}; pages=${bootstrapTelemetry.pagesConsumed}; exhausted=${bootstrapTelemetry.queueDepth.exhausted}; blocked=${bootstrapTelemetry.queueDepth.blocked}`;
   }
+  stageReports.push({
+    stage: 'fulltext',
+    status: fulltextStageStatus,
+    message: fulltextStageMessage,
+  });
 
   let principles: CorpusPrinciple[] = [];
+  let studyCards: import('./contracts').StudyCard[] = [];
+  let thematicSyntheses: ThematicSynthesis[] = [];
   let validatedSynthesis = buildValidatedSynthesisFromPrinciples({
     records: [],
     principles: [],
@@ -630,6 +653,19 @@ export async function runAdaptiveKnowledgePipeline(
     cursorState,
     bootstrapTelemetry,
   });
+  let studyCardStageRecorded = false;
+  let thematicSynthesisStageRecorded = false;
+  let studyCardStageMessage = 'remote-client-unavailable';
+  let remoteStudyCardClient: CorpusRemoteSynthesisClient | null = input.remoteSynthesisClient ?? null;
+  if (!remoteStudyCardClient) {
+    try {
+      remoteStudyCardClient = createConfiguredOpenAiCorpusSynthesisClient();
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes('not configured')) {
+        throw error;
+      }
+    }
+  }
   let qualityGateResult = evaluateCorpusQualityGate({
     now,
     records: [],
@@ -638,6 +674,18 @@ export async function runAdaptiveKnowledgePipeline(
     projection: qualityGateProjection,
   });
   if (candidateRecordsForSynthesis.length > 0 && recordsForSynthesis.length === 0) {
+    stageReports.push({
+      stage: 'extract-study-cards',
+      status: remoteStudyCardClient ? 'succeeded' : 'skipped',
+      message: remoteStudyCardClient ? 'records=0; extracted=0' : studyCardStageMessage,
+    });
+    studyCardStageRecorded = true;
+    stageReports.push({
+      stage: 'thematic-synthesis',
+      status: 'skipped',
+      message: 'no-study-cards-available',
+    });
+    thematicSynthesisStageRecorded = true;
     stageReports.push({
       stage: 'synthesize',
       status: 'skipped',
@@ -658,6 +706,18 @@ export async function runAdaptiveKnowledgePipeline(
     });
   } else if (recordsForSynthesis.length === 0) {
     stageReports.push({
+      stage: 'extract-study-cards',
+      status: remoteStudyCardClient ? 'succeeded' : 'skipped',
+      message: remoteStudyCardClient ? 'records=0; extracted=0' : studyCardStageMessage,
+    });
+    studyCardStageRecorded = true;
+    stageReports.push({
+      stage: 'thematic-synthesis',
+      status: 'skipped',
+      message: 'no-study-cards-available',
+    });
+    thematicSynthesisStageRecorded = true;
+    stageReports.push({
       stage: 'synthesize',
       status: 'skipped',
       message: 'no-records-selected-for-synthesis',
@@ -677,6 +737,69 @@ export async function runAdaptiveKnowledgePipeline(
     });
   } else {
     try {
+      if (remoteStudyCardClient) {
+        studyCards = await extractStudyCards({
+          records: fulltextTargets,
+          fullTextMap: new Map(
+            [...fulltextResultMap.entries()].map(([recordId, result]) => [recordId, { fullText: result.fullText, sections: result.sections }]),
+          ),
+          client: remoteStudyCardClient,
+          runId,
+        });
+        studyCardStageMessage = `records=${fulltextTargets.length}; extracted=${studyCards.length}`;
+        stageReports.push({
+          stage: 'extract-study-cards',
+          status: 'succeeded',
+          message: studyCardStageMessage,
+        });
+        studyCardStageRecorded = true;
+      } else {
+        stageReports.push({
+          stage: 'extract-study-cards',
+          status: 'skipped',
+          message: studyCardStageMessage,
+        });
+        studyCardStageRecorded = true;
+      }
+      if (remoteStudyCardClient && studyCards.length > 0) {
+        const groupedCards = new Map<string, import('./contracts').StudyCard[]>();
+        for (const card of studyCards) {
+          for (const topicKey of card.topicKeys) {
+            const existing = groupedCards.get(topicKey);
+            if (existing) {
+              existing.push(card);
+            } else {
+              groupedCards.set(topicKey, [card]);
+            }
+          }
+        }
+        thematicSyntheses = await Promise.all(
+          [...groupedCards.entries()]
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([topicKey, topicCards]) =>
+              synthesizeThematicPrinciples({
+                topicKey,
+                topicLabel: topicKey,
+                studyCards: topicCards,
+                client: remoteStudyCardClient!,
+                runId,
+              }),
+            ),
+        );
+        stageReports.push({
+          stage: 'thematic-synthesis',
+          status: 'succeeded',
+          message: `topics=${thematicSyntheses.length}; cards=${studyCards.length}`,
+        });
+        thematicSynthesisStageRecorded = true;
+      } else {
+        stageReports.push({
+          stage: 'thematic-synthesis',
+          status: 'skipped',
+          message: 'no-study-cards-available',
+        });
+        thematicSynthesisStageRecorded = true;
+      }
       const synthesisResult = normalizeSynthesisResult(recordsForSynthesis, await Promise.resolve(synthesize(recordsForSynthesis)));
       principles = synthesisResult.principles;
       validatedSynthesis = synthesisResult.validatedSynthesis;
@@ -706,6 +829,22 @@ export async function runAdaptiveKnowledgePipeline(
         projection: qualityGateProjection,
       });
     } catch (error) {
+      if (!studyCardStageRecorded) {
+        stageReports.push({
+          stage: 'extract-study-cards',
+          status: remoteStudyCardClient ? 'failed' : 'skipped',
+          message: remoteStudyCardClient ? 'study-card-extraction-failed' : studyCardStageMessage,
+        });
+        studyCardStageRecorded = true;
+      }
+      if (!thematicSynthesisStageRecorded) {
+        stageReports.push({
+          stage: 'thematic-synthesis',
+          status: 'skipped',
+          message: studyCardStageRecorded ? 'blocked-by-study-card-failure' : 'blocked-by-study-card-stage',
+        });
+        thematicSynthesisStageRecorded = true;
+      }
       if (error instanceof CorpusRemoteSynthesisError) {
         synthesisErrorMessage = error.message;
       } else {
@@ -765,6 +904,9 @@ export async function runAdaptiveKnowledgePipeline(
       validatedSynthesisPath: path.join('snapshots', runId, 'candidate', 'validated-synthesis.json'),
       studyExtractionsPath: path.join('snapshots', runId, 'candidate', 'study-extractions.json'),
       documentStagingPath: path.join('snapshots', runId, 'candidate', 'document-staging.json'),
+      studyCardsPath: path.join('snapshots', runId, 'candidate', 'study-cards.json'),
+      thematicSynthesisPath: path.join('snapshots', runId, 'candidate', 'thematic-synthesis.json'),
+      bookletPath: path.join('snapshots', runId, 'candidate', 'booklet-fr.md'),
     },
   });
   const previousManifest = await loadPreviousManifest(outputRootDir);
@@ -772,6 +914,14 @@ export async function runAdaptiveKnowledgePipeline(
     records: normalizedRecords,
     principles,
     validatedSynthesis,
+    studyCards,
+    thematicSyntheses,
+  });
+  const bookletMarkdown = renderBookletMarkdown({
+    thematicSyntheses,
+    studyCards,
+    generatedAt: now.toISOString(),
+    snapshotId: runId,
   });
 
   await mkdir(candidateDir, { recursive: true });
@@ -866,6 +1016,33 @@ export async function runAdaptiveKnowledgePipeline(
     ) + '\n',
     'utf8',
   );
+  await writeFile(
+    path.join(candidateDir, 'study-cards.json'),
+    JSON.stringify(
+      {
+        runId,
+        generatedAt: now.toISOString(),
+        studyCards,
+      },
+      null,
+      2,
+    ) + '\n',
+    'utf8',
+  );
+  await writeFile(
+    path.join(candidateDir, 'thematic-synthesis.json'),
+    JSON.stringify(
+      {
+        runId,
+        generatedAt: now.toISOString(),
+        thematicSyntheses,
+      },
+      null,
+      2,
+    ) + '\n',
+    'utf8',
+  );
+  await writeFile(path.join(candidateDir, 'booklet-fr.md'), bookletMarkdown, 'utf8');
   await writeFile(
     path.join(candidateDir, 'validated-synthesis.json'),
     JSON.stringify(
