@@ -27,6 +27,17 @@ const STUDY_CARD_EVIDENCE_LEVEL_VALUES = ['high', 'moderate', 'low'] as const;
 const STUDY_CARD_EXTRACTION_SOURCE_VALUES = ['full-text', 'abstract'] as const;
 const THEMATIC_GUARDRAIL_VALUES = ['SAFE-01', 'SAFE-02', 'SAFE-03'] as const;
 const THEMATIC_EVIDENCE_LEVEL_VALUES = ['strong', 'moderate', 'emerging'] as const;
+const DOCUMENT_REGISTRY_STATUS_VALUES = [
+  'discovered',
+  'metadata-ready',
+  'abstract-ready',
+  'full-text-ready',
+  'extractible',
+  'extracted',
+  'linked',
+] as const;
+const STUDY_DOSSIER_REGISTRY_STATUS_VALUES = ['draft', 'validated-structure', 'linked-to-question', 'needs-review'] as const;
+const DURABLE_WORK_QUEUE_STATUS_VALUES = ['pending', 'running', 'blocked', 'completed', 'failed'] as const;
 
 export const documentaryRejectionReasonSchema = z
   .object({
@@ -170,6 +181,74 @@ export const thematicSynthesisSchema = z
     gapsFr: z.array(z.string().min(1)),
     studyCount: z.number().int().nonnegative(),
     lastUpdated: z.string().datetime(),
+  })
+  .strict();
+
+export const documentRegistryRecordSchema = z
+  .object({
+    documentId: z.string().min(1),
+    canonicalId: z.string().min(1).nullable().optional(),
+    recordId: z.string().min(1),
+    title: z.string().min(1),
+    sourceDomain: z.string().min(1),
+    sourceUrl: z.string().url(),
+    status: z.enum(DOCUMENT_REGISTRY_STATUS_VALUES),
+    topicKeys: z.array(z.string().min(1)),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .strict();
+
+export const documentRegistryStateSchema = z
+  .object({
+    version: z.string().min(1),
+    generatedAt: z.string().datetime(),
+    items: z.array(documentRegistryRecordSchema),
+  })
+  .strict();
+
+export const studyDossierRegistryRecordSchema = z
+  .object({
+    studyId: z.string().min(1),
+    recordId: z.string().min(1),
+    title: z.string().min(1),
+    status: z.enum(STUDY_DOSSIER_REGISTRY_STATUS_VALUES),
+    topicKeys: z.array(z.string().min(1)),
+    studyCard: studyCardSchema,
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .strict();
+
+export const studyDossierRegistryStateSchema = z
+  .object({
+    version: z.string().min(1),
+    generatedAt: z.string().datetime(),
+    items: z.array(studyDossierRegistryRecordSchema),
+  })
+  .strict();
+
+export const durableWorkQueueItemSchema = z
+  .object({
+    id: z.string().min(1),
+    queueName: z.string().min(1),
+    logicalKey: z.string().min(1),
+    status: z.enum(DURABLE_WORK_QUEUE_STATUS_VALUES),
+    payload: z.record(z.string(), z.unknown()),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    claimedBy: z.string().min(1).optional(),
+    claimedAt: z.string().datetime().optional(),
+    blockedReason: z.string().min(1).optional(),
+    failureReason: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const durableWorkQueueStateSchema = z
+  .object({
+    version: z.string().min(1),
+    generatedAt: z.string().datetime(),
+    items: z.array(durableWorkQueueItemSchema),
   })
   .strict();
 
@@ -504,6 +583,12 @@ export type EvidenceScientificRanking = z.infer<typeof evidenceScientificRanking
 export type StructuredStudyExtraction = z.infer<typeof structuredStudyExtractionSchema>;
 export type StudyCard = z.infer<typeof studyCardSchema>;
 export type ThematicSynthesis = z.infer<typeof thematicSynthesisSchema>;
+export type DocumentRegistryRecord = z.infer<typeof documentRegistryRecordSchema>;
+export type DocumentRegistryState = z.infer<typeof documentRegistryStateSchema>;
+export type StudyDossierRegistryRecord = z.infer<typeof studyDossierRegistryRecordSchema>;
+export type StudyDossierRegistryState = z.infer<typeof studyDossierRegistryStateSchema>;
+export type DurableWorkQueueItem = z.infer<typeof durableWorkQueueItemSchema>;
+export type DurableWorkQueueState = z.infer<typeof durableWorkQueueStateSchema>;
 export type AdaptiveKnowledgeRankingTelemetry = z.infer<typeof adaptiveKnowledgeRankingTelemetrySchema>;
 export type CorpusPrinciple = z.infer<typeof corpusPrincipleSchema>;
 export type AdaptiveKnowledgeBootstrapCampaignState = z.infer<typeof adaptiveKnowledgeBootstrapCampaignStateSchema>;
@@ -548,6 +633,30 @@ export function parseStudyCard(input: unknown): StudyCard {
 
 export function parseThematicSynthesis(input: unknown): ThematicSynthesis {
   return thematicSynthesisSchema.parse(input);
+}
+
+export function parseDocumentRegistryRecord(input: unknown): DocumentRegistryRecord {
+  return documentRegistryRecordSchema.parse(input);
+}
+
+export function parseDocumentRegistryState(input: unknown): DocumentRegistryState {
+  return documentRegistryStateSchema.parse(input);
+}
+
+export function parseStudyDossierRegistryRecord(input: unknown): StudyDossierRegistryRecord {
+  return studyDossierRegistryRecordSchema.parse(input);
+}
+
+export function parseStudyDossierRegistryState(input: unknown): StudyDossierRegistryState {
+  return studyDossierRegistryStateSchema.parse(input);
+}
+
+export function parseDurableWorkQueueItem(input: unknown): DurableWorkQueueItem {
+  return durableWorkQueueItemSchema.parse(input);
+}
+
+export function parseDurableWorkQueueState(input: unknown): DurableWorkQueueState {
+  return durableWorkQueueStateSchema.parse(input);
 }
 
 export function parseAdaptiveKnowledgeRankingTelemetry(input: unknown): AdaptiveKnowledgeRankingTelemetry {

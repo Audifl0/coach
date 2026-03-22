@@ -57,6 +57,9 @@ import { acquireFullText, type FullTextAcquisitionResult } from './fulltext-acqu
 import { extractStudyCards } from './study-card-extraction';
 import { synthesizeThematicPrinciples } from './thematic-synthesis';
 import { renderBookletMarkdown } from './booklet-renderer';
+import { buildDocumentRegistryRecordFromNormalizedRecord, upsertDocumentRegistryRecords } from './registry/doc-library';
+import { buildStudyDossierFromStudyCard, upsertStudyDossiers } from './registry/study-dossiers';
+import { enqueueWorkItems } from './registry/work-queues';
 
 type PipelineConnectorFn = (input: ConnectorFetchInput) => Promise<ConnectorFetchResult>;
 
@@ -925,6 +928,42 @@ export async function runAdaptiveKnowledgePipeline(
   });
 
   await mkdir(candidateDir, { recursive: true });
+  await upsertDocumentRegistryRecords(
+    outputRootDir,
+    rankedRecords.map((record) => buildDocumentRegistryRecordFromNormalizedRecord(record, now)),
+    now,
+  );
+  await enqueueWorkItems(
+    outputRootDir,
+    'study-extraction',
+    recordsForSynthesis.map((record) => ({
+      logicalKey: `study-extraction:${record.id}`,
+      payload: {
+        recordId: record.id,
+        canonicalId: record.canonicalId ?? record.id,
+      },
+    })),
+    now,
+  );
+  if (studyCards.length > 0) {
+    await upsertStudyDossiers(
+      outputRootDir,
+      studyCards.map((card) => buildStudyDossierFromStudyCard(card, now)),
+      now,
+    );
+    await enqueueWorkItems(
+      outputRootDir,
+      'question-linking',
+      studyCards.map((card) => ({
+        logicalKey: `question-linking:${card.recordId}`,
+        payload: {
+          studyId: card.recordId,
+          recordId: card.recordId,
+        },
+      })),
+      now,
+    );
+  }
   await writeCursorState(
     outputRootDir,
     [...cursorState.seenRecordIds, ...normalizedRecords.map((record) => record.id)],

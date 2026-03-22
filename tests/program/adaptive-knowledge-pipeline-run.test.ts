@@ -16,6 +16,9 @@ import {
 } from '../../scripts/adaptive-knowledge/contracts';
 import { parseAdaptiveKnowledgePipelineConfig } from '../../scripts/adaptive-knowledge/config';
 import { buildAdaptiveKnowledgeBootstrapCollectionJobs } from '../../scripts/adaptive-knowledge/discovery';
+import { loadDocumentRegistry } from '../../scripts/adaptive-knowledge/registry/doc-library';
+import { loadStudyDossierRegistry } from '../../scripts/adaptive-knowledge/registry/study-dossiers';
+import { loadWorkQueues } from '../../scripts/adaptive-knowledge/registry/work-queues';
 import { runAdaptiveKnowledgePipeline } from '../../scripts/adaptive-knowledge/pipeline-run';
 import {
   buildStructuredExtractionPlan,
@@ -1660,6 +1663,241 @@ test('bootstrap resumes pending queue without duplicating work units', async () 
     persistedJobs.find((job) => job.id === 'crossref:progression-split')?.status,
     'exhausted',
   );
+});
+
+test('pipeline persists discovered documents to document registry', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-registry-'));
+
+  await runPipelineWithDeterministicSynthesis({
+    runId: 'run-document-registry',
+    now: new Date('2026-03-22T00:00:00.000Z'),
+    outputRootDir,
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const registry = await loadDocumentRegistry(outputRootDir);
+  assert.equal(registry.items.length >= 3, true);
+  assert.equal(registry.items.some((item) => item.recordId === 'pubmed-1'), true);
+});
+
+test('pipeline persists study cards to dossier registry when extraction succeeds', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-dossier-'));
+
+  await runAdaptiveKnowledgePipeline({
+    runId: 'run-dossier-registry',
+    now: new Date('2026-03-22T00:00:00.000Z'),
+    outputRootDir,
+    remoteSynthesisClient: {
+      async extractStudyCards(input) {
+        return input.records.map((record) => ({
+          recordId: record.id,
+          title: record.title,
+          authors: 'Doe et al.',
+          year: 2024,
+          journal: 'Journal of Strength Research',
+          doi: null,
+          studyType: 'rct' as const,
+          population: {
+            description: 'Adult lifters',
+            size: 30,
+            trainingLevel: 'intermediate' as const,
+          },
+          protocol: {
+            duration: '8 semaines',
+            intervention: 'Progression encadree',
+            comparison: 'Charge fixe',
+          },
+          results: {
+            primary: 'Amelioration de la force.',
+            secondary: ['Amelioration legere de la masse maigre.'],
+          },
+          practicalTakeaways: ['Monter la charge progressivement.'],
+          limitations: ['Petit echantillon.'],
+          safetySignals: ['Pas d evenement grave.'],
+          evidenceLevel: 'moderate' as const,
+          topicKeys: record.tags,
+          extractionSource: input.payloadByRecordId.get(record.id)?.extractionSource ?? 'abstract',
+          langueFr: {
+            titreFr: `FR ${record.title}`,
+            resumeFr: 'Resume francais.',
+            conclusionFr: 'Conclusion francaise.',
+          },
+        }));
+      },
+      async synthesizeThematicPrinciples(input) {
+        return {
+          topicKey: input.topicKey,
+          topicLabel: input.topicLabel,
+          principlesFr: [
+            {
+              id: `${input.topicKey}-1`,
+              title: 'Principe thematique',
+              statement: 'Adapter la progression au contexte du pratiquant.',
+              conditions: ['Tolerance de charge stable'],
+              guardrail: 'SAFE-03' as const,
+              evidenceLevel: 'moderate' as const,
+              sourceCardIds: input.studyCards.map((card) => card.recordId),
+            },
+          ],
+          summaryFr: `Synthese pour ${input.topicLabel}`,
+          gapsFr: ['Davantage de donnees a long terme necessaires.'],
+          studyCount: input.studyCards.length,
+          lastUpdated: '2026-03-22T00:00:00.000Z',
+        };
+      },
+      async synthesizeLot() {
+        throw new Error('not used');
+      },
+      async consolidate() {
+        throw new Error('not used');
+      },
+    },
+    synthesizeImpl: async (records) => {
+      const principles = synthesizeCorpusPrinciples(records);
+      return {
+        principles,
+        validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+          records,
+          principles,
+          modelRun: {
+            provider: 'deterministic',
+            model: 'test-remote-synthesis',
+            promptVersion: 'test-v1',
+          },
+        }),
+      };
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const registry = await loadStudyDossierRegistry(outputRootDir);
+  assert.equal(registry.items.length > 0, true);
+  assert.equal(registry.items.every((item) => item.status === 'validated-structure'), true);
+});
+
+test('pipeline enqueues downstream work items instead of losing unfinished work', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-work-queue-'));
+
+  await runPipelineWithDeterministicSynthesis({
+    runId: 'run-work-queue',
+    now: new Date('2026-03-22T00:00:00.000Z'),
+    outputRootDir,
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const queues = await loadWorkQueues(outputRootDir);
+  assert.equal(queues.items.some((item) => item.queueName === 'study-extraction'), true);
+  assert.equal(queues.items.some((item) => item.logicalKey.startsWith('study-extraction:')), true);
+});
+
+test('pipeline enqueues question-linking work items when study cards are extracted', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-question-queue-'));
+
+  await runAdaptiveKnowledgePipeline({
+    runId: 'run-question-queue',
+    now: new Date('2026-03-22T00:00:00.000Z'),
+    outputRootDir,
+    remoteSynthesisClient: {
+      async extractStudyCards(input) {
+        return input.records.map((record) => ({
+          recordId: record.id,
+          title: record.title,
+          authors: 'Doe et al.',
+          year: 2024,
+          journal: 'Journal of Strength Research',
+          doi: null,
+          studyType: 'rct' as const,
+          population: {
+            description: 'Adult lifters',
+            size: 30,
+            trainingLevel: 'intermediate' as const,
+          },
+          protocol: {
+            duration: '8 semaines',
+            intervention: 'Progression encadree',
+            comparison: 'Charge fixe',
+          },
+          results: {
+            primary: 'Amelioration de la force.',
+            secondary: ['Amelioration legere de la masse maigre.'],
+          },
+          practicalTakeaways: ['Monter la charge progressivement.'],
+          limitations: ['Petit echantillon.'],
+          safetySignals: ['Pas d evenement grave.'],
+          evidenceLevel: 'moderate' as const,
+          topicKeys: record.tags,
+          extractionSource: input.payloadByRecordId.get(record.id)?.extractionSource ?? 'abstract',
+          langueFr: {
+            titreFr: `FR ${record.title}`,
+            resumeFr: 'Resume francais.',
+            conclusionFr: 'Conclusion francaise.',
+          },
+        }));
+      },
+      async synthesizeThematicPrinciples(input) {
+        return {
+          topicKey: input.topicKey,
+          topicLabel: input.topicLabel,
+          principlesFr: [
+            {
+              id: `${input.topicKey}-1`,
+              title: 'Principe thematique',
+              statement: 'Adapter la progression au contexte du pratiquant.',
+              conditions: ['Tolerance de charge stable'],
+              guardrail: 'SAFE-03' as const,
+              evidenceLevel: 'moderate' as const,
+              sourceCardIds: input.studyCards.map((card) => card.recordId),
+            },
+          ],
+          summaryFr: `Synthese pour ${input.topicLabel}`,
+          gapsFr: ['Davantage de donnees a long terme necessaires.'],
+          studyCount: input.studyCards.length,
+          lastUpdated: '2026-03-22T00:00:00.000Z',
+        };
+      },
+      async synthesizeLot() {
+        throw new Error('not used');
+      },
+      async consolidate() {
+        throw new Error('not used');
+      },
+    },
+    synthesizeImpl: async (records) => {
+      const principles = synthesizeCorpusPrinciples(records);
+      return {
+        principles,
+        validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+          records,
+          principles,
+          modelRun: {
+            provider: 'deterministic',
+            model: 'test-remote-synthesis',
+            promptVersion: 'test-v1',
+          },
+        }),
+      };
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const queues = await loadWorkQueues(outputRootDir);
+  assert.equal(queues.items.some((item) => item.queueName === 'question-linking'), true);
 });
 
 test('pipeline fetches multiple pages per query up to configured limit', async () => {
