@@ -1409,3 +1409,58 @@ test('bootstrap resumes pending queue without duplicating work units', async () 
     'exhausted',
   );
 });
+
+test('pipeline fetches multiple pages per query up to configured limit', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+  const callLog: Array<{ source: string; page: number }> = [];
+
+  await runPipelineWithDeterministicSynthesis({
+    runId: 'run-pagination-multi-page',
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    outputRootDir,
+    configOverrides: {
+      maxQueriesPerRun: 1,
+      pagesPerQuery: 3,
+    },
+    connectors: {
+      pubmed: async (input) => {
+        const page = input.pagination?.page ?? 0;
+        callLog.push({ source: 'pubmed', page });
+
+        const hasMore = page < 2;
+        return {
+          source: 'pubmed',
+          skipped: false,
+          records: [
+            {
+              id: `pubmed-page-${page}`,
+              sourceType: 'guideline',
+              sourceUrl: `https://pubmed.ncbi.nlm.nih.gov/pubmed-page-${page}`,
+              sourceDomain: 'pubmed.ncbi.nlm.nih.gov',
+              publishedAt: '2025-11-02',
+              title: `PubMed page ${page} result on progression overload`,
+              summaryEn: `Resistance training progression and overload at page ${page}.`,
+              tags: ['progression'],
+              provenanceIds: [`pubmed-page-${page}`],
+            },
+          ],
+          recordsFetched: 1,
+          recordsSkipped: 0,
+          telemetry: {
+            attempts: 1,
+            hasMore,
+          },
+        } satisfies ConnectorFetchResult;
+      },
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const pubmedCalls = callLog.filter((entry) => entry.source === 'pubmed');
+  assert.equal(pubmedCalls.length, 3, `Expected 3 pubmed calls, got ${pubmedCalls.length}`);
+  assert.deepEqual(
+    pubmedCalls.map((entry) => entry.page),
+    [0, 1, 2],
+  );
+});

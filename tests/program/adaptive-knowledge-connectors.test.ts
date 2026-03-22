@@ -4,6 +4,7 @@ import test from 'node:test';
 import { fetchCrossrefEvidenceBatch } from '../../scripts/adaptive-knowledge/connectors/crossref';
 import { fetchOpenAlexEvidenceBatch } from '../../scripts/adaptive-knowledge/connectors/openalex';
 import { fetchPubmedEvidenceBatch } from '../../scripts/adaptive-knowledge/connectors/pubmed';
+import { buildAdaptiveKnowledgeDiscoveryPlan } from '../../scripts/adaptive-knowledge/discovery';
 
 type MockResponse = {
   ok: boolean;
@@ -176,4 +177,32 @@ test('cursor state excludes already seen records before final normalization', as
 
   assert.equal(result.records.length, 0);
   assert.equal(result.recordsSkipped, 1);
+});
+
+test('discovery plan with expanded topics covers at least 8 distinct topic keys', () => {
+  const plan = buildAdaptiveKnowledgeDiscoveryPlan({ maxQueries: 30 });
+  const uniqueTopicKeys = new Set(plan.map((query) => query.topicKey));
+  assert.equal(uniqueTopicKeys.size >= 8, true, `Expected at least 8 topic keys, got ${uniqueTopicKeys.size}: ${[...uniqueTopicKeys].join(', ')}`);
+});
+
+test('connectors respect pagination page parameter and report hasMore', async () => {
+  const capturedUrls: string[] = [];
+
+  const result = await fetchPubmedEvidenceBatch({
+    query: 'progressive overload',
+    allowedDomains: ['pubmed.ncbi.nlm.nih.gov'],
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    pagination: { page: 2 },
+    fetchImpl: async (url) => {
+      capturedUrls.push(url);
+      return buildJsonResponse({
+        esearchresult: { idlist: [] },
+      });
+    },
+  });
+
+  assert.equal(capturedUrls.length >= 1, true);
+  const searchUrl = capturedUrls[0]!;
+  assert.equal(searchUrl.includes('retstart=40'), true, `Expected retstart=40 in URL, got: ${searchUrl}`);
+  assert.equal(result.telemetry.hasMore, false);
 });

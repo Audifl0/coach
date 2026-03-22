@@ -81,6 +81,8 @@ export type RunAdaptiveKnowledgePipelineInput = {
     backfillMaxDays: number;
     retryCount: number;
     timeoutMs: number;
+    maxQueriesPerRun: number;
+    pagesPerQuery: number;
     bootstrapMaxJobsPerRun: number;
     bootstrapMaxPagesPerJob: number;
     bootstrapMaxCanonicalRecordsPerRun: number;
