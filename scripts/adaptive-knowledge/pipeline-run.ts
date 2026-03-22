@@ -443,19 +443,56 @@ export async function runAdaptiveKnowledgePipeline(
 
   const stageReports: PipelineStage[] = [];
 
+  const pagesPerQuery = config.pagesPerQuery;
+
   const sourceResults = await Promise.all(
     discoveryPlan.map(async (source, index) => {
       const connector = connectors[source.source];
-      return connector({
-        query: source.query,
-        allowedDomains: [...config.allowedDomains],
-        freshnessWindowDays: config.freshnessWindowDays,
-        retryCount: config.maxRetries,
-        timeoutMs: config.requestTimeoutMs,
-        now,
-        cursorState,
-        collectionJob: mode === 'bootstrap' ? bootstrapJobs[index] : undefined,
-      });
+      const allRecords: ConnectorFetchResult['records'] = [];
+      let totalFetched = 0;
+      let totalSkipped = 0;
+      let lastTelemetry: ConnectorFetchResult['telemetry'] = { attempts: 0 };
+      let lastError: ConnectorFetchResult['error'];
+      let wasSkipped = false;
+
+      for (let page = 0; page < pagesPerQuery; page++) {
+        const pageResult = await connector({
+          query: source.query,
+          allowedDomains: [...config.allowedDomains],
+          freshnessWindowDays: config.freshnessWindowDays,
+          retryCount: config.maxRetries,
+          timeoutMs: config.requestTimeoutMs,
+          now,
+          cursorState,
+          collectionJob: mode === 'bootstrap' ? bootstrapJobs[index] : undefined,
+          pagination: { page, pagesPerQuery },
+        });
+
+        allRecords.push(...pageResult.records);
+        totalFetched += pageResult.recordsFetched;
+        totalSkipped += pageResult.recordsSkipped;
+        lastTelemetry = pageResult.telemetry;
+
+        if (pageResult.skipped || pageResult.error) {
+          wasSkipped = pageResult.skipped;
+          lastError = pageResult.error;
+          break;
+        }
+
+        if (pageResult.recordsFetched === 0 || lastTelemetry.hasMore !== true) {
+          break;
+        }
+      }
+
+      return {
+        source: source.source,
+        skipped: wasSkipped,
+        records: allRecords,
+        recordsFetched: totalFetched,
+        recordsSkipped: totalSkipped,
+        telemetry: lastTelemetry,
+        ...(lastError ? { error: lastError } : {}),
+      } satisfies ConnectorFetchResult;
     }),
   );
 
