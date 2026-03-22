@@ -248,7 +248,7 @@ export function evaluateCorpusQualityGate(input: EvaluateCorpusQualityGateInput)
   }
 
   return {
-    publishable: status === 'publishable',
+    publishable: status === 'publishable' || status === 'progressing',
     status,
     reasons: [...new Set(uniqueReasons)],
     compositeScore,
