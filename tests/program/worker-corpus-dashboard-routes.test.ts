@@ -326,7 +326,7 @@ test('server pause action writes paused control state', async () => {
 
   assert.equal(state.state, 'paused');
   assert.equal(state.pauseRequestedAt, '2026-03-22T19:10:00.000Z');
-  assert.equal(state.message, 'no active worker process to pause');
+  assert.equal(state.message, 'pause requested from dashboard');
 });
 
 test('control and library routes validate authenticated worker dashboard workflows', async () => {

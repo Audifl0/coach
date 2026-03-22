@@ -66,7 +66,7 @@ type WorkerLaunchInvocation = {
   options: SpawnOptions;
 };
 
-type WorkerLauncher = (invocation: WorkerLaunchInvocation) => { pid: number | null; unref(): void };
+type WorkerLauncher = (invocation: WorkerLaunchInvocation) => { pid?: number | null; unref(): void };
 
 const DEFAULT_ROOT_DIR = path.join(process.cwd(), '.planning', 'knowledge', 'adaptive-coaching');
 const CONTROL_STATE_FILE = 'worker-control.json';
@@ -311,24 +311,17 @@ export async function pauseWorkerControl(input: WorkerControlInput = {}): Promis
   const filePath = buildControlStatePath(knowledgeRootDir);
   const current = await readWorkerControlState({ knowledgeRootDir, now });
 
-  if (current.state !== 'running' || !isPidRunning(current.pid)) {
-    const idleState = {
-      ...createIdleState(now, 'no active worker process to pause'),
-      state: 'paused' as const,
-      pauseRequestedAt: now.toISOString(),
-    };
-    return writeResolvedControlState(filePath, idleState);
-  }
-
-  process.kill(current.pid!, 'SIGTERM');
   const nextState: WorkerControlState = {
     state: 'paused',
-    pid: null,
+    pid: current.state === 'running' && isPidRunning(current.pid) ? current.pid : null,
     mode: current.mode,
     startedAt: current.startedAt,
-    stoppedAt: now.toISOString(),
+    stoppedAt: current.stoppedAt,
     pauseRequestedAt: now.toISOString(),
-    message: 'pause requested from dashboard',
+    message:
+      current.state === 'running' && isPidRunning(current.pid)
+        ? 'soft pause requested from dashboard; active run may finish, new runs blocked'
+        : 'pause requested from dashboard',
     campaign: null,
   };
   return writeResolvedControlState(filePath, nextState);

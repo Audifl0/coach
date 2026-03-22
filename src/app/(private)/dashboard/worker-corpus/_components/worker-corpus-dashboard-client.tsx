@@ -40,20 +40,21 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
   const [pendingAction, setPendingAction] = useState<'start' | 'pause' | null>(null);
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const supervision = props.initialSupervision;
-  const sectionReady = props.initialSection.status === 'ready';
+  const sectionData = props.initialSection.status === 'ready' ? props.initialSection.data : null;
+  const sectionReady = sectionData !== null;
   const sectionSummary =
-    props.initialSection.status === 'ready'
-      ? `${props.initialSection.data.recentRuns.length} recent runs · active snapshot ${formatMaybe(
-          props.initialSection.data.publication.activeSnapshotId,
+    sectionData !== null
+      ? `${sectionData.recentRuns.length} recent runs · active snapshot ${formatMaybe(
+          sectionData.publication.activeSnapshotId,
           'none',
         )}`
       : props.initialSection.status === 'empty'
         ? 'No published worker artifacts yet.'
         : 'Worker overview unavailable.';
 
-  const operatorMode = sectionReady ? props.initialSection.data.operatorMode : 'running';
-  const operatorUpdatedAt = sectionReady ? props.initialSection.data.operatorUpdatedAt : null;
-  const runActive = sectionReady ? props.initialSection.data.runActive : false;
+  const operatorMode = sectionData?.operatorMode ?? 'running';
+  const operatorUpdatedAt = sectionData?.operatorUpdatedAt ?? null;
+  const runActive = sectionData?.runActive ?? false;
   const startDisabled = pendingAction !== null || (sectionReady && operatorMode === 'running' && runActive);
   const pauseDisabled = pendingAction !== null || !sectionReady || operatorMode === 'paused';
 

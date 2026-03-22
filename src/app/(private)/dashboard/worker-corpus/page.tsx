@@ -1,7 +1,5 @@
 import { redirect } from 'next/navigation';
 
-import { WorkerCorpusDashboardClientShell } from './_components/worker-corpus-dashboard-client-shell';
-
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
 import {
   type WorkerCorpusLibraryDetail,
