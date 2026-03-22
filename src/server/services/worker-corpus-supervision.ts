@@ -39,7 +39,7 @@ async function readQuestionDossiers(knowledgeRootDir: string): Promise<QuestionS
   try {
     const raw = JSON.parse(await readFile(filePath, 'utf8')) as unknown;
     if (!Array.isArray(raw)) {
-      return [];
+      throw new Error('question-synthesis-dossiers.json must contain an array');
     }
     return raw
       .map((item) => {
@@ -50,8 +50,12 @@ async function readQuestionDossiers(knowledgeRootDir: string): Promise<QuestionS
         }
       })
       .filter((item): item is QuestionSynthesisDossier => item !== null);
-  } catch {
-    return [];
+  } catch (error) {
+    const errno = (error as NodeJS.ErrnoException).code;
+    if (errno === 'ENOENT') {
+      return [];
+    }
+    throw error;
   }
 }
 

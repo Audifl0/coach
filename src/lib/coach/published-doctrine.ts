@@ -1,6 +1,13 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
+export class PublishedDoctrineArtifactError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PublishedDoctrineArtifactError';
+  }
+}
+
 export type PublishedDoctrinePrinciple = {
   id: string;
   statement: string;
@@ -86,9 +93,8 @@ export function loadPublishedDoctrine(input: LoadPublishedDoctrineInput = {}): P
       return { snapshotId: null, principles: [] };
     }
 
-    const artifact = JSON.parse(
-      readFileSync(path.join(activePointer.snapshotDir, 'knowledge-bible.json'), 'utf8'),
-    ) as {
+    const artifactPath = path.join(activePointer.snapshotDir, 'knowledge-bible.json');
+    const artifact = JSON.parse(readFileSync(artifactPath, 'utf8')) as {
       publishedDoctrine?: {
         principles?: unknown[];
       };
@@ -102,11 +108,18 @@ export function loadPublishedDoctrine(input: LoadPublishedDoctrineInput = {}): P
       snapshotId: activePointer.snapshotId ?? null,
       principles,
     };
-  } catch {
-    return {
-      snapshotId: null,
-      principles: [],
-    };
+  } catch (error) {
+    const errno = (error as NodeJS.ErrnoException).code;
+    if (errno === 'ENOENT') {
+      return {
+        snapshotId: null,
+        principles: [],
+      };
+    }
+
+    throw new PublishedDoctrineArtifactError(
+      `Failed to load published doctrine artifact: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 

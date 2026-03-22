@@ -306,3 +306,19 @@ test('supervision service summarizes published doctrine revisions', async () => 
   assert.equal(supervision.recentResearchJournal.length > 0, true);
   assert.equal(supervision.recentResearchJournal[0]?.kind.length > 0, true);
 });
+
+test('supervision service tolerates missing dossier registry file', async () => {
+  const rootDir = await mkdtemp(path.join(tmpdir(), 'worker-corpus-supervision-missing-'));
+
+  const supervision = await loadWorkerCorpusSupervision({ knowledgeRootDir: rootDir });
+
+  assert.equal(supervision.questions.total, 0);
+  assert.equal(supervision.workflow.queueDepth, 0);
+});
+
+test('supervision service throws when dossier registry is malformed', async () => {
+  const rootDir = await buildSupervisionFixture();
+  await writeFile(path.join(rootDir, 'registry', 'question-synthesis-dossiers.json'), '{not-json', 'utf8');
+
+  await assert.rejects(() => loadWorkerCorpusSupervision({ knowledgeRootDir: rootDir }));
+});

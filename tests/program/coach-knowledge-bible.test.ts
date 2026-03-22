@@ -5,7 +5,11 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { loadCoachKnowledgeBible, renderCoachKnowledgeBibleForPrompt } from '../../src/lib/coach/knowledge-bible';
-import { loadPublishedDoctrine, renderPublishedDoctrineForPrompt } from '../../src/lib/coach/published-doctrine';
+import {
+  PublishedDoctrineArtifactError,
+  loadPublishedDoctrine,
+  renderPublishedDoctrineForPrompt,
+} from '../../src/lib/coach/published-doctrine';
 
 async function writeJson(filePath: string, payload: unknown): Promise<void> {
   await writeFile(filePath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
@@ -175,6 +179,31 @@ test('runtime doctrine loader excludes unresolved question dossiers and raw stud
   assert.doesNotMatch(prompt, /UNRESOLVED DOSSIER SHOULD NOT APPEAR/);
   assert.doesNotMatch(prompt, /RAW STUDY DOSSIER SHOULD NOT APPEAR/);
   assert.doesNotMatch(prompt, /Raw study title/);
+});
+
+test('runtime doctrine loader returns empty only when doctrine artifacts are missing', async () => {
+  const rootDir = await mkdtemp(path.join(tmpdir(), 'coach-bible-missing-'));
+  const doctrine = loadPublishedDoctrine({ knowledgeRootDir: rootDir });
+
+  assert.equal(doctrine.snapshotId, null);
+  assert.deepEqual(doctrine.principles, []);
+});
+
+test('runtime doctrine loader throws when published doctrine artifact is malformed', async () => {
+  const rootDir = await mkdtemp(path.join(tmpdir(), 'coach-bible-malformed-'));
+  const snapshotDir = path.join(rootDir, 'snapshots', 'run-active', 'validated');
+  await mkdir(snapshotDir, { recursive: true });
+  await writeFile(path.join(snapshotDir, 'knowledge-bible.json'), '{not-json', 'utf8');
+  await writeJson(path.join(rootDir, 'active.json'), {
+    snapshotId: 'run-active',
+    snapshotDir,
+    promotedAt: '2026-03-05T00:00:00.000Z',
+  });
+
+  assert.throws(
+    () => loadPublishedDoctrine({ knowledgeRootDir: rootDir }),
+    (error) => error instanceof PublishedDoctrineArtifactError,
+  );
 });
 
 test('renderCoachKnowledgeBibleForPrompt includes conditions and practical takeaways when present', () => {
