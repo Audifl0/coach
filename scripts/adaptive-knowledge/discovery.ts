@@ -38,6 +38,12 @@ const DEFAULT_DISCOVERY_TOPICS: readonly DiscoveryTopic[] = [
         queryFamily: 'progression-split',
         query: 'strength programming weekly split resistance training',
       },
+      {
+        key: 'deload-protocols',
+        label: 'Protocoles de deload',
+        queryFamily: 'progression-deload',
+        query: 'deload protocol resistance training recovery supercompensation',
+      },
     ],
   },
   {
@@ -56,6 +62,12 @@ const DEFAULT_DISCOVERY_TOPICS: readonly DiscoveryTopic[] = [
         label: 'Frequence et dose',
         queryFamily: 'hypertrophy-frequency',
         query: 'muscle hypertrophy training frequency volume dose response',
+      },
+      {
+        key: 'dose-response-sets',
+        label: 'Dose-reponse series',
+        queryFamily: 'hypertrophy-dose-response-sets',
+        query: 'dose response weekly sets muscle hypertrophy',
       },
     ],
   },
@@ -76,6 +88,12 @@ const DEFAULT_DISCOVERY_TOPICS: readonly DiscoveryTopic[] = [
         queryFamily: 'readiness-autoregulation',
         query: 'load autoregulation readiness monitoring resistance training',
       },
+      {
+        key: 'recovery-monitoring',
+        label: 'Monitoring de recuperation',
+        queryFamily: 'fatigue-recovery-monitoring',
+        query: 'recovery monitoring biomarkers resistance training readiness',
+      },
     ],
   },
   {
@@ -94,6 +112,12 @@ const DEFAULT_DISCOVERY_TOPICS: readonly DiscoveryTopic[] = [
         label: 'Entrainement avec douleur',
         queryFamily: 'limitations-pain-aware',
         query: 'resistance training pain modification exercise selection',
+      },
+      {
+        key: 'load-modification',
+        label: 'Modification de charge',
+        queryFamily: 'limitations-load-modification',
+        query: 'load modification pain resistance training rehabilitation',
       },
     ],
   },
@@ -116,6 +140,13 @@ const DEFAULT_DISCOVERY_TOPICS: readonly DiscoveryTopic[] = [
         query: 'time efficient resistance training frequency split',
         targetPopulation: 'time constrained athletes',
       },
+      {
+        key: 'female-athletes',
+        label: 'Athlete feminine',
+        queryFamily: 'population-female-athletes',
+        query: 'female resistance training hypertrophy strength differences',
+        targetPopulation: 'female athletes',
+      },
     ],
   },
   {
@@ -134,6 +165,62 @@ const DEFAULT_DISCOVERY_TOPICS: readonly DiscoveryTopic[] = [
         label: 'Variantes et specificite',
         queryFamily: 'exercise-selection-variation',
         query: 'exercise variation specificity resistance training',
+      },
+      {
+        key: 'isolation-vs-compound',
+        label: 'Isolation vs compound',
+        queryFamily: 'exercise-selection-isolation-compound',
+        query: 'isolation compound exercise comparison hypertrophy',
+      },
+    ],
+  },
+  {
+    key: 'periodization',
+    label: 'Periodisation',
+    priority: 7,
+    subtopics: [
+      {
+        key: 'linear-periodization',
+        label: 'Periodisation lineaire',
+        queryFamily: 'periodization-linear',
+        query: 'linear periodization resistance training strength',
+      },
+      {
+        key: 'undulating-periodization',
+        label: 'Periodisation ondulatoire',
+        queryFamily: 'periodization-undulating',
+        query: 'daily undulating periodization hypertrophy strength',
+      },
+      {
+        key: 'block-periodization',
+        label: 'Periodisation par blocs',
+        queryFamily: 'periodization-block',
+        query: 'block periodization resistance training programming',
+      },
+    ],
+  },
+  {
+    key: 'rest-intervals',
+    label: 'Intervalles de repos',
+    priority: 8,
+    subtopics: [
+      {
+        key: 'hypertrophy-rest',
+        label: 'Repos pour hypertrophie',
+        queryFamily: 'rest-intervals-hypertrophy',
+        query: 'rest interval duration hypertrophy muscle growth',
+      },
+      {
+        key: 'strength-rest',
+        label: 'Repos pour la force',
+        queryFamily: 'rest-intervals-strength',
+        query: 'inter-set rest period strength performance recovery',
+      },
+      {
+        key: 'endurance-rest',
+        label: 'Repos pour endurance',
+        queryFamily: 'rest-intervals-endurance',
+        query: 'short rest intervals muscular endurance resistance training',
       },
     ],
   },

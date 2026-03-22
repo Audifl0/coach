@@ -142,6 +142,8 @@ function deriveContentTags(title: string, summary: string): string[] {
     ['pain', ['pain', 'injury', 'limitation']],
     ['substitution', ['substitution', 'modification', 'alternative exercise']],
     ['adherence', ['adherence', 'compliance', 'dropout']],
+    ['periodization', ['periodization', 'undulating', 'block periodization', 'linear periodization']],
+    ['rest-intervals', ['rest interval', 'inter-set rest', 'rest period']],
   ];
   for (const [tag, keywords] of checks) {
     if (keywords.some((kw) => text.includes(kw))) tags.push(tag);
@@ -289,12 +291,14 @@ const GENERAL_TRAINING_TERMS = new Set([
 ]);
 
 const TOPIC_TERMS: Record<string, string[]> = {
-  progression: ['progression', 'overload', 'strength', 'load'],
-  'hypertrophy-dose': ['hypertrophy', 'muscle', 'volume', 'frequency'],
-  'fatigue-readiness': ['fatigue', 'readiness', 'recovery', 'autoregulation'],
-  'limitations-pain': ['pain', 'injury', 'limitation', 'substitution'],
-  'population-context': ['novice', 'beginner', 'older', 'population', 'time'],
-  'exercise-selection': ['exercise', 'movement', 'variation', 'specificity'],
+  progression: ['progression', 'overload', 'strength', 'load', 'deload', 'supercompensation'],
+  'hypertrophy-dose': ['hypertrophy', 'muscle', 'volume', 'frequency', 'dose'],
+  'fatigue-readiness': ['fatigue', 'readiness', 'recovery', 'autoregulation', 'biomarker'],
+  'limitations-pain': ['pain', 'injury', 'limitation', 'substitution', 'rehabilitation', 'modification'],
+  'population-context': ['novice', 'beginner', 'older', 'population', 'time', 'female'],
+  'exercise-selection': ['exercise', 'movement', 'variation', 'specificity', 'isolation', 'compound'],
+  'periodization': ['periodization', 'linear', 'undulating', 'block', 'programming'],
+  'rest-intervals': ['rest', 'interval', 'recovery', 'endurance'],
 };
 
 function tokenizeSemanticText(value: string): string[] {
