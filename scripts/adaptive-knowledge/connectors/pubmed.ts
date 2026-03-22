@@ -162,7 +162,7 @@ export async function fetchPubmedEvidenceBatch(input: ConnectorFetchInput): Prom
       return { mode: 'preformed' as const, records: payload.results, ids: [] as string[] };
     }
     const ids = payload.esearchresult?.idlist ?? [];
-    return { mode: 'ids' as const, records: [] as typeof payload.results, ids };
+    return { mode: 'ids' as const, records: [] as PubmedApiResponse['results'], ids };
   }, config.maxRetries);
 
   if (!searchResult.ok) {
