@@ -51,6 +51,7 @@ import {
   synthesizeCorpusWithRemoteModel,
   type CorpusSynthesisOutput,
 } from './synthesis';
+import { acquireFullText, type FullTextAcquisitionResult } from './fulltext-acquisition';
 
 type PipelineConnectorFn = (input: ConnectorFetchInput) => Promise<ConnectorFetchResult>;
 
@@ -83,6 +84,7 @@ export type RunAdaptiveKnowledgePipelineInput = {
     timeoutMs: number;
     maxQueriesPerRun: number;
     pagesPerQuery: number;
+    fulltextBudgetPerRun: number;
     bootstrapMaxJobsPerRun: number;
     bootstrapMaxPagesPerJob: number;
     bootstrapMaxCanonicalRecordsPerRun: number;
@@ -517,6 +519,36 @@ export async function runAdaptiveKnowledgePipeline(
     records: candidateRecordsForSynthesis,
   });
   const recordsForSynthesis = extractionPlan.extractableRecords;
+
+  // Full-text acquisition stage: run for top N records (budget-gated)
+  const fulltextBudget = config.fulltextBudgetPerRun;
+  const fulltextTargets = candidateRecordsForSynthesis.slice(0, fulltextBudget);
+  const fulltextResultMap = new Map<string, FullTextAcquisitionResult>();
+  let fulltextAcquired = 0;
+  for (const record of fulltextTargets) {
+    const ftResult = await acquireFullText({ record });
+    fulltextResultMap.set(record.id, ftResult);
+    if (ftResult.source !== 'abstract-only') {
+      fulltextAcquired += 1;
+      // Promote the record's documentary status to full-text-ready
+      const idx = rankedRecords.findIndex((r) => r.id === record.id);
+      if (idx >= 0) {
+        rankedRecords[idx] = {
+          ...rankedRecords[idx]!,
+          documentary: {
+            status: 'full-text-ready' as const,
+            acquisition: {
+              sourceKind: 'full-text' as const,
+              rejectionReason: null,
+            },
+          },
+        };
+      }
+    }
+  }
+  const fulltextStageMessage =
+    `budget=${fulltextBudget}; targets=${fulltextTargets.length}; acquired=${fulltextAcquired}; ` +
+    `abstractOnly=${fulltextTargets.length - fulltextAcquired}`;
   const rankingTelemetry: AdaptiveKnowledgeRankingTelemetry = parseAdaptiveKnowledgeRankingTelemetry(
     rankingSelection.telemetry,
   );
@@ -572,7 +604,7 @@ export async function runAdaptiveKnowledgePipeline(
     status: 'succeeded',
     message:
       `sources=${sourceResults.length}; skippedSources=${skippedSources}; ` +
-      `fetched=${fetchedRecords}; incrementalSkipped=${incrementalSkipped}; deduped=${dedupedRecords}; skipped=${skippedRecords}; normalized=${normalizedRecords.length}; selected=${rankingTelemetry.selectedRecordCount}; rejected=${rankingTelemetry.rejectedRecordCount}`,
+      `fetched=${fetchedRecords}; incrementalSkipped=${incrementalSkipped}; deduped=${dedupedRecords}; skipped=${skippedRecords}; normalized=${normalizedRecords.length}; selected=${rankingTelemetry.selectedRecordCount}; rejected=${rankingTelemetry.rejectedRecordCount}; fulltext:${fulltextStageMessage}`,
   });
   if (extractionPlan.deferredRecordIds.length > 0) {
     stageReports[1]!.message +=
@@ -785,6 +817,12 @@ export async function runAdaptiveKnowledgePipeline(
         discovery: discoveryTelemetry,
         ranking: rankingTelemetry,
         bootstrap: bootstrapTelemetry,
+        fulltext: {
+          budget: fulltextBudget,
+          targets: fulltextTargets.length,
+          acquired: fulltextAcquired,
+          results: [...fulltextResultMap.entries()].map(([, result]) => result),
+        },
         selectedRecordIds: recordsForSynthesis.map((record) => record.id),
         rejectedRecordIds: rankingSelection.rejectedRecords.map((record) => record.id),
         sources: sourceResults,
