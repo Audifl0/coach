@@ -153,7 +153,17 @@ function hasInsufficientTopicDiversity(records: NormalizedEvidenceRecord[], vali
     return false;
   }
 
-  return new Set(validatedSynthesis.coverage.coveredTags).size < 2;
+  // Check coveredTags from synthesis first; fall back to record-level tags
+  // when the remote model returns an empty coveredTags array.
+  const synthesisTags = new Set(validatedSynthesis.coverage.coveredTags);
+  if (synthesisTags.size >= 2) return false;
+
+  const recordTags = new Set(records.flatMap((r) => r.tags));
+  if (recordTags.size >= 2) return false;
+
+  // Last resort: multiple distinct guardrails across principles counts as diverse
+  const guardrails = new Set(validatedSynthesis.principles.map((p) => p.guardrail));
+  return guardrails.size < 2;
 }
 
 function hasInsufficientSourceDiversity(records: NormalizedEvidenceRecord[], validatedSynthesis: ValidatedSynthesis | undefined): boolean {
