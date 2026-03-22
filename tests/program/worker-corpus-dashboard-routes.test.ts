@@ -319,6 +319,52 @@ test('server start action reports already-running instead of launching a duplica
   }
 });
 
+test('server start action can queue a host-bridge launch request without shelling to docker', async () => {
+  const knowledgeRootDir = await mkdtemp(path.join(tmpdir(), 'worker-control-bridge-'));
+  let spawnCalls = 0;
+
+  setWorkerLauncherForTests(() => {
+    spawnCalls += 1;
+    return {
+      pid: 7777,
+      unref() {
+        // noop
+      },
+    };
+  });
+
+  const previousMode = process.env.WORKER_CONTROL_BRIDGE_MODE;
+  process.env.WORKER_CONTROL_BRIDGE_MODE = 'host-file';
+
+  try {
+    const state = await startWorkerControl({ knowledgeRootDir, now: new Date('2026-03-22T19:02:00.000Z') });
+
+    assert.equal(state.state, 'running');
+    assert.equal(state.pid, null);
+    assert.equal(state.mode, 'refresh');
+    assert.equal(state.message, 'worker start requested from dashboard (refresh)');
+    assert.equal(spawnCalls, 0);
+
+    const persisted = JSON.parse(await readFile(path.join(knowledgeRootDir, 'worker-control.json'), 'utf8')) as {
+      state: string;
+      pid: number | null;
+      message: string | null;
+      mode: string | null;
+    };
+    assert.equal(persisted.state, 'running');
+    assert.equal(persisted.pid, null);
+    assert.equal(persisted.mode, 'refresh');
+    assert.equal(persisted.message, 'worker start requested from dashboard (refresh)');
+  } finally {
+    if (previousMode === undefined) {
+      delete process.env.WORKER_CONTROL_BRIDGE_MODE;
+    } else {
+      process.env.WORKER_CONTROL_BRIDGE_MODE = previousMode;
+    }
+    resetWorkerLauncherForTests();
+  }
+});
+
 test('server pause action writes paused control state', async () => {
   const knowledgeRootDir = await mkdtemp(path.join(tmpdir(), 'worker-control-pause-'));
 

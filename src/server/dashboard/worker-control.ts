@@ -77,8 +77,13 @@ const WORKER_STATE_FILE = 'worker-state.json';
 const WORKER_LOCK_FILE = 'worker.lock';
 const COACH_ENV_FILE = '/opt/coach/.env';
 const WORKER_COMPOSE_SERVICE = 'worker-corpus';
+const WORKER_CONTROL_BRIDGE_MODE = 'host-file';
 
 let workerLauncher: WorkerLauncher = ({ command, args, options }) => spawn(command, args, options);
+
+function resolveWorkerControlBridgeMode(env: NodeJS.ProcessEnv = process.env): 'docker-compose' | 'host-file' {
+  return env.WORKER_CONTROL_BRIDGE_MODE === WORKER_CONTROL_BRIDGE_MODE ? 'host-file' : 'docker-compose';
+}
 
 function resolveKnowledgeRootDir(input?: string): string {
   return input ?? DEFAULT_ROOT_DIR;
@@ -289,6 +294,20 @@ export async function startWorkerControl(
   }
 
   const mode = input.mode ?? 'refresh';
+  if (resolveWorkerControlBridgeMode() === 'host-file') {
+    const nextState: WorkerControlState = {
+      state: 'running',
+      pid: null,
+      mode,
+      startedAt: now.toISOString(),
+      stoppedAt: null,
+      pauseRequestedAt: null,
+      message: `worker start requested from dashboard (${mode})`,
+      campaign: null,
+    };
+    return writeResolvedControlState(filePath, nextState);
+  }
+
   const child = workerLauncher(buildStartWorkerInvocation({ knowledgeRootDir, mode }));
   child.unref();
 
