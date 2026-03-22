@@ -1,4 +1,12 @@
-import type { CorpusPrinciple, NormalizedEvidenceRecord, StudyCard, ThematicSynthesis, ValidatedSynthesis } from './contracts';
+import type {
+  CorpusPrinciple,
+  NormalizedEvidenceRecord,
+  PublishedDoctrineSnapshot,
+  QuestionSynthesisDossier,
+  StudyCard,
+  ThematicSynthesis,
+  ValidatedSynthesis,
+} from './contracts';
 
 export type CuratedKnowledgeBible = {
   principles: Array<{
@@ -19,6 +27,8 @@ export type CuratedKnowledgeBible = {
   }>;
   studyCards?: StudyCard[];
   thematicSyntheses?: ThematicSynthesis[];
+  questionSynthesisDossiers?: QuestionSynthesisDossier[];
+  publishedDoctrine?: PublishedDoctrineSnapshot;
 };
 
 function collectTags(records: NormalizedEvidenceRecord[], ids: readonly string[]): string[] {
@@ -40,6 +50,8 @@ export function curateAdaptiveKnowledgeBible(input: {
   validatedSynthesis?: ValidatedSynthesis;
   studyCards?: StudyCard[];
   thematicSyntheses?: ThematicSynthesis[];
+  questionSynthesisDossiers?: QuestionSynthesisDossier[];
+  publishedDoctrine?: PublishedDoctrineSnapshot;
 }): CuratedKnowledgeBible {
   const principles = input.validatedSynthesis?.principles ?? input.principles;
   const retainedRecordIds = new Set(
@@ -67,5 +79,7 @@ export function curateAdaptiveKnowledgeBible(input: {
       })),
     ...(input.studyCards ? { studyCards: input.studyCards } : {}),
     ...(input.thematicSyntheses ? { thematicSyntheses: input.thematicSyntheses } : {}),
+    ...(input.questionSynthesisDossiers ? { questionSynthesisDossiers: input.questionSynthesisDossiers } : {}),
+    ...(input.publishedDoctrine ? { publishedDoctrine: input.publishedDoctrine } : {}),
   };
 }

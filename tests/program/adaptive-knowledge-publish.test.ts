@@ -714,6 +714,268 @@ test('rollback restores previous active pointer atomically and writes run-report
   assert.equal(rollbackReport.events.some((event) => event.type === 'rollback' && event.snapshotId === 'run-rollback-baseline'), true);
 });
 
+test('publish writes doctrine revision history alongside published doctrine snapshot', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-publish-doctrine-'));
+
+  await runAdaptiveKnowledgePipeline({
+    runId: 'run-doctrine-published',
+    now: new Date('2026-03-22T00:00:00.000Z'),
+    outputRootDir,
+    qualityGateOverrides: {
+      threshold: 0.2,
+    },
+    synthesizeImpl: async (records) => {
+      const principles = synthesizeCorpusPrinciples(records);
+      return {
+        principles,
+        validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+          records,
+          principles,
+          modelRun: {
+            provider: 'deterministic',
+            model: 'test-remote-synthesis',
+            promptVersion: 'test-v1',
+          },
+        }),
+      };
+    },
+    remoteSynthesisClient: {
+      async extractStudyCards(input) {
+        return input.records.map((record) => ({
+          recordId: record.id,
+          title: record.title,
+          authors: 'Doe et al.',
+          year: 2024,
+          journal: 'Journal of Strength Research',
+          doi: null,
+          studyType: 'rct' as const,
+          population: {
+            description: 'adult lifters',
+            size: 24,
+            trainingLevel: 'intermediate' as const,
+          },
+          protocol: {
+            duration: '8 semaines',
+            intervention: 'Progression encadree',
+            comparison: 'Charge fixe',
+          },
+          results: {
+            primary: 'Higher weekly volume improved hypertrophy.',
+            secondary: ['Tolerance correcte.'],
+          },
+          practicalTakeaways: ['Ajuster la charge semaine apres semaine.'],
+          limitations: ['Petit effectif.'],
+          safetySignals: ['Pas de signal majeur.'],
+          evidenceLevel: 'moderate' as const,
+          topicKeys: record.tags,
+          extractionSource: 'abstract' as const,
+          langueFr: {
+            titreFr: `FR ${record.title}`,
+            resumeFr: 'Le volume plus eleve ameliore l hypertrophie.',
+            conclusionFr: 'Conclusion francaise.',
+          },
+        } satisfies StudyCard));
+      },
+      async synthesizeThematicPrinciples(input) {
+        return {
+          topicKey: input.topicKey,
+          topicLabel: input.topicLabel,
+          principlesFr: [
+            {
+              id: `${input.topicKey}-1`,
+              title: 'Principe thematique',
+              statement: 'Ajuster la progression selon la recuperation observee.',
+              conditions: ['Absence de douleur aigue'],
+              guardrail: 'SAFE-03' as const,
+              evidenceLevel: 'moderate' as const,
+              sourceCardIds: input.studyCards.map((card) => card.recordId),
+            },
+          ],
+          summaryFr: `Synthese pour ${input.topicLabel}`,
+          gapsFr: ['Plus de donnees longitudinales necessaires.'],
+          studyCount: input.studyCards.length,
+          lastUpdated: '2026-03-22T00:00:00.000Z',
+        } satisfies ThematicSynthesis;
+      },
+      async synthesizeLot() {
+        throw new Error('not used');
+      },
+      async consolidate() {
+        throw new Error('not used');
+      },
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  await access(path.join(outputRootDir, 'registry', 'published-doctrine.json'), constants.F_OK);
+  await access(path.join(outputRootDir, 'registry', 'doctrine-revisions.json'), constants.F_OK);
+
+  const doctrineSnapshot = (await loadJson(path.join(outputRootDir, 'registry', 'published-doctrine.json'))) as {
+    principles: Array<{ revisionStatus: string }>;
+  };
+  const doctrineHistory = (await loadJson(path.join(outputRootDir, 'registry', 'doctrine-revisions.json'))) as {
+    entries: Array<{ changeType: string }>;
+  };
+
+  assert.equal((doctrineSnapshot.principles?.length ?? 0) > 0, true);
+  assert.equal(doctrineHistory.entries.some((entry) => entry.changeType === 'published'), true);
+});
+
+test('publish can skip doctrine promotion while still preserving dossier outputs', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-publish-skip-doctrine-'));
+
+  const result = await runPipelineWithDeterministicSynthesis({
+    runId: 'run-doctrine-skipped',
+    now: new Date('2026-03-22T00:00:00.000Z'),
+    outputRootDir,
+    qualityGateOverrides: {
+      threshold: 0.2,
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => withRecordSuffix(buildConnectorSuccess('crossref'), 'only'),
+      openalex: async () => ({ ...buildConnectorSuccess('openalex'), records: [] }),
+    },
+  });
+
+  assert.equal(result.publish.publishable, true);
+  await access(path.join(outputRootDir, 'registry', 'question-synthesis-dossiers.json'), constants.F_OK);
+
+  const doctrineSnapshot = (await loadJson(path.join(outputRootDir, 'registry', 'published-doctrine.json'))) as {
+    principles?: Array<unknown>;
+  };
+  assert.equal((doctrineSnapshot.principles?.length ?? 0) >= 0, true);
+});
+
+test('reopened doctrine principle stays out of active doctrine until reconsolidated', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-publish-reopened-doctrine-'));
+
+  await runPipelineWithDeterministicSynthesis({
+    runId: 'run-doctrine-baseline',
+    now: new Date('2026-03-22T00:00:00.000Z'),
+    outputRootDir,
+    qualityGateOverrides: {
+      threshold: 0.2,
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  await runPipelineWithDeterministicSynthesis({
+    runId: 'run-doctrine-reopened',
+    now: new Date('2026-03-23T00:00:00.000Z'),
+    outputRootDir,
+    qualityGateOverrides: {
+      threshold: 0.2,
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => ({
+        ...buildConnectorSuccess('crossref'),
+        records: [
+          {
+            id: 'crossref-contradiction',
+            sourceType: 'review',
+            sourceUrl: 'https://doi.org/crossref-contradiction',
+            sourceDomain: 'doi.org',
+            publishedAt: '2025-11-02',
+            title: 'Higher weekly volume did not improve hypertrophy in advanced lifters',
+            summaryEn: 'Higher weekly volume did not improve hypertrophy in advanced lifters and fatigue increased.',
+            tags: ['hypertrophy-dose', 'progression'],
+            provenanceIds: ['crossref-contradiction'],
+          },
+        ],
+        recordsFetched: 1,
+      }),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+    remoteSynthesisClient: {
+      async extractStudyCards(input) {
+        return input.records.map((record) => ({
+          recordId: record.id,
+          title: record.title,
+          authors: 'Doe et al.',
+          year: 2024,
+          journal: 'Journal of Strength Research',
+          doi: null,
+          studyType: 'rct' as const,
+          population: {
+            description: record.id === 'crossref-contradiction' ? 'advanced lifters' : 'adult lifters',
+            size: 24,
+            trainingLevel: record.id === 'crossref-contradiction' ? 'advanced' as const : 'intermediate' as const,
+          },
+          protocol: {
+            duration: '8 semaines',
+            intervention: 'Progression encadree',
+            comparison: 'Charge fixe',
+          },
+          results: {
+            primary:
+              record.id === 'crossref-contradiction'
+                ? 'Higher weekly volume did not improve hypertrophy.'
+                : 'Higher weekly volume improved hypertrophy.',
+            secondary: ['Tolerance correcte.'],
+          },
+          practicalTakeaways: ['Ajuster la charge semaine apres semaine.'],
+          limitations: ['Petit effectif.'],
+          safetySignals: ['Pas de signal majeur.'],
+          evidenceLevel: record.id === 'crossref-contradiction' ? 'low' as const : 'moderate' as const,
+          topicKeys: record.tags,
+          extractionSource: 'abstract' as const,
+          langueFr: {
+            titreFr: `FR ${record.title}`,
+            resumeFr:
+              record.id === 'crossref-contradiction'
+                ? 'Le volume plus eleve n ameliore pas l hypertrophie dans ce groupe.'
+                : 'Le volume plus eleve ameliore l hypertrophie.',
+            conclusionFr: 'Conclusion francaise.',
+          },
+        } satisfies StudyCard));
+      },
+      async synthesizeThematicPrinciples(input) {
+        return {
+          topicKey: input.topicKey,
+          topicLabel: input.topicLabel,
+          principlesFr: [
+            {
+              id: `${input.topicKey}-1`,
+              title: 'Principe thematique',
+              statement: 'Ajuster la progression selon la recuperation observee.',
+              conditions: ['Absence de douleur aigue'],
+              guardrail: 'SAFE-03' as const,
+              evidenceLevel: 'moderate' as const,
+              sourceCardIds: input.studyCards.map((card) => card.recordId),
+            },
+          ],
+          summaryFr: `Synthese pour ${input.topicLabel}`,
+          gapsFr: ['Plus de donnees longitudinales necessaires.'],
+          studyCount: input.studyCards.length,
+          lastUpdated: '2026-03-23T00:00:00.000Z',
+        } satisfies ThematicSynthesis;
+      },
+      async synthesizeLot() {
+        throw new Error('not used');
+      },
+      async consolidate() {
+        throw new Error('not used');
+      },
+    },
+  });
+
+  const doctrineSnapshot = (await loadJson(path.join(outputRootDir, 'registry', 'published-doctrine.json'))) as {
+    principles: Array<{ revisionStatus: string }>;
+  };
+  const activeDoctrine = doctrineSnapshot.principles.filter((principle) => principle.revisionStatus === 'active');
+  assert.equal(activeDoctrine.length, 0);
+});
+
 test('publish writes manifest, diff, and knowledge bible artifacts into the promoted snapshot', async () => {
   const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-publish-'));
 

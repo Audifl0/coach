@@ -40,6 +40,11 @@ const STUDY_DOSSIER_REGISTRY_STATUS_VALUES = ['draft', 'validated-structure', 'l
 const SCIENTIFIC_QUESTION_COVERAGE_VALUES = ['empty', 'partial', 'developing', 'mature', 'blocked'] as const;
 const SCIENTIFIC_QUESTION_PUBLICATION_STATUS_VALUES = ['not-ready', 'candidate', 'published', 'reopened'] as const;
 const DURABLE_WORK_QUEUE_STATUS_VALUES = ['pending', 'running', 'blocked', 'completed', 'failed'] as const;
+const SCIENTIFIC_CONTRADICTION_SEVERITY_VALUES = ['note', 'caution', 'blocking'] as const;
+const QUESTION_SYNTHESIS_PUBLICATION_READINESS_VALUES = ['insufficient', 'candidate', 'ready', 'blocked'] as const;
+const DOCTRINE_CONFIDENCE_LEVEL_VALUES = ['low', 'moderate', 'high'] as const;
+const DOCTRINE_REVISION_STATUS_VALUES = ['active', 'reopened', 'superseded'] as const;
+const DOCTRINE_CHANGE_TYPE_VALUES = ['published', 'reopened', 'superseded', 'reaffirmed'] as const;
 
 export const documentaryRejectionReasonSchema = z
   .object({
@@ -302,6 +307,70 @@ export const durableWorkQueueStateSchema = z
     version: z.string().min(1),
     generatedAt: z.string().datetime(),
     items: z.array(durableWorkQueueItemSchema),
+  })
+  .strict();
+
+export const scientificContradictionSchema = z
+  .object({
+    questionId: z.string().min(1),
+    studyIds: z.array(z.string().min(1)).min(1),
+    reasonCode: z.string().min(1),
+    summaryFr: z.string().min(1),
+    severity: z.enum(SCIENTIFIC_CONTRADICTION_SEVERITY_VALUES),
+    resolved: z.boolean(),
+  })
+  .strict();
+
+export const questionSynthesisDossierSchema = z
+  .object({
+    questionId: z.string().min(1),
+    coverageStatus: z.enum(SCIENTIFIC_QUESTION_COVERAGE_VALUES),
+    linkedStudyIds: z.array(z.string().min(1)),
+    contradictions: z.array(scientificContradictionSchema),
+    summaryFr: z.string().min(1),
+    confidenceLevel: z.enum(DOCTRINE_CONFIDENCE_LEVEL_VALUES),
+    publicationReadiness: z.enum(QUESTION_SYNTHESIS_PUBLICATION_READINESS_VALUES),
+    generatedAt: z.string().datetime(),
+  })
+  .strict();
+
+export const publishedDoctrinePrincipleSchema = z
+  .object({
+    principleId: z.string().min(1),
+    statementFr: z.string().min(1),
+    conditionsFr: z.string().min(1),
+    limitsFr: z.string().min(1),
+    confidenceLevel: z.enum(DOCTRINE_CONFIDENCE_LEVEL_VALUES),
+    questionIds: z.array(z.string().min(1)).min(1),
+    studyIds: z.array(z.string().min(1)).min(1),
+    revisionStatus: z.enum(DOCTRINE_REVISION_STATUS_VALUES),
+    publishedAt: z.string().datetime(),
+  })
+  .strict();
+
+export const doctrineRevisionEntrySchema = z
+  .object({
+    revisionId: z.string().min(1),
+    principleId: z.string().min(1),
+    changedAt: z.string().datetime(),
+    changeType: z.enum(DOCTRINE_CHANGE_TYPE_VALUES),
+    reason: z.string().min(1),
+  })
+  .strict();
+
+export const doctrineRevisionHistorySchema = z
+  .object({
+    version: z.string().min(1),
+    generatedAt: z.string().datetime(),
+    entries: z.array(doctrineRevisionEntrySchema),
+  })
+  .strict();
+
+export const publishedDoctrineSnapshotSchema = z
+  .object({
+    version: z.string().min(1),
+    generatedAt: z.string().datetime(),
+    principles: z.array(publishedDoctrinePrincipleSchema),
   })
   .strict();
 
@@ -647,6 +716,12 @@ export type ScientificQuestionStatus = z.infer<typeof scientificQuestionStatusSc
 export type ScientificQuestionRegistryState = z.infer<typeof scientificQuestionRegistryStateSchema>;
 export type DurableWorkQueueItem = z.infer<typeof durableWorkQueueItemSchema>;
 export type DurableWorkQueueState = z.infer<typeof durableWorkQueueStateSchema>;
+export type ScientificContradiction = z.infer<typeof scientificContradictionSchema>;
+export type QuestionSynthesisDossier = z.infer<typeof questionSynthesisDossierSchema>;
+export type PublishedDoctrinePrinciple = z.infer<typeof publishedDoctrinePrincipleSchema>;
+export type DoctrineRevisionEntry = z.infer<typeof doctrineRevisionEntrySchema>;
+export type DoctrineRevisionHistory = z.infer<typeof doctrineRevisionHistorySchema>;
+export type PublishedDoctrineSnapshot = z.infer<typeof publishedDoctrineSnapshotSchema>;
 export type AdaptiveKnowledgeRankingTelemetry = z.infer<typeof adaptiveKnowledgeRankingTelemetrySchema>;
 export type CorpusPrinciple = z.infer<typeof corpusPrincipleSchema>;
 export type AdaptiveKnowledgeBootstrapCampaignState = z.infer<typeof adaptiveKnowledgeBootstrapCampaignStateSchema>;
@@ -735,6 +810,30 @@ export function parseDurableWorkQueueItem(input: unknown): DurableWorkQueueItem 
 
 export function parseDurableWorkQueueState(input: unknown): DurableWorkQueueState {
   return durableWorkQueueStateSchema.parse(input);
+}
+
+export function parseScientificContradiction(input: unknown): ScientificContradiction {
+  return scientificContradictionSchema.parse(input);
+}
+
+export function parseQuestionSynthesisDossier(input: unknown): QuestionSynthesisDossier {
+  return questionSynthesisDossierSchema.parse(input);
+}
+
+export function parsePublishedDoctrinePrinciple(input: unknown): PublishedDoctrinePrinciple {
+  return publishedDoctrinePrincipleSchema.parse(input);
+}
+
+export function parseDoctrineRevisionEntry(input: unknown): DoctrineRevisionEntry {
+  return doctrineRevisionEntrySchema.parse(input);
+}
+
+export function parseDoctrineRevisionHistory(input: unknown): DoctrineRevisionHistory {
+  return doctrineRevisionHistorySchema.parse(input);
+}
+
+export function parsePublishedDoctrineSnapshot(input: unknown): PublishedDoctrineSnapshot {
+  return publishedDoctrineSnapshotSchema.parse(input);
 }
 
 export function parseAdaptiveKnowledgeRankingTelemetry(input: unknown): AdaptiveKnowledgeRankingTelemetry {

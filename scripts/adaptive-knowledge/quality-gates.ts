@@ -1,4 +1,9 @@
-import type { NormalizedEvidenceRecord, ValidatedSynthesis } from './contracts';
+import type {
+  NormalizedEvidenceRecord,
+  PublishedDoctrinePrinciple,
+  QuestionSynthesisDossier,
+  ValidatedSynthesis,
+} from './contracts';
 
 export type QualityGateReason =
   | 'no_library_progress'
@@ -34,6 +39,8 @@ export type EvaluateCorpusQualityGateInput = {
     projectionSafe: boolean;
     canonicalRecordsOnly: boolean;
   };
+  questionDossiers?: QuestionSynthesisDossier[];
+  doctrinePrinciples?: PublishedDoctrinePrinciple[];
 };
 
 export type CorpusQualityGateResult = {
@@ -196,6 +203,26 @@ function hasUnresolvedContradiction(validatedSynthesis: ValidatedSynthesis | und
   );
 }
 
+function hasBlockingQuestionDossier(dossiers: readonly QuestionSynthesisDossier[] | undefined): boolean {
+  if (!dossiers || dossiers.length === 0) {
+    return false;
+  }
+
+  return dossiers.some(
+    (dossier) =>
+      dossier.publicationReadiness === 'blocked' ||
+      dossier.contradictions.some((item) => item.resolved === false && item.severity === 'blocking'),
+  );
+}
+
+function hasReopenedDoctrine(doctrinePrinciples: readonly PublishedDoctrinePrinciple[] | undefined): boolean {
+  if (!doctrinePrinciples || doctrinePrinciples.length === 0) {
+    return false;
+  }
+
+  return doctrinePrinciples.some((principle) => principle.revisionStatus === 'reopened');
+}
+
 export function evaluateCorpusQualityGate(input: EvaluateCorpusQualityGateInput): CorpusQualityGateResult {
   const threshold = input.threshold ?? DEFAULT_THRESHOLD;
   const sourceClassScore = computeSourceClassScore(input.records);
@@ -241,6 +268,12 @@ export function evaluateCorpusQualityGate(input: EvaluateCorpusQualityGateInput)
     reasons.push('critical_contradiction');
   }
   if (hasUnresolvedContradiction(input.validatedSynthesis)) {
+    reasons.push('unresolved_contradiction');
+  }
+  if (hasBlockingQuestionDossier(input.questionDossiers)) {
+    reasons.push('unresolved_contradiction');
+  }
+  if (hasReopenedDoctrine(input.doctrinePrinciples)) {
     reasons.push('unresolved_contradiction');
   }
 

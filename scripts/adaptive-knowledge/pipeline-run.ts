@@ -12,6 +12,9 @@ import {
   parseCorpusPrinciple,
   parseCorpusRunReport,
   parseCorpusSnapshotManifest,
+  parseDoctrineRevisionEntry,
+  parsePublishedDoctrinePrinciple,
+  parsePublishedDoctrineSnapshot,
   type AdaptiveKnowledgeCoverageGap,
   type AdaptiveKnowledgeBootstrapRunTelemetry,
   type AdaptiveKnowledgeCollectionJob,
@@ -22,6 +25,7 @@ import {
   type CorpusPrinciple,
   type CorpusRunReport,
   type NormalizedEvidenceRecord,
+  type QuestionSynthesisDossier,
   type ThematicSynthesis,
   type ValidatedSynthesis,
 } from './contracts';
@@ -62,6 +66,13 @@ import { buildStudyDossierFromStudyCard, upsertStudyDossiers } from './registry/
 import { loadScientificQuestions, upsertScientificQuestions } from './registry/scientific-questions';
 import { enqueueWorkItems } from './registry/work-queues';
 import { linkStudiesToScientificQuestions } from './question-linking';
+import { analyzeQuestionContradictions, buildQuestionSynthesisDossier } from './contradiction-analysis';
+import { evaluateDoctrineCandidatePublication, reconcileDoctrineAgainstDossiers } from './conservative-publication';
+import {
+  appendDoctrineRevisionEntries,
+  loadPublishedDoctrineSnapshot,
+  writePublishedDoctrineSnapshot,
+} from './registry/doctrine';
 
 type PipelineConnectorFn = (input: ConnectorFetchInput) => Promise<ConnectorFetchResult>;
 
@@ -649,6 +660,7 @@ export async function runAdaptiveKnowledgePipeline(
     records: [],
     principles: [],
   });
+  let questionSynthesisDossiers: QuestionSynthesisDossier[] = [];
   let manifest: CorpusSnapshotManifest | null = null;
   let synthesisErrorMessage: string | null = null;
   let publishErrorMessage: string | null = null;
@@ -915,13 +927,7 @@ export async function runAdaptiveKnowledgePipeline(
     },
   });
   const previousManifest = await loadPreviousManifest(outputRootDir);
-  const curatedBible = curateAdaptiveKnowledgeBible({
-    records: normalizedRecords,
-    principles,
-    validatedSynthesis,
-    studyCards,
-    thematicSyntheses,
-  });
+  let currentDoctrineSnapshot = await loadPublishedDoctrineSnapshot(outputRootDir);
   const bookletMarkdown = renderBookletMarkdown({
     thematicSyntheses,
     studyCards,
@@ -930,6 +936,21 @@ export async function runAdaptiveKnowledgePipeline(
   });
 
   await mkdir(candidateDir, { recursive: true });
+  await writePublishedDoctrineSnapshot(outputRootDir, currentDoctrineSnapshot);
+  await appendDoctrineRevisionEntries(outputRootDir, [], now);
+  await writeFile(
+    path.join(outputRootDir, 'registry', 'question-synthesis-dossiers.json'),
+    JSON.stringify(
+      {
+        version: 'v1',
+        generatedAt: now.toISOString(),
+        items: questionSynthesisDossiers,
+      },
+      null,
+      2,
+    ) + '\n',
+    'utf8',
+  );
   await upsertDocumentRegistryRecords(
     outputRootDir,
     rankedRecords.map((record) => buildDocumentRegistryRecordFromNormalizedRecord(record, now)),
@@ -959,7 +980,131 @@ export async function runAdaptiveKnowledgePipeline(
       questions: scientificQuestions.items,
       now,
     });
+    const questionDossiers = questionLinking.questions.map((question) => {
+      const linkedStudies = persistedDossiers.items.filter((study) => question.linkedStudyIds.includes(study.studyId));
+      const contradictions = analyzeQuestionContradictions({
+        question,
+        linkedStudies,
+      });
+      return buildQuestionSynthesisDossier({
+        question,
+        linkedStudies,
+        contradictions,
+        now,
+      });
+    });
+    questionSynthesisDossiers = questionDossiers;
     await upsertScientificQuestions(outputRootDir, questionLinking.questions, now);
+    await writeFile(
+      path.join(outputRootDir, 'registry', 'question-synthesis-dossiers.json'),
+      JSON.stringify(
+        {
+          version: 'v1',
+          generatedAt: now.toISOString(),
+          items: questionDossiers,
+        },
+        null,
+        2,
+      ) + '\n',
+      'utf8',
+    );
+
+    const candidatePrinciples = questionDossiers.flatMap((dossier) => {
+      if (dossier.linkedStudyIds.length === 0) {
+        return [];
+      }
+      const question = questionLinking.questions.find((item) => item.questionId === dossier.questionId);
+      if (!question) {
+        return [];
+      }
+
+      const linkedStudies = persistedDossiers.items.filter((study) => dossier.linkedStudyIds.includes(study.studyId));
+      const statementFr = dossier.summaryFr;
+      const conditionsFr = question.inclusionCriteria.join(' ');
+      const limitsFr = dossier.contradictions.length > 0
+        ? dossier.contradictions.map((item) => item.summaryFr).join(' ')
+        : question.exclusionCriteria.join(' ');
+
+      return [
+        parsePublishedDoctrinePrinciple({
+          principleId: `doctrine:${dossier.questionId}`,
+          statementFr,
+          conditionsFr: conditionsFr || 'Conditions explicites non nulles requises.',
+          limitsFr: limitsFr || 'Limites explicites requises.',
+          confidenceLevel: dossier.confidenceLevel,
+          questionIds: [dossier.questionId],
+          studyIds: dossier.linkedStudyIds,
+          revisionStatus: 'active',
+          publishedAt: now.toISOString(),
+        }),
+      ];
+    });
+
+    const publishedPrinciples = candidatePrinciples.flatMap((candidate) => {
+      const dossier = questionDossiers.find((item) => item.questionId === candidate.questionIds[0]);
+      if (!dossier) {
+        return [];
+      }
+      const evaluated = evaluateDoctrineCandidatePublication({
+        candidate,
+        dossier,
+      });
+      return evaluated.published && evaluated.principle ? [evaluated.principle] : [];
+    });
+
+    const existingPrincipleIds = new Set(currentDoctrineSnapshot.principles.map((principle) => principle.principleId));
+    const reconciled = reconcileDoctrineAgainstDossiers({
+      snapshot: parsePublishedDoctrineSnapshot({
+        version: currentDoctrineSnapshot.version,
+        generatedAt: now.toISOString(),
+        principles: [...currentDoctrineSnapshot.principles, ...publishedPrinciples].filter(
+          (principle, index, list) => list.findIndex((item) => item.principleId === principle.principleId) === index,
+        ),
+      }),
+      dossiers: questionDossiers,
+      now,
+    });
+
+    currentDoctrineSnapshot = await writePublishedDoctrineSnapshot(outputRootDir, reconciled.snapshot);
+
+    const revisionEntries = [
+      ...publishedPrinciples
+        .filter((principle) => !existingPrincipleIds.has(principle.principleId))
+        .map((principle) =>
+          parseDoctrineRevisionEntry({
+            revisionId: `${principle.principleId}:published:${now.toISOString()}`,
+            principleId: principle.principleId,
+            changedAt: now.toISOString(),
+            changeType: 'published',
+            reason: 'Conservative doctrine publication gate accepted this principle.',
+          }),
+        ),
+      ...reconciled.revisions,
+    ];
+    if (revisionEntries.length > 0) {
+      await appendDoctrineRevisionEntries(outputRootDir, revisionEntries, now);
+    }
+    const revisionHistoryPath = path.join(outputRootDir, 'registry', 'doctrine-revisions.json');
+    const revisionHistory = JSON.parse(await readFile(revisionHistoryPath, 'utf8')) as { entries?: Array<{ principleId: string; changeType: string }> };
+    const existingPublishedIds = new Set(
+      (revisionHistory.entries ?? [])
+        .filter((entry) => entry.changeType === 'published')
+        .map((entry) => entry.principleId),
+    );
+    const missingPublishedEntries = currentDoctrineSnapshot.principles
+      .filter((principle) => principle.revisionStatus === 'active' && !existingPublishedIds.has(principle.principleId))
+      .map((principle) =>
+        parseDoctrineRevisionEntry({
+          revisionId: `${principle.principleId}:published-snapshot:${now.toISOString()}`,
+          principleId: principle.principleId,
+          changedAt: now.toISOString(),
+          changeType: 'published',
+          reason: 'Backfilled from active published doctrine snapshot.',
+        }),
+      );
+    if (missingPublishedEntries.length > 0) {
+      await appendDoctrineRevisionEntries(outputRootDir, missingPublishedEntries, now);
+    }
     await enqueueWorkItems(
       outputRootDir,
       'question-linking',
@@ -1117,6 +1262,15 @@ export async function runAdaptiveKnowledgePipeline(
     ) + '\n',
     'utf8',
   );
+  const curatedBible = curateAdaptiveKnowledgeBible({
+    records: normalizedRecords,
+    principles,
+    validatedSynthesis,
+    studyCards,
+    thematicSyntheses,
+    questionSynthesisDossiers,
+    publishedDoctrine: currentDoctrineSnapshot,
+  });
   await writeFile(path.join(candidateDir, 'knowledge-bible.json'), JSON.stringify(curatedBible, null, 2) + '\n', 'utf8');
   await writeFile(path.join(candidateDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8');
   await writeFile(
