@@ -1,5 +1,4 @@
-import { parseStudyCard, type StudyCard } from './contracts';
-import type { NormalizedEvidenceRecord } from './connectors/shared';
+import { parseStudyCard, type StudyCard, type NormalizedEvidenceRecord } from './contracts';
 import type { CorpusRemoteSynthesisClient } from './remote-synthesis';
 
 export type StudyCardExtractionPayload = {

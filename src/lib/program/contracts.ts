@@ -208,7 +208,16 @@ export const workerCorpusLiveStateValues = [
 ] as const;
 export const workerCorpusOutcomeValues = ['succeeded', 'failed', 'blocked', 'running'] as const;
 export const workerCorpusArtifactStateValues = ['candidate', 'validated'] as const;
-export const workerCorpusStageValues = ['discover', 'ingest', 'synthesize', 'validate', 'publish'] as const;
+export const workerCorpusStageValues = [
+  'discover',
+  'ingest',
+  'fulltext',
+  'extract-study-cards',
+  'thematic-synthesis',
+  'synthesize',
+  'validate',
+  'publish',
+] as const;
 export const workerCorpusStageStatusValues = ['succeeded', 'failed', 'skipped'] as const;
 export const workerCorpusModeValues = ['bootstrap', 'refresh', 'check'] as const;
 export const workerCorpusControlStateValues = ['idle', 'running', 'paused', 'failed'] as const;
