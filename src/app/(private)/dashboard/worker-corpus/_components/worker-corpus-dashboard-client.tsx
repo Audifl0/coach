@@ -32,6 +32,38 @@ function sumRecord(values: Record<string, number>): number {
   return Object.values(values).reduce((total, value) => total + value, 0);
 }
 
+function formatHeartbeatAge(ageSec: number | null | undefined): string {
+  if (ageSec === null || ageSec === undefined || Number.isNaN(ageSec)) {
+    return 'n/a';
+  }
+
+  return `${Math.max(0, Math.round(ageSec))}s`;
+}
+
+function getLiveRunBadgeLabel(status: string, active: boolean): string {
+  if (status === 'stale') {
+    return 'Stale';
+  }
+
+  if (status === 'running' || active) {
+    return 'Actif';
+  }
+
+  return 'Idle';
+}
+
+function getLiveRunBadgeClassName(status: string, active: boolean): string {
+  if (status === 'stale') {
+    return styles.warnBadge;
+  }
+
+  if (status === 'running' || active) {
+    return styles.goodBadge;
+  }
+
+  return styles.badge;
+}
+
 export function resolveWorkerCorpusRefreshInterval(): number {
   return 30_000;
 }
@@ -55,6 +87,10 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
   const operatorMode = sectionData?.operatorMode ?? 'running';
   const operatorUpdatedAt = sectionData?.operatorUpdatedAt ?? null;
   const runActive = sectionData?.runActive ?? false;
+  const liveRun = sectionData?.liveRun ?? null;
+  const liveRunStage = liveRun?.currentStage ?? 'Aucun run actif';
+  const liveRunBadgeLabel = getLiveRunBadgeLabel(liveRun?.status ?? 'idle', liveRun?.active ?? false);
+  const liveRunBadgeClassName = getLiveRunBadgeClassName(liveRun?.status ?? 'idle', liveRun?.active ?? false);
   const startDisabled = pendingAction !== null || (sectionReady && operatorMode === 'running' && runActive);
   const pauseDisabled = pendingAction !== null || !sectionReady || operatorMode === 'paused';
 
@@ -151,6 +187,29 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
               >
                 {pendingAction === 'pause' ? 'Pause...' : 'Mettre en pause'}
               </button>
+            </div>
+          </article>
+          <article className={`${styles.metricCard} ${styles.liveRunCard}`}>
+            <div className={styles.controlHeaderRow}>
+              <div>
+                <div className={styles.metaLabel}>Run actif</div>
+                <h2 className={styles.metricTitle}>{liveRunStage}</h2>
+              </div>
+              <span className={`${styles.badge} ${liveRunBadgeClassName}`}>{liveRunBadgeLabel}</span>
+            </div>
+            <div className={styles.muted}>{liveRun?.liveMessage ?? 'Aucun run actif détecté'}</div>
+            {liveRun?.currentWorkItemLabel ? (
+              <div className={styles.liveRunItem}>{liveRun.currentWorkItemLabel}</div>
+            ) : null}
+            <div className={styles.liveRunMetaRow}>
+              <span>Heartbeat {formatMaybe(liveRun?.lastHeartbeatAt)}</span>
+              <span>{formatHeartbeatAge(liveRun?.heartbeatAgeSec)}</span>
+            </div>
+            <div className={styles.liveRunCounters}>
+              <span className={styles.chip}>pending {liveRun?.progress.pending ?? 0}</span>
+              <span className={styles.chip}>running {liveRun?.progress.running ?? 0}</span>
+              <span className={styles.chip}>completed {liveRun?.progress.completed ?? 0}</span>
+              <span className={styles.chip}>failed {liveRun?.progress.failed ?? 0}</span>
             </div>
           </article>
           <article className={styles.metricCard}>

@@ -29,6 +29,21 @@ function buildClientProps() {
         operatorMode: 'paused' as const,
         operatorUpdatedAt: '2026-03-11T10:10:00.000Z',
         runActive: false,
+        liveRun: {
+          active: false,
+          status: 'idle' as const,
+          currentStage: null,
+          currentWorkItemLabel: null,
+          lastHeartbeatAt: null,
+          heartbeatAgeSec: null,
+          liveMessage: 'Aucun run actif détecté',
+          progress: {
+            pending: 4,
+            running: 0,
+            completed: 3,
+            failed: 0,
+          },
+        },
         control: {
           state: 'paused' as const,
           pid: null,
@@ -371,6 +386,102 @@ test('worker corpus dashboard client renders running operator badge when operato
   const html = renderToStaticMarkup(<WorkerCorpusDashboardClient {...props} />);
 
   assert.match(html, /En marche/i);
+});
+
+test('worker corpus dashboard client renders idle live run card copy', async () => {
+  const { WorkerCorpusDashboardClient } = await import(
+    '../../src/app/(private)/dashboard/worker-corpus/_components/worker-corpus-dashboard-client'
+  );
+  const props = buildClientProps();
+  props.initialSection.data.liveRun = {
+    active: false,
+    status: 'idle' as const,
+    currentStage: null,
+    currentWorkItemLabel: null,
+    lastHeartbeatAt: null,
+    heartbeatAgeSec: null,
+    liveMessage: 'Aucun run actif détecté',
+    progress: {
+      pending: 4,
+      running: 0,
+      completed: 3,
+      failed: 0,
+    },
+  };
+  const html = renderToStaticMarkup(<WorkerCorpusDashboardClient {...props} />);
+
+  assert.match(html, /Run actif/i);
+  assert.match(html, /Aucun run actif détecté/i);
+  assert.match(html, /pending 4/i);
+  assert.match(html, /running 0/i);
+  assert.match(html, /completed 3/i);
+  assert.match(html, /failed 0/i);
+});
+
+test('worker corpus dashboard client renders running live run state with stage and current item', async () => {
+  const { WorkerCorpusDashboardClient } = await import(
+    '../../src/app/(private)/dashboard/worker-corpus/_components/worker-corpus-dashboard-client'
+  );
+  const props = buildClientProps();
+  props.initialSection.data.liveRun = {
+    active: true,
+    status: 'running' as const,
+    currentStage: 'Extraction en cours',
+    currentWorkItemLabel: 'PMID-123456 · Progressive overload review',
+    lastHeartbeatAt: '2026-03-11T10:09:30.000Z',
+    heartbeatAgeSec: 8,
+    liveMessage: 'Analyse en cours',
+    progress: {
+      pending: 2,
+      running: 1,
+      completed: 5,
+      failed: 0,
+    },
+  };
+  const html = renderToStaticMarkup(<WorkerCorpusDashboardClient {...props} />);
+
+  assert.match(html, /Run actif/i);
+  assert.match(html, /Actif/i);
+  assert.match(html, /Extraction en cours/i);
+  assert.match(html, /PMID-123456 · Progressive overload review/i);
+  assert.match(html, /Analyse en cours/i);
+  assert.match(html, /Heartbeat 2026-03-11T10:09:30.000Z/i);
+  assert.match(html, /8s/i);
+  assert.match(html, /pending 2/i);
+  assert.match(html, /running 1/i);
+  assert.match(html, /completed 5/i);
+  assert.match(html, /failed 0/i);
+});
+
+test('worker corpus dashboard client renders stale live run warning state', async () => {
+  const { WorkerCorpusDashboardClient } = await import(
+    '../../src/app/(private)/dashboard/worker-corpus/_components/worker-corpus-dashboard-client'
+  );
+  const props = buildClientProps();
+  props.initialSection.data.liveRun = {
+    active: true,
+    status: 'stale' as const,
+    currentStage: 'Publication',
+    currentWorkItemLabel: 'Question Q-42 · Recovery pacing',
+    lastHeartbeatAt: '2026-03-11T09:58:00.000Z',
+    heartbeatAgeSec: 720,
+    liveMessage: 'Heartbeat en retard',
+    progress: {
+      pending: 1,
+      running: 1,
+      completed: 6,
+      failed: 1,
+    },
+  };
+  const html = renderToStaticMarkup(<WorkerCorpusDashboardClient {...props} />);
+
+  assert.match(html, /Run actif/i);
+  assert.match(html, /Stale/i);
+  assert.match(html, /Publication/i);
+  assert.match(html, /Question Q-42 · Recovery pacing/i);
+  assert.match(html, /Heartbeat en retard/i);
+  assert.match(html, /720s/i);
+  assert.match(html, /failed 1/i);
 });
 
 test('run detail panel stays readable for progressing bootstrap runs', () => {
