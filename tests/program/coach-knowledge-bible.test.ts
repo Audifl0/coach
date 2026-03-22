@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { loadCoachKnowledgeBible, renderCoachKnowledgeBibleForPrompt } from '../../src/lib/coach/knowledge-bible';
+import { loadPublishedDoctrine, renderPublishedDoctrineForPrompt } from '../../src/lib/coach/published-doctrine';
 
 async function writeJson(filePath: string, payload: unknown): Promise<void> {
   await writeFile(filePath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
@@ -62,28 +63,40 @@ test('coach knowledge bible loads validated entries and normalizes principle var
   assert.equal(bible.sources[0]?.id, 'guideline-1');
 });
 
-test('coach knowledge bible prefers published knowledge-bible artifact when available', async () => {
-  const rootDir = await mkdtemp(path.join(tmpdir(), 'coach-bible-'));
+test('runtime doctrine loader reads published doctrine principles only', async () => {
+  const rootDir = await mkdtemp(path.join(tmpdir(), 'coach-bible-published-'));
   const snapshotDir = path.join(rootDir, 'snapshots', 'run-active', 'validated');
   await mkdir(snapshotDir, { recursive: true });
 
   await writeJson(path.join(snapshotDir, 'knowledge-bible.json'), {
-    principles: [
+    publishedDoctrine: {
+      principles: [
+        {
+          principleId: 'p_doctrine',
+          statementFr: 'Conserver une surcharge progressive prudente.',
+          conditionsFr: ['Fatigue persistante', 'Technique stable'],
+          limitsFr: ['Ne pas accélérer sous douleur aiguë'],
+          confidenceLevel: 'moderate',
+          questionIds: ['q_progression'],
+          studyIds: ['study_safe_1', 'study_safe_2'],
+          revisionStatus: 'published',
+        },
+      ],
+    },
+    questionSynthesisDossiers: [
       {
-        id: 'p_curated',
-        title: 'Curated progression',
-        description: 'Use curated evidence to keep overload conservative.',
-        guardrail: 'SAFE-03',
-        tags: ['progression', 'fatigue'],
+        questionId: 'q_progression',
+        synthesis: 'Raw dossier content that must not enter runtime doctrine.',
+        unresolvedContradictions: ['questionable signal'],
       },
     ],
-    sources: [
+    studyCards: [
       {
-        id: 's_curated',
-        title: 'Curated source',
-        summary: 'Curated knowledge summary.',
-        sourceClass: 'review',
-        tags: ['progression'],
+        recordId: 'study_safe_1',
+        langueFr: {
+          titreFr: 'Study dossier',
+          resumeFr: 'Raw study dossier content that must not enter runtime doctrine.',
+        },
       },
     ],
   });
@@ -93,103 +106,75 @@ test('coach knowledge bible prefers published knowledge-bible artifact when avai
     promotedAt: '2026-03-05T00:00:00.000Z',
   });
 
-  const bible = loadCoachKnowledgeBible({
+  const doctrine = loadPublishedDoctrine({
     knowledgeRootDir: rootDir,
-    queryTags: ['progression'],
   });
 
-  assert.equal(bible.snapshotId, 'run-active');
-  assert.equal(bible.principles[0]?.id, 'p_curated');
-  assert.equal(bible.sources[0]?.id, 's_curated');
+  assert.equal(doctrine.snapshotId, 'run-active');
+  assert.equal(doctrine.principles.length, 1);
+  assert.deepEqual(doctrine.principles[0], {
+    id: 'p_doctrine',
+    statement: 'Conserver une surcharge progressive prudente.',
+    conditions: ['Fatigue persistante', 'Technique stable'],
+    limits: ['Ne pas accélérer sous douleur aiguë'],
+    confidenceLevel: 'moderate',
+    provenance: ['q_progression', 'study_safe_1', 'study_safe_2'],
+  });
 });
 
-test('loadCoachKnowledgeBible loads enriched thematic principles and study card sources', async () => {
-  const rootDir = await mkdtemp(path.join(tmpdir(), 'coach-bible-enriched-'));
-  const snapshotDir = path.join(rootDir, 'snapshots', 'run-enriched', 'validated');
+test('runtime doctrine loader excludes unresolved question dossiers and raw study dossiers', async () => {
+  const rootDir = await mkdtemp(path.join(tmpdir(), 'coach-bible-boundary-'));
+  const snapshotDir = path.join(rootDir, 'snapshots', 'run-active', 'validated');
   await mkdir(snapshotDir, { recursive: true });
 
   await writeJson(path.join(snapshotDir, 'knowledge-bible.json'), {
-    principles: [
+    publishedDoctrine: {
+      principles: [
+        {
+          principleId: 'p_boundary',
+          statementFr: 'Utiliser des montées de charge prudentes.',
+          conditionsFr: ['Récupération acceptable'],
+          limitsFr: ['Réévaluer si douleur'],
+          confidenceLevel: 'low',
+          questionIds: ['q_boundary'],
+          studyIds: ['study_boundary_1'],
+          revisionStatus: 'published',
+        },
+      ],
+    },
+    questionSynthesisDossiers: [
       {
-        id: 'p_legacy',
-        title: 'Legacy principle',
-        description: 'Legacy snapshot data still exists.',
-        guardrail: 'SAFE-01',
-        tags: ['legacy'],
-      },
-    ],
-    sources: [
-      {
-        id: 's_legacy',
-        title: 'Legacy source',
-        summary: 'Legacy source summary.',
-        sourceClass: 'review',
-        tags: ['legacy'],
-      },
-    ],
-    thematicSyntheses: [
-      {
-        id: 'theme_progression',
-        principlesFr: [
-          {
-            id: 'p_theme_1',
-            title: 'Progression gouvernée par la récupération',
-            statement: 'La progression doit rester subordonnée aux signaux de récupération.',
-            conditions: ['Fatigue persistante', 'Sommeil dégradé'],
-            evidenceLevel: 'moderate',
-            sourceCardIds: ['study_2024_1'],
-            guardrail: 'SAFE-03',
-          },
-        ],
+        questionId: 'q_boundary',
+        synthesis: 'UNRESOLVED DOSSIER SHOULD NOT APPEAR',
       },
     ],
     studyCards: [
       {
-        recordId: 'study_2024_1',
+        recordId: 'study_boundary_1',
         langueFr: {
-          titreFr: 'Revue de la fatigue',
-          resumeFr: 'Les marqueurs de fatigue justifient une progression prudente.',
+          titreFr: 'Raw study title',
+          resumeFr: 'RAW STUDY DOSSIER SHOULD NOT APPEAR',
         },
-        practicalTakeaways: ['Réduire la charge si la fatigue s’accumule', 'Confirmer la reprise avant de progresser'],
-        year: 2024,
-        journal: 'Sports Medicine',
-        doi: '10.1000/fatigue.2024.1',
       },
     ],
   });
   await writeJson(path.join(rootDir, 'active.json'), {
-    snapshotId: 'run-enriched',
+    snapshotId: 'run-active',
     snapshotDir,
     promotedAt: '2026-03-05T00:00:00.000Z',
   });
 
-  const bible = loadCoachKnowledgeBible({
-    knowledgeRootDir: rootDir,
-    queryTags: ['fatigue'],
-    principleLimit: 6,
-    sourceLimit: 8,
+  const prompt = renderPublishedDoctrineForPrompt({
+    doctrine: loadPublishedDoctrine({ knowledgeRootDir: rootDir }),
   });
 
-  assert.equal(bible.snapshotId, 'run-enriched');
-  assert.equal(bible.principles.some((principle) => principle.id === 'p_theme_1'), true);
-  const enrichedPrinciple = bible.principles.find((principle) => principle.id === 'p_theme_1');
-  assert.equal(enrichedPrinciple?.description, 'La progression doit rester subordonnée aux signaux de récupération.');
-  assert.deepEqual(enrichedPrinciple?.conditions, ['Fatigue persistante', 'Sommeil dégradé']);
-  assert.equal(enrichedPrinciple?.evidenceLevel, 'moderate');
-  assert.deepEqual(enrichedPrinciple?.sourceCardIds, ['study_2024_1']);
-  assert.equal(enrichedPrinciple?.guardrail, 'SAFE-03');
-
-  assert.equal(bible.sources.some((source) => source.id === 'study_2024_1'), true);
-  const enrichedSource = bible.sources.find((source) => source.id === 'study_2024_1');
-  assert.equal(enrichedSource?.title, 'Revue de la fatigue');
-  assert.match(enrichedSource?.summary ?? '', /progression prudente/i);
-  assert.deepEqual(enrichedSource?.practicalTakeaways, [
-    'Réduire la charge si la fatigue s’accumule',
-    'Confirmer la reprise avant de progresser',
-  ]);
-  assert.equal(enrichedSource?.year, 2024);
-  assert.equal(enrichedSource?.journal, 'Sports Medicine');
-  assert.equal(enrichedSource?.doi, '10.1000/fatigue.2024.1');
+  assert.match(prompt, /p_boundary/);
+  assert.match(prompt, /Confidence: low/);
+  assert.match(prompt, /Conditions: Récupération acceptable/);
+  assert.match(prompt, /Limits: Réévaluer si douleur/);
+  assert.doesNotMatch(prompt, /UNRESOLVED DOSSIER SHOULD NOT APPEAR/);
+  assert.doesNotMatch(prompt, /RAW STUDY DOSSIER SHOULD NOT APPEAR/);
+  assert.doesNotMatch(prompt, /Raw study title/);
 });
 
 test('renderCoachKnowledgeBibleForPrompt includes conditions and practical takeaways when present', () => {

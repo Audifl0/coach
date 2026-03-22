@@ -156,48 +156,99 @@ test('program generation service keeps PROG-01/PROG-02 contract under valid hybr
   assert.equal((result.sessions[0]?.exercises[0]?.restMinSec ?? 0) >= 0, true);
 });
 
-test('program generation defaults use principleLimit 6 and sourceLimit 8', async () => {
-  const rootDir = await mkdtemp(path.join(tmpdir(), 'program-knowledge-defaults-'));
-  const snapshotDir = path.join(rootDir, 'snapshots', 'run-defaults', 'validated');
+test('program generation uses published doctrine and ignores unresolved dossier content', async () => {
+  const rootDir = await mkdtemp(path.join(tmpdir(), 'program-published-doctrine-'));
+  const snapshotDir = path.join(rootDir, 'snapshots', 'run-doctrine', 'validated');
   await mkdir(snapshotDir, { recursive: true });
 
   await writeJson(path.join(snapshotDir, 'knowledge-bible.json'), {
-    principles: Array.from({ length: 9 }, (_, index) => ({
-      id: `p_${index + 1}`,
-      title: `Principle ${index + 1}`,
-      description: `Description ${index + 1}`,
-      guardrail: index % 2 === 0 ? `SAFE-0${(index % 3) + 1}` : null,
-      tags: ['progression', 'load'],
-    })),
-    sources: Array.from({ length: 10 }, (_, index) => ({
-      id: `s_${index + 1}`,
-      title: `Source ${index + 1}`,
-      summary: `Summary ${index + 1}`,
-      sourceClass: index % 2 === 0 ? 'guideline' : 'review',
-      tags: ['progression', 'load'],
-    })),
+    publishedDoctrine: {
+      principles: [
+        {
+          principleId: 'p_doctrine_1',
+          statementFr: 'Progression prudente si la récupération suit.',
+          conditionsFr: ['Sommeil acceptable'],
+          limitsFr: ['Stopper si douleur aiguë'],
+          confidenceLevel: 'moderate',
+          questionIds: ['q_prog'],
+          studyIds: ['study_prog_1'],
+          revisionStatus: 'published',
+        },
+      ],
+    },
+    questionSynthesisDossiers: [
+      {
+        questionId: 'q_prog',
+        synthesis: 'UNRESOLVED DOSSIER MUST NOT ENTER PROGRAM PROMPT',
+      },
+    ],
+    studyCards: [
+      {
+        recordId: 'study_prog_1',
+        langueFr: {
+          titreFr: 'Raw study title that should stay out',
+          resumeFr: 'RAW STUDY DOSSIER MUST NOT ENTER PROGRAM PROMPT',
+        },
+      },
+    ],
   });
   await writeJson(path.join(rootDir, 'active.json'), {
-    snapshotId: 'run-defaults',
+    snapshotId: 'run-doctrine',
     snapshotDir,
     promotedAt: '2026-03-05T00:00:00.000Z',
   });
 
-  const manualBible = loadCoachKnowledgeBible({
+  const knowledgeBible = loadCoachKnowledgeBible({
     knowledgeRootDir: rootDir,
-    queryTags: ['progression', 'load'],
+    queryTags: ['progression'],
     principleLimit: 6,
     sourceLimit: 8,
   });
 
-  assert.equal(manualBible.principles.length, 6);
-  assert.equal(manualBible.sources.length, 8);
+  assert.equal(knowledgeBible.principles.length, 1);
+  assert.equal(knowledgeBible.principles[0]?.id, 'p_doctrine_1');
+  assert.equal(knowledgeBible.sources.length, 1);
+  assert.equal(knowledgeBible.sources[0]?.id, 'doctrine:q_prog+study_prog_1');
+  assert.doesNotMatch(knowledgeBible.sources[0]?.summary ?? '', /RAW STUDY DOSSIER MUST NOT ENTER PROGRAM PROMPT/);
+  assert.doesNotMatch(knowledgeBible.sources[0]?.title ?? '', /Raw study title/);
+});
 
-  const resolvedBible = resolveProgramKnowledgeBible({
-    profile: createProfile({
-      goal: 'progression',
-    }),
+test('program generation still works when only legacy knowledge-bible exists', async () => {
+  const rootDir = await mkdtemp(path.join(tmpdir(), 'program-legacy-doctrine-'));
+  const snapshotDir = path.join(rootDir, 'snapshots', 'run-legacy', 'validated');
+  await mkdir(snapshotDir, { recursive: true });
+
+  await writeJson(path.join(snapshotDir, 'knowledge-bible.json'), {
+    principles: [
+      {
+        id: 'p_legacy_runtime',
+        title: 'Legacy progression',
+        description: 'Legacy curated principle remains supported.',
+        guardrail: 'SAFE-02',
+        tags: ['progression'],
+      },
+    ],
+    sources: [
+      {
+        id: 's_legacy_runtime',
+        title: 'Legacy source',
+        summary: 'Legacy curated source remains supported.',
+        sourceClass: 'guideline',
+        tags: ['progression'],
+      },
+    ],
+  });
+  await writeJson(path.join(rootDir, 'active.json'), {
+    snapshotId: 'run-legacy',
+    snapshotDir,
+    promotedAt: '2026-03-05T00:00:00.000Z',
   });
 
-  assert.equal(typeof resolvedBible.snapshotId, 'string');
+  const knowledgeBible = loadCoachKnowledgeBible({
+    knowledgeRootDir: rootDir,
+    queryTags: ['progression'],
+  });
+
+  assert.equal(knowledgeBible.principles[0]?.id, 'p_legacy_runtime');
+  assert.equal(knowledgeBible.sources[0]?.id, 's_legacy_runtime');
 });

@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 
 import { loadCoachKnowledgeBible, renderCoachKnowledgeBibleForPrompt, type CoachKnowledgeBible } from '@/lib/coach/knowledge-bible';
+import { loadPublishedDoctrine, renderPublishedDoctrineForPrompt } from '@/lib/coach/published-doctrine';
 import {
   buildProgramGenerationPrompt,
   mergeHybridProgramDraft,
@@ -197,10 +198,16 @@ export function createHybridProgramDraftBuilder(input: {
   config: LlmRuntimeConfig;
 }): (draftInput: BuildHybridProgramDraftInput) => Promise<unknown> {
   return async (draftInput) => {
-    const biblePromptBlock = renderCoachKnowledgeBibleForPrompt({
-      bible: draftInput.knowledgeBible,
-      heading: 'Scientific coach bible',
-    });
+    const publishedDoctrine = loadPublishedDoctrine();
+    const biblePromptBlock = publishedDoctrine.principles.length > 0
+      ? renderPublishedDoctrineForPrompt({
+        doctrine: publishedDoctrine,
+        heading: 'Published training doctrine',
+      })
+      : renderCoachKnowledgeBibleForPrompt({
+        bible: draftInput.knowledgeBible,
+        heading: 'Scientific coach bible',
+      });
     const prompts = buildProgramGenerationPrompt({
       profile: draftInput.profile,
       baselinePlan: draftInput.baselinePlan,

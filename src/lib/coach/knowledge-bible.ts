@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { loadActiveAdaptiveEvidenceCorpus } from '@/lib/adaptive-coaching/evidence-corpus';
+import { loadPublishedDoctrine } from '@/lib/coach/published-doctrine';
 
 export type CoachKnowledgePrinciple = {
   id: string;
@@ -193,6 +194,36 @@ function normalizeStudyCardSource(record: unknown): CoachKnowledgeSource | null 
 
 function readPublishedKnowledgeBible(knowledgeRootDir: string): CoachKnowledgeBible | null {
   try {
+    const doctrine = loadPublishedDoctrine({ knowledgeRootDir });
+    if (doctrine.principles.length > 0) {
+      return {
+        snapshotId: doctrine.snapshotId,
+        principles: doctrine.principles.map((principle) => ({
+          id: principle.id,
+          title: principle.statement,
+          description: principle.statement,
+          conditions: principle.conditions,
+          evidenceLevel: principle.confidenceLevel,
+          sourceCardIds: principle.provenance,
+          guardrail: null,
+          tags: [],
+        })),
+        sources: doctrine.principles.map((principle) => ({
+          id: `doctrine:${principle.provenance.join('+') || principle.id}`,
+          title: `Doctrine provenance for ${principle.id}`,
+          summary: [
+            principle.conditions.length > 0 ? `Conditions: ${principle.conditions.join('; ')}` : null,
+            principle.limits.length > 0 ? `Limits: ${principle.limits.join('; ')}` : null,
+            `Confidence: ${principle.confidenceLevel}`,
+          ]
+            .filter(isNonEmptyString)
+            .join(' | '),
+          sourceClass: 'guideline',
+          tags: [],
+        })),
+      };
+    }
+
     const activePointer = JSON.parse(readFileSync(path.join(knowledgeRootDir, 'active.json'), 'utf8')) as {
       snapshotId?: string;
       snapshotDir?: string;
@@ -209,14 +240,8 @@ function readPublishedKnowledgeBible(knowledgeRootDir: string): CoachKnowledgeBi
       studyCards?: unknown[];
     };
 
-    const principles = [
-      ...(published.principles ?? []).map(normalizePrinciple),
-      ...normalizeThematicSynthesisPrinciples(published.thematicSyntheses),
-    ].filter((item): item is CoachKnowledgePrinciple => item !== null);
-    const sources = [
-      ...((published.sources ?? []).map(normalizeSource)),
-      ...((published.studyCards ?? []).map(normalizeStudyCardSource)),
-    ].filter((item): item is CoachKnowledgeSource => item !== null);
+    const principles = (published.principles ?? []).map(normalizePrinciple).filter((item): item is CoachKnowledgePrinciple => item !== null);
+    const sources = ((published.sources ?? []).map(normalizeSource)).filter((item): item is CoachKnowledgeSource => item !== null);
 
     return {
       snapshotId: activePointer.snapshotId,
