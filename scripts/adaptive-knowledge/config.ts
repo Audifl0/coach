@@ -17,6 +17,7 @@ const DEFAULT_BOOTSTRAP_MAX_CANONICAL_RECORDS_PER_RUN = 250;
 const DEFAULT_BOOTSTRAP_MAX_RUNTIME_MS = 15 * 60 * 1000;
 const MAX_PIPELINE_RETRY_COUNT = 3;
 const DEFAULT_PAGES_PER_QUERY = 5;
+const DEFAULT_FULLTEXT_BUDGET_PER_RUN = 20;
 
 export const DEFAULT_PIPELINE_FRESHNESS_DAYS = 1825;
 export const DEFAULT_PIPELINE_RETRY_COUNT = 2;
@@ -29,6 +30,7 @@ export type AdaptiveKnowledgePipelineConfig = {
   readonly requestTimeoutMs: number;
   readonly maxQueriesPerRun: number;
   readonly pagesPerQuery: number;
+  readonly fulltextBudgetPerRun: number;
   readonly schedule: {
     readonly cron: string;
     readonly timezone: string;
@@ -53,6 +55,7 @@ type OverridesInput = Partial<{
   requestTimeoutMs: number;
   maxQueriesPerRun: number;
   pagesPerQuery: number;
+  fulltextBudgetPerRun: number;
   bootstrapMaxJobsPerRun: number;
   bootstrapMaxPagesPerJob: number;
   bootstrapMaxCanonicalRecordsPerRun: number;
@@ -152,6 +155,9 @@ function parseFromEnv(env: EnvInput): AdaptiveKnowledgePipelineConfig {
     parseMaybeInteger(env.PIPELINE_MAX_QUERIES_PER_RUN, 'PIPELINE_MAX_QUERIES_PER_RUN') ?? 6;
   const pagesPerQuery =
     parseMaybeInteger(env.PIPELINE_PAGES_PER_QUERY, 'PIPELINE_PAGES_PER_QUERY') ?? DEFAULT_PAGES_PER_QUERY;
+  const fulltextBudgetPerRun =
+    parseMaybeInteger(env.PIPELINE_FULLTEXT_BUDGET_PER_RUN, 'PIPELINE_FULLTEXT_BUDGET_PER_RUN') ??
+    DEFAULT_FULLTEXT_BUDGET_PER_RUN;
   const bootstrapMaxJobsPerRun =
     parseMaybeInteger(env.PIPELINE_BOOTSTRAP_MAX_JOBS_PER_RUN, 'PIPELINE_BOOTSTRAP_MAX_JOBS_PER_RUN') ??
     DEFAULT_BOOTSTRAP_MAX_JOBS_PER_RUN;
@@ -182,6 +188,7 @@ function parseFromEnv(env: EnvInput): AdaptiveKnowledgePipelineConfig {
     requestTimeoutMs,
     maxQueriesPerRun,
     pagesPerQuery,
+    fulltextBudgetPerRun,
     schedule: Object.freeze({
       cron,
       timezone,
@@ -227,6 +234,10 @@ function parseFromOverrides(overrides: OverridesInput = {}): AdaptiveKnowledgePi
   if (!Number.isInteger(pagesPerQuery) || pagesPerQuery <= 0) {
     throw new Error('pagesPerQuery must be a positive integer');
   }
+  const fulltextBudgetPerRun = overrides.fulltextBudgetPerRun ?? DEFAULT_FULLTEXT_BUDGET_PER_RUN;
+  if (!Number.isInteger(fulltextBudgetPerRun) || fulltextBudgetPerRun <= 0) {
+    throw new Error('fulltextBudgetPerRun must be a positive integer');
+  }
   const bootstrapMaxJobsPerRun = overrides.bootstrapMaxJobsPerRun ?? DEFAULT_BOOTSTRAP_MAX_JOBS_PER_RUN;
   if (!Number.isInteger(bootstrapMaxJobsPerRun) || bootstrapMaxJobsPerRun <= 0) {
     throw new Error('bootstrapMaxJobsPerRun must be a positive integer');
@@ -257,6 +268,7 @@ function parseFromOverrides(overrides: OverridesInput = {}): AdaptiveKnowledgePi
     requestTimeoutMs,
     maxQueriesPerRun,
     pagesPerQuery,
+    fulltextBudgetPerRun,
     schedule: Object.freeze({
       cron: overrides.scheduleCron?.trim() || DEFAULT_PIPELINE_SCHEDULE_CRON,
       timezone: overrides.scheduleTimezone?.trim() || DEFAULT_PIPELINE_SCHEDULE_TIMEZONE,
