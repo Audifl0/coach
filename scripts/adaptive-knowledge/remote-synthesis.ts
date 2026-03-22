@@ -2,11 +2,16 @@ import OpenAI from 'openai';
 
 import {
   parseSourceSynthesisBatch,
+  parseStudyCard,
+  parseThematicSynthesis,
   parseValidatedSynthesis,
   type NormalizedEvidenceRecord,
   type SourceSynthesisBatch,
+  type StudyCard,
+  type ThematicSynthesis,
   type ValidatedSynthesis,
 } from './contracts';
+import type { StudyCardExtractionPayload } from './study-card-extraction';
 
 type OpenAiResponsesApi = {
   create: (
@@ -29,6 +34,17 @@ export type OpenAiCorpusSynthesisConfig = {
 };
 
 export type CorpusRemoteSynthesisClient = {
+  extractStudyCards(input: {
+    runId: string;
+    records: NormalizedEvidenceRecord[];
+    payloadByRecordId: Map<string, StudyCardExtractionPayload>;
+  }): Promise<StudyCard[]>;
+  synthesizeThematicPrinciples(input: {
+    runId: string;
+    topicKey: string;
+    topicLabel: string;
+    studyCards: StudyCard[];
+  }): Promise<ThematicSynthesis>;
   synthesizeLot(input: {
     lotId: string;
     records: NormalizedEvidenceRecord[];
@@ -197,6 +213,152 @@ function buildLotPayload(records: NormalizedEvidenceRecord[]): string {
     null,
     2,
   );
+}
+
+function buildStudyCardPayload(
+  records: NormalizedEvidenceRecord[],
+  payloadByRecordId: Map<string, StudyCardExtractionPayload>,
+): string {
+  return JSON.stringify(
+    records.map((record) => payloadByRecordId.get(record.id) ?? {
+      recordId: record.id,
+      title: record.title,
+      summaryEn: record.summaryEn,
+      sourceUrl: record.sourceUrl,
+      topicKeys: record.tags,
+      extractionSource: 'abstract',
+    }),
+    null,
+    2,
+  );
+}
+
+function buildStudyCardSchema() {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['studyCards'],
+    properties: {
+      studyCards: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: [
+            'recordId',
+            'title',
+            'authors',
+            'year',
+            'journal',
+            'doi',
+            'studyType',
+            'population',
+            'protocol',
+            'results',
+            'practicalTakeaways',
+            'limitations',
+            'safetySignals',
+            'evidenceLevel',
+            'topicKeys',
+            'extractionSource',
+            'langueFr',
+          ],
+          properties: {
+            recordId: { type: 'string', minLength: 1 },
+            title: { type: 'string', minLength: 1 },
+            authors: { type: 'string', minLength: 1 },
+            year: { type: 'integer', minimum: 1900, maximum: 2100 },
+            journal: { type: 'string', minLength: 1 },
+            doi: { type: ['string', 'null'] },
+            studyType: {
+              type: 'string',
+              enum: ['rct', 'meta-analysis', 'systematic-review', 'cohort', 'case-study', 'guideline', 'narrative-review'],
+            },
+            population: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['description', 'size', 'trainingLevel'],
+              properties: {
+                description: { type: 'string', minLength: 1 },
+                size: { type: ['integer', 'null'], minimum: 1 },
+                trainingLevel: { type: ['string', 'null'], enum: ['novice', 'intermediate', 'advanced', 'mixed', null] },
+              },
+            },
+            protocol: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['duration', 'intervention', 'comparison'],
+              properties: {
+                duration: { type: 'string', minLength: 1 },
+                intervention: { type: 'string', minLength: 1 },
+                comparison: { type: ['string', 'null'] },
+              },
+            },
+            results: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['primary', 'secondary'],
+              properties: {
+                primary: { type: 'string', minLength: 1 },
+                secondary: { type: 'array', items: { type: 'string', minLength: 1 } },
+              },
+            },
+            practicalTakeaways: { type: 'array', items: { type: 'string', minLength: 1 } },
+            limitations: { type: 'array', items: { type: 'string', minLength: 1 } },
+            safetySignals: { type: 'array', items: { type: 'string', minLength: 1 } },
+            evidenceLevel: { type: 'string', enum: ['high', 'moderate', 'low'] },
+            topicKeys: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } },
+            extractionSource: { type: 'string', enum: ['full-text', 'abstract'] },
+            langueFr: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['titreFr', 'resumeFr', 'conclusionFr'],
+              properties: {
+                titreFr: { type: 'string', minLength: 1 },
+                resumeFr: { type: 'string', minLength: 1 },
+                conclusionFr: { type: 'string', minLength: 1 },
+              },
+            },
+          },
+        },
+      },
+    },
+  } as const;
+}
+
+function buildThematicSynthesisSchema() {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['topicKey', 'topicLabel', 'principlesFr', 'summaryFr', 'gapsFr', 'studyCount', 'lastUpdated'],
+    properties: {
+      topicKey: { type: 'string', minLength: 1 },
+      topicLabel: { type: 'string', minLength: 1 },
+      principlesFr: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 4,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['id', 'title', 'statement', 'conditions', 'guardrail', 'evidenceLevel', 'sourceCardIds'],
+          properties: {
+            id: { type: 'string', minLength: 1 },
+            title: { type: 'string', minLength: 1 },
+            statement: { type: 'string', minLength: 1 },
+            conditions: { type: 'array', items: { type: 'string', minLength: 1 } },
+            guardrail: { type: 'string', enum: ['SAFE-01', 'SAFE-02', 'SAFE-03'] },
+            evidenceLevel: { type: 'string', enum: ['strong', 'moderate', 'emerging'] },
+            sourceCardIds: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } },
+          },
+        },
+      },
+      summaryFr: { type: 'string', minLength: 1 },
+      gapsFr: { type: 'array', items: { type: 'string', minLength: 1 } },
+      studyCount: { type: 'integer', minimum: 0 },
+      lastUpdated: { type: 'string', format: 'date-time' },
+    },
+  } as const;
 }
 
 function buildSourceSynthesisSchema() {
@@ -504,6 +666,52 @@ export function createOpenAiCorpusSynthesisClient(
   const promptVersion = config.promptVersion ?? 'corpus-v1';
 
   return {
+    async extractStudyCards(input) {
+      const response = await requestStructuredOutput({
+        sdk,
+        config,
+        now,
+        schemaName: 'corpus_study_cards',
+        schema: buildStudyCardSchema(),
+        diagnosticScope: `operation=extractStudyCards;run=${input.runId}`,
+        parse: (payload) => {
+          const rawCards =
+            payload && typeof payload === 'object' && Array.isArray((payload as { studyCards?: unknown }).studyCards)
+              ? (payload as { studyCards: unknown[] }).studyCards
+              : [];
+          return rawCards.map((card) => parseStudyCard(card));
+        },
+        systemPrompt:
+          'You extract conservative, structured study cards from sports-science papers. Prefer exact details from the provided payload. Use abstract-only evidence when full text is unavailable.',
+        userPrompt:
+          `Prompt version: ${promptVersion}\n` +
+          `Run id: ${input.runId}\n` +
+          'Return one StudyCard per record. Preserve the provided extractionSource exactly. Base the card only on the provided metadata, abstract, and optional full-text sections.\n' +
+          `Records:\n${buildStudyCardPayload(input.records, input.payloadByRecordId)}`,
+      });
+
+      return response;
+    },
+    async synthesizeThematicPrinciples(input) {
+      return requestStructuredOutput({
+        sdk,
+        config,
+        now,
+        schemaName: 'corpus_thematic_synthesis',
+        schema: buildThematicSynthesisSchema(),
+        diagnosticScope: `operation=synthesizeThematicPrinciples;run=${input.runId};topic=${input.topicKey}`,
+        parse: (payload) => parseThematicSynthesis(payload),
+        systemPrompt:
+          'You synthesize practical, safety-first thematic principles in French from structured sports-science study cards. Stay conservative and keep every principle traceable to sourceCardIds present in the input.',
+        userPrompt:
+          `Prompt version: ${promptVersion}\n` +
+          `Run id: ${input.runId}\n` +
+          `Topic key: ${input.topicKey}\n` +
+          `Topic label: ${input.topicLabel}\n` +
+          'Return 2 to 4 French practical principles with conditions, guardrail, evidenceLevel, and sourceCardIds. Include a concise French summary and open evidence gaps. Use only the provided study cards.\n' +
+          `Study cards:\n${JSON.stringify(input.studyCards, null, 2)}`,
+      });
+    },
     async synthesizeLot(input) {
       return requestStructuredOutput({
         sdk,

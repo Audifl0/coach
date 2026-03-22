@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const SOURCE_TYPE_VALUES = ['guideline', 'review', 'expertise'] as const;
-const STAGE_VALUES = ['discover', 'ingest', 'synthesize', 'validate', 'publish'] as const;
+const STAGE_VALUES = ['discover', 'ingest', 'fulltext', 'extract-study-cards', 'thematic-synthesis', 'synthesize', 'validate', 'publish'] as const;
 const STAGE_STATUS_VALUES = ['succeeded', 'failed', 'skipped'] as const;
 const PIPELINE_MODE_VALUES = ['bootstrap', 'refresh', 'check'] as const;
 const SYNTHESIS_PROVIDER_VALUES = ['openai', 'deterministic'] as const;
@@ -13,6 +13,20 @@ const BOOTSTRAP_CAMPAIGN_STATUS_VALUES = ['idle', 'running', 'paused', 'complete
 const COLLECTION_JOB_STATUS_VALUES = ['pending', 'running', 'completed', 'blocked', 'exhausted'] as const;
 const DOCUMENTARY_STATUS_VALUES = ['metadata-only', 'abstract-ready', 'full-text-ready', 'blocked'] as const;
 const DOCUMENTARY_SOURCE_KIND_VALUES = ['metadata', 'abstract', 'full-text'] as const;
+const STUDY_CARD_STUDY_TYPE_VALUES = [
+  'rct',
+  'meta-analysis',
+  'systematic-review',
+  'cohort',
+  'case-study',
+  'guideline',
+  'narrative-review',
+] as const;
+const STUDY_CARD_TRAINING_LEVEL_VALUES = ['novice', 'intermediate', 'advanced', 'mixed'] as const;
+const STUDY_CARD_EVIDENCE_LEVEL_VALUES = ['high', 'moderate', 'low'] as const;
+const STUDY_CARD_EXTRACTION_SOURCE_VALUES = ['full-text', 'abstract'] as const;
+const THEMATIC_GUARDRAIL_VALUES = ['SAFE-01', 'SAFE-02', 'SAFE-03'] as const;
+const THEMATIC_EVIDENCE_LEVEL_VALUES = ['strong', 'moderate', 'emerging'] as const;
 
 export const documentaryRejectionReasonSchema = z
   .object({
@@ -84,6 +98,78 @@ export const adaptiveKnowledgeRankingTelemetrySchema = z
     rejectedRecordCount: z.number().int().nonnegative(),
     topRecordIds: z.array(z.string().min(1)),
     rejectionCodes: z.array(z.string().min(1)),
+  })
+  .strict();
+
+export const studyCardSchema = z
+  .object({
+    recordId: z.string().min(1),
+    title: z.string().min(1),
+    authors: z.string().min(1),
+    year: z.number().int().min(1900).max(2100),
+    journal: z.string().min(1),
+    doi: z.string().min(1).nullable(),
+    studyType: z.enum(STUDY_CARD_STUDY_TYPE_VALUES),
+    population: z
+      .object({
+        description: z.string().min(1),
+        size: z.number().int().positive().nullable(),
+        trainingLevel: z.enum(STUDY_CARD_TRAINING_LEVEL_VALUES).nullable(),
+      })
+      .strict(),
+    protocol: z
+      .object({
+        duration: z.string().min(1),
+        intervention: z.string().min(1),
+        comparison: z.string().min(1).nullable(),
+      })
+      .strict(),
+    results: z
+      .object({
+        primary: z.string().min(1),
+        secondary: z.array(z.string().min(1)),
+      })
+      .strict(),
+    practicalTakeaways: z.array(z.string().min(1)),
+    limitations: z.array(z.string().min(1)),
+    safetySignals: z.array(z.string().min(1)),
+    evidenceLevel: z.enum(STUDY_CARD_EVIDENCE_LEVEL_VALUES),
+    topicKeys: z.array(z.string().min(1)).min(1),
+    extractionSource: z.enum(STUDY_CARD_EXTRACTION_SOURCE_VALUES),
+    langueFr: z
+      .object({
+        titreFr: z.string().min(1),
+        resumeFr: z.string().min(1),
+        conclusionFr: z.string().min(1),
+      })
+      .strict(),
+  })
+  .strict();
+
+export const thematicSynthesisSchema = z
+  .object({
+    topicKey: z.string().min(1),
+    topicLabel: z.string().min(1),
+    principlesFr: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1),
+            title: z.string().min(1),
+            statement: z.string().min(1),
+            conditions: z.array(z.string().min(1)),
+            guardrail: z.enum(THEMATIC_GUARDRAIL_VALUES),
+            evidenceLevel: z.enum(THEMATIC_EVIDENCE_LEVEL_VALUES),
+            sourceCardIds: z.array(z.string().min(1)).min(1),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(4),
+    summaryFr: z.string().min(1),
+    gapsFr: z.array(z.string().min(1)),
+    studyCount: z.number().int().nonnegative(),
+    lastUpdated: z.string().datetime(),
   })
   .strict();
 
@@ -311,6 +397,9 @@ const artifactPointerSchema = z
     validatedSynthesisPath: z.string().min(1).optional(),
     studyExtractionsPath: z.string().min(1).optional(),
     documentStagingPath: z.string().min(1).optional(),
+    studyCardsPath: z.string().min(1).optional(),
+    thematicSynthesisPath: z.string().min(1).optional(),
+    bookletPath: z.string().min(1).optional(),
   })
   .strict();
 
@@ -383,7 +472,7 @@ export const corpusRunReportSchema = z
       if (observed[index] !== expectedPrefix[index]) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'stageReports must follow discover->ingest->synthesize->validate->publish order',
+          message: 'stageReports must follow discover->ingest->fulltext->extract-study-cards->thematic-synthesis->synthesize->validate->publish order',
           path: ['stageReports', index, 'stage'],
         });
       }
@@ -413,6 +502,8 @@ export type DocumentaryRecordState = z.infer<typeof documentaryRecordStateSchema
 export type EvidenceRankingReason = z.infer<typeof evidenceRankingReasonSchema>;
 export type EvidenceScientificRanking = z.infer<typeof evidenceScientificRankingSchema>;
 export type StructuredStudyExtraction = z.infer<typeof structuredStudyExtractionSchema>;
+export type StudyCard = z.infer<typeof studyCardSchema>;
+export type ThematicSynthesis = z.infer<typeof thematicSynthesisSchema>;
 export type AdaptiveKnowledgeRankingTelemetry = z.infer<typeof adaptiveKnowledgeRankingTelemetrySchema>;
 export type CorpusPrinciple = z.infer<typeof corpusPrincipleSchema>;
 export type AdaptiveKnowledgeBootstrapCampaignState = z.infer<typeof adaptiveKnowledgeBootstrapCampaignStateSchema>;
@@ -449,6 +540,14 @@ export function parseAdaptiveKnowledgeDiscoveryTelemetry(input: unknown): Adapti
 
 export function parseEvidenceScientificRanking(input: unknown): EvidenceScientificRanking {
   return evidenceScientificRankingSchema.parse(input);
+}
+
+export function parseStudyCard(input: unknown): StudyCard {
+  return studyCardSchema.parse(input);
+}
+
+export function parseThematicSynthesis(input: unknown): ThematicSynthesis {
+  return thematicSynthesisSchema.parse(input);
 }
 
 export function parseAdaptiveKnowledgeRankingTelemetry(input: unknown): AdaptiveKnowledgeRankingTelemetry {
