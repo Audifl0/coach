@@ -13,6 +13,7 @@ import {
   acquireAdaptiveKnowledgeLease,
   heartbeatAdaptiveKnowledgeLease,
   readAdaptiveKnowledgeWorkerState,
+  releaseAdaptiveKnowledgeLease,
 } from '../../scripts/adaptive-knowledge/worker-state';
 
 function buildConnectorSuccess(source: 'pubmed' | 'crossref' | 'openalex'): ConnectorFetchResult {
@@ -142,6 +143,41 @@ test('heartbeat updates lease metadata for the active run', async () => {
   assert.equal(heartbeat.status, 'heartbeat');
   assert.equal(heartbeat.message, 'mid-run');
   assert.equal(Date.parse(heartbeat.leaseExpiresAt) > Date.parse(heartbeat.heartbeatAt), true);
+});
+
+test('completed lease is immediately replaceable by a fresh run', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-worker-'));
+  const now = new Date('2026-03-11T10:00:00.000Z');
+
+  const first = await acquireAdaptiveKnowledgeLease({
+    outputRootDir,
+    runId: 'completed-run',
+    mode: 'refresh',
+    now,
+    leaseMs: 30_000,
+  });
+  assert.equal(first.acquired, true);
+
+  await releaseAdaptiveKnowledgeLease({
+    outputRootDir,
+    runId: 'completed-run',
+    status: 'completed',
+    now: new Date(now.getTime() + 2_000),
+    leaseMs: 30_000,
+    message: 'refresh completed',
+  });
+
+  const second = await acquireAdaptiveKnowledgeLease({
+    outputRootDir,
+    runId: 'fresh-run',
+    mode: 'refresh',
+    now: new Date(now.getTime() + 3_000),
+    leaseMs: 30_000,
+  });
+
+  assert.equal(second.acquired, true);
+  assert.equal(second.state?.runId, 'fresh-run');
+  assert.equal(second.state?.status, 'started');
 });
 
 test('worker command returns paused-by-operator when control state is paused', async () => {

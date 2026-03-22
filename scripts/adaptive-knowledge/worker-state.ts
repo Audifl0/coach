@@ -196,12 +196,26 @@ export async function acquireAdaptiveKnowledgeLease(
   await mkdir(input.outputRootDir, { recursive: true });
 
   const existingState = await safeReadWorkerState(statePath);
-  if (existingState !== null && !isLeaseExpired(existingState, now)) {
+  if (
+    existingState !== null &&
+    !isLeaseExpired(existingState, now) &&
+    existingState.status !== 'completed' &&
+    existingState.status !== 'failed' &&
+    existingState.status !== 'blocked-by-lease'
+  ) {
     return {
       acquired: false,
       reason: 'blocked-by-lease',
       state: existingState,
     };
+  }
+
+  if (
+    existingState !== null &&
+    (!isLeaseExpired(existingState, now) || isLeaseExpired(existingState, now)) &&
+    (existingState.status === 'completed' || existingState.status === 'failed' || existingState.status === 'blocked-by-lease')
+  ) {
+    await safeRemove(lockPath);
   }
 
   if (existingState !== null && isLeaseExpired(existingState, now)) {
