@@ -64,11 +64,13 @@ function inferSourceType(openalexType: string | undefined): 'guideline' | 'revie
   return 'expertise';
 }
 
-function buildOpenAlexUrl(query: string): string {
+function buildOpenAlexUrl(query: string, pagination?: { page?: number }): string {
+  const page = (pagination?.page ?? 0) + 1;
   const params = new URLSearchParams({
     search: query,
     per_page: '25',
     sort: 'relevance_score:desc',
+    ...(page > 1 ? { page: String(page) } : {}),
   });
   return `${OPENALEX_ENDPOINT}?${params.toString()}`;
 }
@@ -106,7 +108,7 @@ export async function fetchOpenAlexEvidenceBatch(input: ConnectorFetchInput): Pr
     });
 
   const result = await runWithRetry(async () => {
-    const response = await fetchImpl(buildOpenAlexUrl(input.query));
+    const response = await fetchImpl(buildOpenAlexUrl(input.query, input.pagination));
     if (!response.ok) {
       throw new Error(`OpenAlex request failed with status ${response.status}`);
     }
@@ -166,6 +168,7 @@ export async function fetchOpenAlexEvidenceBatch(input: ConnectorFetchInput): Pr
       attempts: result.attempts,
       rawResults: result.value.length,
       nextCursor: result.value.at(-1)?.id,
+      hasMore: result.value.length === 25,
       skipReasons: normalized.skipReasons,
     },
   };

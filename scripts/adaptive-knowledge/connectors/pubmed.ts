@@ -52,13 +52,15 @@ const PUBMED_ESEARCH = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fc
 const PUBMED_ESUMMARY = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi';
 const PUBMED_EFETCH = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi';
 
-function buildSearchUrl(query: string): string {
+function buildSearchUrl(query: string, pagination?: { page?: number }): string {
+  const retstart = (pagination?.page ?? 0) * 20;
   const params = new URLSearchParams({
     db: 'pubmed',
     retmode: 'json',
     retmax: '20',
     sort: 'relevance',
     term: query,
+    ...(retstart > 0 ? { retstart: String(retstart) } : {}),
   });
   return `${PUBMED_ESEARCH}?${params.toString()}`;
 }
@@ -152,7 +154,7 @@ export async function fetchPubmedEvidenceBatch(input: ConnectorFetchInput): Prom
 
   // Step 1: Search for PMIDs
   const searchResult = await runWithRetry(async () => {
-    const response = await fetchImpl(buildSearchUrl(input.query));
+    const response = await fetchImpl(buildSearchUrl(input.query, input.pagination));
     if (!response.ok) {
       throw new Error(`PubMed search failed with status ${response.status}`);
     }
@@ -194,6 +196,7 @@ export async function fetchPubmedEvidenceBatch(input: ConnectorFetchInput): Prom
         attempts: searchResult.attempts,
         rawResults: searchResult.value.records!.length,
         nextCursor: searchResult.value.records!.at(-1)?.id,
+        hasMore: searchResult.value.records!.length === 20,
         skipReasons: normalized.skipReasons,
       },
     };
@@ -207,7 +210,7 @@ export async function fetchPubmedEvidenceBatch(input: ConnectorFetchInput): Prom
       records: [],
       recordsFetched: 0,
       recordsSkipped: 0,
-      telemetry: { attempts: searchResult.attempts, rawResults: 0 },
+      telemetry: { attempts: searchResult.attempts, rawResults: 0, hasMore: false },
     };
   }
 
@@ -265,6 +268,7 @@ export async function fetchPubmedEvidenceBatch(input: ConnectorFetchInput): Prom
       attempts: searchResult.attempts,
       rawResults: records.length,
       nextCursor: pmids.at(-1),
+      hasMore: pmids.length === 20,
       skipReasons: normalized.skipReasons,
     },
   };

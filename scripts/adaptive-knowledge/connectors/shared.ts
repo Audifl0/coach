@@ -23,6 +23,11 @@ export type ConnectorFetchInput = {
   now?: Date;
   cursorState?: ConnectorCursorState;
   collectionJob?: AdaptiveKnowledgeCollectionJob;
+  pagination?: {
+    page?: number;
+    pagesPerQuery?: number;
+    cursor?: string;
+  };
   fetchImpl?: (url: string) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
 };
 
@@ -51,6 +56,7 @@ export type ConnectorFetchResult = {
     nextCursor?: string;
     rawResults?: number;
     incrementalSkipped?: number;
+    hasMore?: boolean;
     skipReasons?: {
       disallowedDomain: number;
       stalePublication: number;

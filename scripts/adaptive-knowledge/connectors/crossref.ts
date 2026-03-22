@@ -47,13 +47,15 @@ function inferSourceType(crossrefType: string | undefined): 'guideline' | 'revie
   }
 }
 
-function buildCrossrefUrl(query: string): string {
+function buildCrossrefUrl(query: string, pagination?: { page?: number }): string {
+  const offset = (pagination?.page ?? 0) * 20;
   const params = new URLSearchParams({
     query,
     rows: '20',
     sort: 'relevance',
     order: 'desc',
     'query.bibliographic': query,
+    ...(offset > 0 ? { offset: String(offset) } : {}),
   });
   return `${CROSSREF_ENDPOINT}?${params.toString()}`;
 }
@@ -74,7 +76,7 @@ export async function fetchCrossrefEvidenceBatch(input: ConnectorFetchInput): Pr
     });
 
   const result = await runWithRetry(async () => {
-    const response = await fetchImpl(buildCrossrefUrl(input.query));
+    const response = await fetchImpl(buildCrossrefUrl(input.query, input.pagination));
     if (!response.ok) {
       throw new Error(`Crossref request failed with status ${response.status}`);
     }
@@ -140,6 +142,7 @@ export async function fetchCrossrefEvidenceBatch(input: ConnectorFetchInput): Pr
       attempts: result.attempts,
       rawResults: result.value.length,
       nextCursor: result.value.at(-1)?.id,
+      hasMore: result.value.length === 20,
       skipReasons: normalized.skipReasons,
     },
   };
