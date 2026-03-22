@@ -10,6 +10,7 @@ import { runAdaptiveKnowledgePipeline } from '../../scripts/adaptive-knowledge/p
 import { rollbackCorpusSnapshot } from '../../scripts/adaptive-knowledge/publish';
 import { evaluateCorpusQualityGate } from '../../scripts/adaptive-knowledge/quality-gates';
 import { buildValidatedSynthesisFromPrinciples, synthesizeCorpusPrinciples } from '../../scripts/adaptive-knowledge/synthesis';
+import type { StudyCard, ThematicSynthesis } from '../../scripts/adaptive-knowledge/contracts';
 
 function buildConnectorSuccess(source: 'pubmed' | 'crossref' | 'openalex'): ConnectorFetchResult {
   const tagsBySource = {
@@ -90,6 +91,115 @@ async function runPipelineWithDeterministicSynthesis(
     },
   });
 }
+
+test('curation includes studyCards and thematicSyntheses in knowledge-bible.json', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-publish-enriched-bible-'));
+
+  await runAdaptiveKnowledgePipeline({
+    runId: 'run-enriched-knowledge-bible',
+    now: new Date('2026-03-08T00:00:00.000Z'),
+    outputRootDir,
+    qualityGateOverrides: {
+      threshold: 0.2,
+    },
+    synthesizeImpl: async (records) => {
+      const principles = synthesizeCorpusPrinciples(records);
+      return {
+        principles,
+        validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+          records,
+          principles,
+          modelRun: {
+            provider: 'deterministic',
+            model: 'test-remote-synthesis',
+            promptVersion: 'test-v1',
+          },
+        }),
+      };
+    },
+    remoteSynthesisClient: {
+      async extractStudyCards(input) {
+        return input.records.map((record) => ({
+          recordId: record.id,
+          title: record.title,
+          authors: 'Doe et al.',
+          year: 2024,
+          journal: 'Journal of Strength Research',
+          doi: null,
+          studyType: 'rct' as const,
+          population: {
+            description: 'Adult lifters',
+            size: 24,
+            trainingLevel: 'intermediate' as const,
+          },
+          protocol: {
+            duration: '8 semaines',
+            intervention: 'Progression encadrée',
+            comparison: 'Charge fixe',
+          },
+          results: {
+            primary: 'Amélioration de la force.',
+            secondary: ['Tolérance correcte.'],
+          },
+          practicalTakeaways: ['Ajuster la charge semaine après semaine.'],
+          limitations: ['Petit effectif.'],
+          safetySignals: ['Pas de signal majeur.'],
+          evidenceLevel: 'moderate' as const,
+          topicKeys: record.tags,
+          extractionSource: input.payloadByRecordId.get(record.id)?.extractionSource ?? 'abstract',
+          langueFr: {
+            titreFr: `FR ${record.title}`,
+            resumeFr: 'Résumé français.',
+            conclusionFr: 'Conclusion française.',
+          },
+        } satisfies StudyCard));
+      },
+      async synthesizeThematicPrinciples(input) {
+        return {
+          topicKey: input.topicKey,
+          topicLabel: input.topicLabel,
+          principlesFr: [
+            {
+              id: `${input.topicKey}-1`,
+              title: 'Principe thématique',
+              statement: 'Ajuster la progression selon la récupération observée.',
+              conditions: ['Absence de douleur aiguë'],
+              guardrail: 'SAFE-03' as const,
+              evidenceLevel: 'moderate' as const,
+              sourceCardIds: input.studyCards.map((card) => card.recordId),
+            },
+          ],
+          summaryFr: `Synthèse pour ${input.topicLabel}`,
+          gapsFr: ['Plus de données longitudinales nécessaires.'],
+          studyCount: input.studyCards.length,
+          lastUpdated: '2026-03-08T00:00:00.000Z',
+        } satisfies ThematicSynthesis;
+      },
+      async synthesizeLot() {
+        throw new Error('not used');
+      },
+      async consolidate() {
+        throw new Error('not used');
+      },
+    },
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => buildConnectorSuccess('crossref'),
+      openalex: async () => buildConnectorSuccess('openalex'),
+    },
+  });
+
+  const activePointer = (await loadJson(path.join(outputRootDir, 'active.json'))) as { snapshotDir: string };
+  const knowledgeBible = (await loadJson(path.join(activePointer.snapshotDir, 'knowledge-bible.json'))) as {
+    studyCards?: StudyCard[];
+    thematicSyntheses?: ThematicSynthesis[];
+  };
+
+  assert.equal(Array.isArray(knowledgeBible.studyCards), true);
+  assert.equal((knowledgeBible.studyCards?.length ?? 0) > 0, true);
+  assert.equal(Array.isArray(knowledgeBible.thematicSyntheses), true);
+  assert.equal((knowledgeBible.thematicSyntheses?.length ?? 0) > 0, true);
+});
 
 test('candidate with score below threshold is not publishable and active pointer remains unchanged', async () => {
   const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-publish-'));
