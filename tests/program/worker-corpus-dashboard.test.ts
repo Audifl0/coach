@@ -37,6 +37,24 @@ async function buildWorkerFixture() {
     heartbeatAt: '2026-03-11T10:01:00.000Z',
     leaseExpiresAt: '2026-03-11T10:06:00.000Z',
     message: 'discovering new evidence',
+    liveRun: {
+      active: true,
+      runId: 'worker-live',
+      mode: 'bootstrap',
+      status: 'running',
+      currentStage: 'discover',
+      currentWorkItemLabel: 'PubMed · progression-load',
+      lastHeartbeatAt: '2026-03-11T10:01:00.000Z',
+      heartbeatAgeSec: 120,
+      startedAt: '2026-03-11T10:00:00.000Z',
+      liveMessage: 'Discovering new evidence',
+      progress: {
+        queue: 4,
+        documents: 48,
+        questions: 3,
+        doctrine: 1,
+      },
+    },
   });
   await writeJson(path.join(rootDir, 'worker-control.json'), {
     state: 'running',
@@ -294,6 +312,24 @@ test('worker corpus contracts parse overview, run detail and snapshot detail pay
       message: 'running',
       isHeartbeatStale: false,
     },
+    liveRun: {
+      active: true,
+      runId: 'run_1',
+      mode: 'refresh',
+      status: 'running',
+      currentStage: 'synthesize',
+      currentWorkItemLabel: 'Question 12 · Progressive overload',
+      lastHeartbeatAt: '2026-03-11T10:00:00.000Z',
+      heartbeatAgeSec: 0,
+      startedAt: '2026-03-11T09:59:00.000Z',
+      liveMessage: 'Synthèse en cours',
+      progress: {
+        queue: 3,
+        documents: 12,
+        questions: 4,
+        doctrine: 2,
+      },
+    },
     publication: {
       severity: 'healthy',
       activeSnapshotId: 'run_1',
@@ -312,6 +348,9 @@ test('worker corpus contracts parse overview, run detail and snapshot detail pay
     recentRuns: [],
   });
   assert.equal(overview.live.state, 'heartbeat');
+  assert.equal(overview.liveRun.active, true);
+  assert.equal(overview.liveRun.status, 'running');
+  assert.equal(overview.liveRun.progress.questions, 4);
   assert.equal(overview.operatorMode, 'running');
   assert.equal(overview.runActive, true);
   assert.equal(
@@ -381,6 +420,24 @@ test('worker corpus contracts parse overview, run detail and snapshot detail pay
       leaseExpiresAt: null,
       message: null,
       isHeartbeatStale: false,
+    },
+    liveRun: {
+      active: false,
+      runId: null,
+      mode: null,
+      status: 'idle',
+      currentStage: null,
+      currentWorkItemLabel: null,
+      lastHeartbeatAt: null,
+      heartbeatAgeSec: null,
+      startedAt: null,
+      liveMessage: null,
+      progress: {
+        queue: 0,
+        documents: 0,
+        questions: 0,
+        doctrine: 0,
+      },
     },
     publication: {
       severity: 'degraded',

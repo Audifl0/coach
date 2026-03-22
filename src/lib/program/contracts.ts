@@ -222,6 +222,7 @@ export const workerCorpusStageStatusValues = ['succeeded', 'failed', 'skipped'] 
 export const workerCorpusModeValues = ['bootstrap', 'refresh', 'check'] as const;
 export const workerCorpusControlStateValues = ['idle', 'running', 'paused', 'failed'] as const;
 export const workerCorpusControlActionValues = ['start', 'pause'] as const;
+export const workerCorpusLiveRunStatusValues = ['idle', 'starting', 'running', 'stale', 'completed', 'failed'] as const;
 
 export const workerCorpusBootstrapCampaignSchema = z.object({
   campaignId: z.string().trim().min(1),
@@ -329,6 +330,29 @@ export const workerCorpusSnapshotDetailSchema = z.object({
   coverageRecordCount: z.number().int().nonnegative().nullable(),
 });
 
+export const workerCorpusLiveRunSchema = z
+  .object({
+    active: z.boolean(),
+    runId: z.string().trim().min(1).nullable(),
+    mode: z.enum(workerCorpusModeValues).nullable(),
+    status: z.enum(workerCorpusLiveRunStatusValues),
+    currentStage: z.string().trim().min(1).nullable(),
+    currentWorkItemLabel: z.string().trim().min(1).nullable(),
+    lastHeartbeatAt: z.iso.datetime().nullable(),
+    heartbeatAgeSec: z.number().int().nonnegative().nullable(),
+    startedAt: z.iso.datetime().nullable(),
+    liveMessage: z.string().trim().min(1).nullable(),
+    progress: z
+      .object({
+        queue: z.number().int().nonnegative(),
+        documents: z.number().int().nonnegative(),
+        questions: z.number().int().nonnegative(),
+        doctrine: z.number().int().nonnegative(),
+      })
+      .strict(),
+  })
+  .strict();
+
 export const workerCorpusOverviewResponseSchema = z.object({
   generatedAt: z.iso.datetime(),
   operatorMode: z.enum(['running', 'paused']),
@@ -355,6 +379,7 @@ export const workerCorpusOverviewResponseSchema = z.object({
     message: z.string().trim().min(1).nullable(),
     isHeartbeatStale: z.boolean(),
   }),
+  liveRun: workerCorpusLiveRunSchema,
   publication: z.object({
     severity: z.enum(workerCorpusSeverityValues),
     activeSnapshotId: z.string().trim().min(1).nullable(),
@@ -752,6 +777,7 @@ export type WorkerCorpusControlResponse = z.infer<typeof workerCorpusControlResp
 export type WorkerCorpusRunRow = z.infer<typeof workerCorpusRunRowSchema>;
 export type WorkerCorpusRunDetail = z.infer<typeof workerCorpusRunDetailSchema>;
 export type WorkerCorpusSnapshotDetail = z.infer<typeof workerCorpusSnapshotDetailSchema>;
+export type WorkerCorpusLiveRun = z.infer<typeof workerCorpusLiveRunSchema>;
 export type WorkerCorpusOverviewResponse = z.infer<typeof workerCorpusOverviewResponseSchema>;
 export type WorkerCorpusOverviewSection = z.infer<typeof workerCorpusOverviewSectionSchema>;
 export type WorkerCorpusStatusResponse = z.infer<typeof workerCorpusStatusResponseSchema>;
