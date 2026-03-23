@@ -841,8 +841,15 @@ export async function runAdaptiveKnowledgePipeline(
           revisionStatus: 'active',
           publishedAt: now.toISOString(),
         });
-        const sourceTiersByStudyId = Object.fromEntries(
-          (refreshStudyDossiers?.items ?? []).map((study) => [study.studyId, study.sourceType === 'guideline' ? 'tier1' : study.sourceType === 'review' ? 'tier2' : 'tier3']),
+        const sourceTiersByStudyId: Record<string, 'academic-primary' | 'academic-secondary' | 'professional-secondary' | undefined> = Object.fromEntries(
+          (refreshStudyDossiers?.items ?? []).map((study) => [
+            study.studyId,
+            study.studyCard.studyType === 'guideline'
+              ? 'academic-primary'
+              : study.studyCard.studyType === 'systematic-review' || study.studyCard.studyType === 'meta-analysis' || study.studyCard.studyType === 'narrative-review'
+                ? 'academic-secondary'
+                : 'professional-secondary',
+          ]),
         );
         await executeDoctrineWorkItem(item, {
           outputRootDir,
@@ -855,7 +862,8 @@ export async function runAdaptiveKnowledgePipeline(
       }
       refreshDoctrineDelta += doctrineExecuted;
       refreshExecutedWorkItems = selectedDiscoveryItems.length + documentExecution.executed + contradictionExecuted + doctrineExecuted;
-      refreshLastCompletedItemKind = refreshPlan.selectedItems.findLast((item) => item.kind)?.kind ?? null;
+      const lastSelectedItem = refreshPlan.selectedItems[refreshPlan.selectedItems.length - 1] ?? null;
+      refreshLastCompletedItemKind = lastSelectedItem?.kind ?? null;
 
       schedulerTelemetry = parseAdaptiveKnowledgeSchedulerTelemetry({
         itemsSelected: refreshPlan.selectedItems.length,

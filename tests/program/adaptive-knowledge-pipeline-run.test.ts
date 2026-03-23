@@ -1348,6 +1348,8 @@ test('shared worker dashboard contracts accept bootstrap campaign metadata', () 
       mode: 'bootstrap',
       status: 'running',
       currentStage: 'discover',
+      currentWorkItemKind: 'discover-front-page',
+      lastCompletedItemKind: 'extract-study-card',
       currentWorkItemLabel: 'job-pubmed',
       lastHeartbeatAt: '2026-03-13T10:30:00.000Z',
       heartbeatAgeSec: 0,
@@ -1359,6 +1361,16 @@ test('shared worker dashboard contracts accept bootstrap campaign metadata', () 
         questions: 0,
         doctrine: 1,
       },
+    },
+    backlog: {
+      generatedAt: '2026-03-13T10:30:00.000Z',
+      queueHealth: { ready: 12, blocked: 0, inProgress: 1 },
+      itemsByKind: {
+        'discover-front-page': 12,
+        'extract-study-card': 2,
+        'publish-doctrine': 1,
+      },
+      noProgressReasons: [],
     },
     live: {
       state: 'heartbeat',

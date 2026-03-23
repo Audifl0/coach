@@ -1,11 +1,21 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
-import { parseScientificQuestion, type ScientificQuestion, type StudyDossierRegistryRecord } from '../../scripts/adaptive-knowledge/contracts';
+import {
+  parseAdaptiveKnowledgeWorkItem,
+  parseScientificContradiction,
+  parseScientificQuestion,
+  type ScientificQuestion,
+  type StudyDossierRegistryRecord,
+} from '../../scripts/adaptive-knowledge/contracts';
 import {
   analyzeQuestionContradictions,
   buildQuestionSynthesisDossier,
 } from '../../scripts/adaptive-knowledge/contradiction-analysis';
+import { executeContradictionWorkItem } from '../../scripts/adaptive-knowledge/executors/contradiction-executor';
 
 function buildQuestion(overrides: Partial<ScientificQuestion> = {}): ScientificQuestion {
   return parseScientificQuestion({
@@ -20,6 +30,10 @@ function buildQuestion(overrides: Partial<ScientificQuestion> = {}): ScientificQ
     publicationStatus: overrides.publicationStatus ?? 'candidate',
     updatedAt: overrides.updatedAt ?? '2026-03-22T00:00:00.000Z',
   });
+}
+
+async function loadJson(filePath: string): Promise<unknown> {
+  return JSON.parse(await readFile(filePath, 'utf8')) as unknown;
 }
 
 function buildStudy(overrides: Partial<StudyDossierRegistryRecord> = {}): StudyDossierRegistryRecord {
@@ -199,4 +213,60 @@ test('question dossier records unresolved contradictions explicitly', () => {
   assert.equal(dossier.contradictions.some((item) => item.resolved === false), true);
   assert.equal(dossier.publicationReadiness, 'blocked');
   assert.match(dossier.summaryFr, /contradiction|diverg/i);
+});
+
+test('contradiction executor refreshes open blocking contradiction dossiers', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-contradiction-'));
+  const question = buildQuestion({ linkedStudyIds: ['study-positive', 'study-negative'] });
+  const positiveStudy = buildStudy({ studyId: 'study-positive', recordId: 'study-positive' });
+  const negativeStudy = buildStudy({
+    studyId: 'study-negative',
+    recordId: 'study-negative',
+    studyCard: {
+      ...buildStudy().studyCard,
+      recordId: 'study-negative',
+      title: 'Higher weekly volume did not improve hypertrophy',
+      results: {
+        primary: 'Higher weekly volume did not improve hypertrophy compared with lower volume.',
+        secondary: ['Fatigue increased.'],
+      },
+      evidenceLevel: 'low',
+    },
+  });
+  const contradiction = parseScientificContradiction({
+    questionId: question.questionId,
+    studyIds: ['study-positive', 'study-negative'],
+    reasonCode: 'outcome-direction-divergence',
+    summaryFr: 'Les etudes divergent sur la direction de l effet.',
+    severity: 'blocking',
+    resolved: false,
+  });
+  const item = parseAdaptiveKnowledgeWorkItem({
+    id: `contradiction:${question.questionId}`,
+    kind: 'analyze-contradiction',
+    status: 'ready',
+    topicKey: question.topicKeys[0] ?? 'hypertrophy',
+    priorityScore: 0.94,
+    blockedBy: [],
+    targetId: question.questionId,
+  });
+
+  const outcome = await executeContradictionWorkItem(item, {
+    outputRootDir,
+    now: new Date('2026-03-23T12:00:00.000Z'),
+    question,
+    linkedStudies: [positiveStudy, negativeStudy],
+    contradictions: [contradiction],
+  });
+
+  assert.equal(outcome.status, 'completed');
+  assert.equal(outcome.delta.contradictionsAnalyzed, 1);
+  assert.equal(outcome.delta.blockingContradictions >= 1, true);
+  assert.equal(outcome.dossier.publicationReadiness, 'blocked');
+  assert.equal(outcome.dossier.contradictions.some((entry) => entry.reasonCode === 'outcome-direction-divergence'), true);
+
+  const onDisk = (await loadJson(path.join(outputRootDir, 'registry', 'question-synthesis-dossiers.json'))) as {
+    items?: Array<{ questionId?: string }>;
+  };
+  assert.equal(onDisk.items?.[0]?.questionId, question.questionId);
 });

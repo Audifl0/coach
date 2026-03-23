@@ -2,6 +2,7 @@ import {
   parseDoctrineRevisionEntry,
   parsePublishedDoctrinePrinciple,
   parsePublishedDoctrineSnapshot,
+  type AdaptiveKnowledgeSourceTier,
   type DoctrineRevisionEntry,
   type PublishedDoctrinePrinciple,
   type PublishedDoctrineSnapshot,
@@ -9,6 +10,10 @@ import {
 } from './contracts';
 
 const MIN_STUDIES = 2;
+const DOCTRINE_ELIGIBLE_TIERS: ReadonlySet<AdaptiveKnowledgeSourceTier> = new Set([
+  'academic-primary',
+  'academic-secondary',
+]);
 
 function nowIso(now?: Date): string {
   return (now ?? new Date()).toISOString();
@@ -18,25 +23,38 @@ function buildRevisionId(principleId: string, changedAt: string, changeType: Doc
   return `${principleId}:${changeType}:${changedAt}`;
 }
 
-export function evaluateDoctrineCandidatePublication(input: {
-  candidate: PublishedDoctrinePrinciple;
-  dossier: QuestionSynthesisDossier;
-}): {
+export type DoctrineCandidateEvaluation = {
   published: boolean;
   reasons: Array<
     | 'insufficient_supporting_studies'
     | 'unresolved_blocking_contradiction'
     | 'missing_summary_or_limits'
     | 'missing_confidence'
+    | 'insufficient_proof_tier'
   >;
   principle?: PublishedDoctrinePrinciple;
-} {
-  const reasons: Array<
-    | 'insufficient_supporting_studies'
-    | 'unresolved_blocking_contradiction'
-    | 'missing_summary_or_limits'
-    | 'missing_confidence'
-  > = [];
+};
+
+function hasEligibleDoctrineProofTier(input: {
+  dossier: QuestionSynthesisDossier;
+  sourceTiersByStudyId?: Record<string, AdaptiveKnowledgeSourceTier | undefined>;
+}): boolean {
+  if (!input.sourceTiersByStudyId) {
+    return true;
+  }
+
+  return input.dossier.linkedStudyIds.some((studyId) => {
+    const tier = input.sourceTiersByStudyId?.[studyId];
+    return tier ? DOCTRINE_ELIGIBLE_TIERS.has(tier) : false;
+  });
+}
+
+export function evaluateDoctrineCandidatePublication(input: {
+  candidate: PublishedDoctrinePrinciple;
+  dossier: QuestionSynthesisDossier;
+  sourceTiersByStudyId?: Record<string, AdaptiveKnowledgeSourceTier | undefined>;
+}): DoctrineCandidateEvaluation {
+  const reasons: DoctrineCandidateEvaluation['reasons'] = [];
 
   if (new Set(input.candidate.studyIds).size < MIN_STUDIES || new Set(input.dossier.linkedStudyIds).size < MIN_STUDIES) {
     reasons.push('insufficient_supporting_studies');
@@ -52,6 +70,10 @@ export function evaluateDoctrineCandidatePublication(input: {
 
   if (!input.candidate.confidenceLevel) {
     reasons.push('missing_confidence');
+  }
+
+  if (!hasEligibleDoctrineProofTier(input)) {
+    reasons.push('insufficient_proof_tier');
   }
 
   if (reasons.length > 0) {

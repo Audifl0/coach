@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
+  parseAdaptiveKnowledgeWorkItem,
   parsePublishedDoctrinePrinciple,
   parseQuestionSynthesisDossier,
   parseScientificContradiction,
@@ -15,6 +16,7 @@ import {
   evaluateDoctrineCandidatePublication,
   reconcileDoctrineAgainstDossiers,
 } from '../../scripts/adaptive-knowledge/conservative-publication';
+import { executeDoctrineWorkItem } from '../../scripts/adaptive-knowledge/executors/doctrine-executor';
 import {
   appendDoctrineRevisionEntries,
   loadDoctrineRevisionHistory,
@@ -157,4 +159,82 @@ test('doctrine registry writes snapshot and revision history artifacts', async (
   const historyFile = await loadJson(path.join(outputRootDir, 'registry', 'doctrine-revisions.json'));
   assert.equal(typeof snapshotFile, 'object');
   assert.equal(typeof historyFile, 'object');
+});
+
+test('doctrine executor refuses publication from professional-only evidence', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-doctrine-executor-'));
+  const item = parseAdaptiveKnowledgeWorkItem({
+    id: 'doctrine:q-weekly-volume-hypertrophy',
+    kind: 'publish-doctrine',
+    status: 'ready',
+    topicKey: 'hypertrophy-dose',
+    priorityScore: 0.91,
+    blockedBy: [],
+    targetId: 'q-weekly-volume-hypertrophy',
+  });
+  const candidate = buildPrinciple({
+    principleId: 'doctrine:q-weekly-volume-hypertrophy',
+    questionIds: ['q-weekly-volume-hypertrophy'],
+  });
+  const dossier = buildDossier({
+    questionId: 'q-weekly-volume-hypertrophy',
+    linkedStudyIds: ['study-1', 'study-2', 'study-3'],
+    publicationReadiness: 'ready',
+    confidenceLevel: 'moderate',
+  });
+
+  const outcome = await executeDoctrineWorkItem(item, {
+    outputRootDir,
+    now: new Date('2026-03-23T12:00:00.000Z'),
+    candidate,
+    dossier,
+    sourceTiersByStudyId: {
+      'study-1': 'professional-secondary',
+      'study-2': 'professional-secondary',
+      'study-3': 'professional-secondary',
+    },
+  });
+
+  assert.equal(outcome.status, 'blocked');
+  assert.match(outcome.reason ?? '', /insufficient-proof-tier/i);
+  assert.equal(outcome.delta.publishedPrinciples, 0);
+});
+
+test('doctrine executor publishes when academic proof tiers support the dossier', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-doctrine-executor-'));
+  const item = parseAdaptiveKnowledgeWorkItem({
+    id: 'doctrine:q-weekly-volume-hypertrophy',
+    kind: 'publish-doctrine',
+    status: 'ready',
+    topicKey: 'hypertrophy-dose',
+    priorityScore: 0.91,
+    blockedBy: [],
+    targetId: 'q-weekly-volume-hypertrophy',
+  });
+  const candidate = buildPrinciple({
+    principleId: 'doctrine:q-weekly-volume-hypertrophy',
+    questionIds: ['q-weekly-volume-hypertrophy'],
+  });
+  const dossier = buildDossier({
+    questionId: 'q-weekly-volume-hypertrophy',
+    linkedStudyIds: ['study-1', 'study-2', 'study-3'],
+    publicationReadiness: 'ready',
+    confidenceLevel: 'high',
+  });
+
+  const outcome = await executeDoctrineWorkItem(item, {
+    outputRootDir,
+    now: new Date('2026-03-23T12:00:00.000Z'),
+    candidate,
+    dossier,
+    sourceTiersByStudyId: {
+      'study-1': 'academic-primary',
+      'study-2': 'academic-secondary',
+      'study-3': 'academic-secondary',
+    },
+  });
+
+  assert.equal(outcome.status, 'completed');
+  assert.equal(outcome.delta.publishedPrinciples, 1);
+  assert.equal(outcome.snapshot.principles.some((principle) => principle.principleId === candidate.principleId), true);
 });

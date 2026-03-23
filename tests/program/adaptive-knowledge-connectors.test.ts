@@ -48,7 +48,7 @@ test('records from non-whitelisted domains are rejected before normalization', a
   assert.equal(result.recordsSkipped, 1);
 });
 
-test('connector freshness window excludes records older than 5-year default', async () => {
+test('freshness metadata no longer excludes old-but-relevant connector records', async () => {
   const result = await fetchOpenAlexEvidenceBatch({
     query: 'resistance training',
     allowedDomains: ['openalex.org'],
@@ -77,10 +77,11 @@ test('connector freshness window excludes records older than 5-year default', as
   });
 
   assert.equal(result.skipped, false);
-  assert.equal(result.records.length, 1);
-  assert.equal(result.records[0]?.id, 'oa-fresh');
-  assert.equal(result.recordsFetched, 1);
-  assert.equal(result.recordsSkipped, 1);
+  assert.equal(result.records.length, 2);
+  assert.deepEqual(result.records.map((record) => record.id), ['oa-fresh', 'oa-stale']);
+  assert.equal(result.recordsFetched, 2);
+  assert.equal(result.recordsSkipped, 0);
+  assert.equal(result.telemetry.skipReasons.stalePublication, 1);
 });
 
 test('retry exhaustion returns source-level skip outcome instead of throwing', async () => {

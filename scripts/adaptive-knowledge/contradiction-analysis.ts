@@ -119,6 +119,27 @@ export function analyzeQuestionContradictions(input: {
   return contradictions;
 }
 
+export function refreshQuestionContradictions(input: {
+  question: ScientificQuestion;
+  linkedStudies: readonly StudyDossierRegistryRecord[];
+}): ScientificContradiction[] {
+  return analyzeQuestionContradictions(input);
+}
+
+export function mergeQuestionContradictions(input: {
+  existing: readonly ScientificContradiction[];
+  refreshed: readonly ScientificContradiction[];
+}): ScientificContradiction[] {
+  const merged = new Map<string, ScientificContradiction>();
+
+  for (const contradiction of [...input.existing, ...input.refreshed]) {
+    const key = `${contradiction.questionId}:${contradiction.reasonCode}:${contradiction.studyIds.join('|')}`;
+    merged.set(key, parseScientificContradiction(contradiction));
+  }
+
+  return [...merged.values()];
+}
+
 export function buildQuestionSynthesisDossier(input: {
   question: ScientificQuestion;
   linkedStudies: readonly StudyDossierRegistryRecord[];
