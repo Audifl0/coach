@@ -11,6 +11,20 @@ const DISCOVERY_GAP_STATUS_VALUES = ['covered', 'partial', 'uncovered'] as const
 const RANKING_REASON_DIRECTION_VALUES = ['boost', 'penalty', 'reject'] as const;
 const BOOTSTRAP_CAMPAIGN_STATUS_VALUES = ['idle', 'running', 'paused', 'completed', 'failed'] as const;
 const COLLECTION_JOB_STATUS_VALUES = ['pending', 'running', 'completed', 'blocked', 'exhausted'] as const;
+const ADAPTIVE_KNOWLEDGE_SOURCE_TIER_VALUES = ['academic-primary', 'academic-secondary', 'professional-secondary'] as const;
+const ADAPTIVE_KNOWLEDGE_SOURCE_CAPABILITY_VALUES = ['metadata', 'abstract', 'fulltext'] as const;
+const ADAPTIVE_KNOWLEDGE_SOURCE_STATUS_VALUES = ['active', 'suspended'] as const;
+const ADAPTIVE_KNOWLEDGE_RESEARCH_FRONT_STATUS_VALUES = ['active', 'cooldown', 'deferred', 'blocked', 'exhausted', 'archived'] as const;
+const ADAPTIVE_KNOWLEDGE_WORK_ITEM_KIND_VALUES = [
+  'discover-front-page',
+  'revisit-front',
+  'acquire-fulltext',
+  'extract-study-card',
+  'link-study-question',
+  'analyze-contradiction',
+  'publish-doctrine',
+] as const;
+const ADAPTIVE_KNOWLEDGE_WORK_ITEM_STATUS_VALUES = ['ready', 'running', 'blocked', 'completed', 'failed'] as const;
 const DOCUMENTARY_STATUS_VALUES = ['metadata-only', 'abstract-ready', 'full-text-ready', 'blocked'] as const;
 const DOCUMENTARY_SOURCE_KIND_VALUES = ['metadata', 'abstract', 'full-text'] as const;
 const STUDY_CARD_STUDY_TYPE_VALUES = [
@@ -503,6 +517,60 @@ export const adaptiveKnowledgeCollectionJobSchema = z
   })
   .strict();
 
+export const adaptiveKnowledgeSourceCatalogEntrySchema = z
+  .object({
+    source: z.enum(['pubmed', 'crossref', 'openalex']),
+    tier: z.enum(ADAPTIVE_KNOWLEDGE_SOURCE_TIER_VALUES),
+    capabilities: z.array(z.enum(ADAPTIVE_KNOWLEDGE_SOURCE_CAPABILITY_VALUES)).min(1),
+    status: z.enum(ADAPTIVE_KNOWLEDGE_SOURCE_STATUS_VALUES),
+  })
+  .strict();
+
+export const adaptiveKnowledgeResearchFrontSchema = z
+  .object({
+    id: z.string().min(1),
+    source: z.enum(['pubmed', 'crossref', 'openalex']),
+    queryFamily: z.string().min(1),
+    status: z.enum(ADAPTIVE_KNOWLEDGE_RESEARCH_FRONT_STATUS_VALUES),
+    topicKey: z.string().min(1),
+    query: z.string().min(1),
+    pageCursor: z
+      .object({
+        page: z.number().int().nonnegative(),
+        nextCursor: z.string().min(1).nullable(),
+      })
+      .strict(),
+    attempts: z.number().int().nonnegative(),
+    evidence: z
+      .object({
+        pagesVisited: z.number().int().nonnegative(),
+        reformulationsTried: z.number().int().nonnegative(),
+        sourcesVisited: z.number().int().nonnegative(),
+      })
+      .strict(),
+  })
+  .strict();
+
+export const adaptiveKnowledgeWorkItemSchema = z
+  .object({
+    id: z.string().min(1),
+    kind: z.enum(ADAPTIVE_KNOWLEDGE_WORK_ITEM_KIND_VALUES),
+    status: z.enum(ADAPTIVE_KNOWLEDGE_WORK_ITEM_STATUS_VALUES),
+    topicKey: z.string().min(1),
+    priorityScore: z.number().min(0).max(1),
+    blockedBy: z.array(z.string().min(1)),
+    targetId: z.string().min(1),
+  })
+  .strict();
+
+export const adaptiveKnowledgeBacklogHealthSummarySchema = z
+  .object({
+    readyItems: z.number().int().nonnegative(),
+    blockedItems: z.number().int().nonnegative(),
+    noProgressReasons: z.array(z.string().min(1)),
+  })
+  .strict();
+
 export const adaptiveKnowledgeBootstrapRunTelemetrySchema = z
   .object({
     queueDepth: z
@@ -738,6 +806,10 @@ export type AdaptiveKnowledgeRankingTelemetry = z.infer<typeof adaptiveKnowledge
 export type CorpusPrinciple = z.infer<typeof corpusPrincipleSchema>;
 export type AdaptiveKnowledgeBootstrapCampaignState = z.infer<typeof adaptiveKnowledgeBootstrapCampaignStateSchema>;
 export type AdaptiveKnowledgeCollectionJob = z.infer<typeof adaptiveKnowledgeCollectionJobSchema>;
+export type AdaptiveKnowledgeSourceCatalogEntry = z.infer<typeof adaptiveKnowledgeSourceCatalogEntrySchema>;
+export type AdaptiveKnowledgeResearchFront = z.infer<typeof adaptiveKnowledgeResearchFrontSchema>;
+export type AdaptiveKnowledgeWorkItem = z.infer<typeof adaptiveKnowledgeWorkItemSchema>;
+export type AdaptiveKnowledgeBacklogHealthSummary = z.infer<typeof adaptiveKnowledgeBacklogHealthSummarySchema>;
 export type AdaptiveKnowledgeBootstrapRunTelemetry = z.infer<typeof adaptiveKnowledgeBootstrapRunTelemetrySchema>;
 export type SynthesisRunMetadata = z.infer<typeof synthesisRunMetadataSchema>;
 export type RejectedSynthesisClaim = z.infer<typeof rejectedSynthesisClaimSchema>;
@@ -766,6 +838,22 @@ export function parseAdaptiveKnowledgeCoverageGap(input: unknown): AdaptiveKnowl
 
 export function parseAdaptiveKnowledgeCollectionJob(input: unknown): AdaptiveKnowledgeCollectionJob {
   return adaptiveKnowledgeCollectionJobSchema.parse(input);
+}
+
+export function parseAdaptiveKnowledgeSourceCatalogEntry(input: unknown): AdaptiveKnowledgeSourceCatalogEntry {
+  return adaptiveKnowledgeSourceCatalogEntrySchema.parse(input);
+}
+
+export function parseAdaptiveKnowledgeResearchFront(input: unknown): AdaptiveKnowledgeResearchFront {
+  return adaptiveKnowledgeResearchFrontSchema.parse(input);
+}
+
+export function parseAdaptiveKnowledgeWorkItem(input: unknown): AdaptiveKnowledgeWorkItem {
+  return adaptiveKnowledgeWorkItemSchema.parse(input);
+}
+
+export function parseAdaptiveKnowledgeBacklogHealthSummary(input: unknown): AdaptiveKnowledgeBacklogHealthSummary {
+  return adaptiveKnowledgeBacklogHealthSummarySchema.parse(input);
 }
 
 export function parseAdaptiveKnowledgeDiscoveryTelemetry(input: unknown): AdaptiveKnowledgeDiscoveryTelemetry {

@@ -2,11 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  parseAdaptiveKnowledgeBacklogHealthSummary,
+  parseAdaptiveKnowledgeResearchFront,
+  parseAdaptiveKnowledgeWorkItem,
   parseCorpusPrinciple,
   parseCorpusRunReport,
   parseCorpusSnapshotManifest,
   parseNormalizedEvidenceRecord,
 } from '../../scripts/adaptive-knowledge/contracts';
+import { parseWorkerCorpusBacklogDashboardPayload } from '../../src/lib/program/contracts';
 
 function buildEvidenceRecord(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -142,6 +146,82 @@ test('snapshot manifest and run report schemas reject unknown fields and invalid
     parseCorpusRunReport({
       ...runReport,
       debug: true,
+    }),
+  );
+});
+
+test('adaptive knowledge contracts parse research fronts and work items', () => {
+  const front = parseAdaptiveKnowledgeResearchFront({
+    id: 'front-progression-load-pubmed',
+    source: 'pubmed',
+    queryFamily: 'progression-load',
+    status: 'active',
+    topicKey: 'progression',
+    query: 'resistance training load progression hypertrophy strength',
+    pageCursor: { page: 0, nextCursor: null },
+    attempts: 0,
+    evidence: { pagesVisited: 0, reformulationsTried: 0, sourcesVisited: 1 },
+  });
+
+  const item = parseAdaptiveKnowledgeWorkItem({
+    id: 'discover:front-progression-load-pubmed:page-0',
+    kind: 'discover-front-page',
+    status: 'ready',
+    topicKey: 'progression',
+    priorityScore: 0.91,
+    blockedBy: [],
+    targetId: front.id,
+  });
+
+  assert.equal(item.kind, 'discover-front-page');
+  assert.equal(item.targetId, front.id);
+});
+
+test('adaptive knowledge contracts parse backlog health summaries', () => {
+  const summary = parseAdaptiveKnowledgeBacklogHealthSummary({
+    readyItems: 7,
+    blockedItems: 2,
+    noProgressReasons: ['duplicate-heavy', 'blocked-by-downstream'],
+  });
+
+  assert.equal(summary.readyItems, 7);
+  assert.equal(summary.noProgressReasons.length, 2);
+});
+
+test('worker dashboard contracts parse backlog dashboard payloads', () => {
+  const payload = parseWorkerCorpusBacklogDashboardPayload({
+    generatedAt: '2026-03-23T00:00:00.000Z',
+    queueHealth: {
+      ready: 7,
+      blocked: 2,
+      inProgress: 1,
+    },
+    itemsByKind: {
+      'discover-front-page': 4,
+      'extract-study-card': 2,
+      'publish-doctrine': 1,
+    },
+    noProgressReasons: ['duplicate-heavy'],
+  });
+
+  assert.equal(payload.queueHealth.ready, 7);
+  assert.equal(payload.itemsByKind['publish-doctrine'], 1);
+});
+
+test('worker dashboard contracts reject backlog payloads missing declared backlog kinds', () => {
+  assert.throws(() =>
+    parseWorkerCorpusBacklogDashboardPayload({
+      generatedAt: '2026-03-23T00:00:00.000Z',
+      queueHealth: {
+        ready: 7,
+        blocked: 2,
+        inProgress: 1,
+      },
+      itemsByKind: {
+        'discover-front-page': 4,
+        'extract-study-card': 2,
+      },
+      noProgressReasons: ['duplicate-heavy'],
     }),
   );
 });

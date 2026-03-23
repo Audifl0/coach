@@ -223,6 +223,11 @@ export const workerCorpusModeValues = ['bootstrap', 'refresh', 'check'] as const
 export const workerCorpusControlStateValues = ['idle', 'running', 'paused', 'failed'] as const;
 export const workerCorpusControlActionValues = ['start', 'pause'] as const;
 export const workerCorpusLiveRunStatusValues = ['idle', 'starting', 'running', 'stale', 'completed', 'failed'] as const;
+export const workerCorpusBacklogItemKindValues = [
+  'discover-front-page',
+  'extract-study-card',
+  'publish-doctrine',
+] as const;
 
 export const workerCorpusBootstrapCampaignSchema = z.object({
   campaignId: z.string().trim().min(1),
@@ -350,6 +355,27 @@ export const workerCorpusLiveRunSchema = z
         doctrine: z.number().int().nonnegative(),
       })
       .strict(),
+  })
+  .strict();
+
+export const workerCorpusBacklogDashboardPayloadSchema = z
+  .object({
+    generatedAt: z.iso.datetime(),
+    queueHealth: z
+      .object({
+        ready: z.number().int().nonnegative(),
+        blocked: z.number().int().nonnegative(),
+        inProgress: z.number().int().nonnegative(),
+      })
+      .strict(),
+    itemsByKind: z
+      .object({
+        'discover-front-page': z.number().int().nonnegative(),
+        'extract-study-card': z.number().int().nonnegative(),
+        'publish-doctrine': z.number().int().nonnegative(),
+      })
+      .strict(),
+    noProgressReasons: z.array(z.string().trim().min(1)).default([]),
   })
   .strict();
 
@@ -778,6 +804,7 @@ export type WorkerCorpusRunRow = z.infer<typeof workerCorpusRunRowSchema>;
 export type WorkerCorpusRunDetail = z.infer<typeof workerCorpusRunDetailSchema>;
 export type WorkerCorpusSnapshotDetail = z.infer<typeof workerCorpusSnapshotDetailSchema>;
 export type WorkerCorpusLiveRun = z.infer<typeof workerCorpusLiveRunSchema>;
+export type WorkerCorpusBacklogDashboardPayload = z.infer<typeof workerCorpusBacklogDashboardPayloadSchema>;
 export type WorkerCorpusOverviewResponse = z.infer<typeof workerCorpusOverviewResponseSchema>;
 export type WorkerCorpusOverviewSection = z.infer<typeof workerCorpusOverviewSectionSchema>;
 export type WorkerCorpusStatusResponse = z.infer<typeof workerCorpusStatusResponseSchema>;
@@ -839,6 +866,10 @@ export function parseHistoryQueryInput(input: unknown): HistoryQueryInput {
 
 export function parseWorkerCorpusOverviewResponse(input: unknown): WorkerCorpusOverviewResponse {
   return workerCorpusOverviewResponseSchema.parse(input);
+}
+
+export function parseWorkerCorpusBacklogDashboardPayload(input: unknown): WorkerCorpusBacklogDashboardPayload {
+  return workerCorpusBacklogDashboardPayloadSchema.parse(input);
 }
 
 export function parseWorkerCorpusOverviewSection(input: unknown): WorkerCorpusOverviewSection {
