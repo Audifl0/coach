@@ -1232,6 +1232,26 @@ export async function runAdaptiveKnowledgePipeline(
             : `blocked:${qualityGateResult.reasons.join(',')}`,
   });
 
+  const directDiscoveryProducedUsefulDelta =
+    normalizedRecords.length > 0 || studyCards.length > 0 || principles.length > 0 || validatedSynthesis.principles.length > 0;
+  const productivityExecutedWorkItems =
+    schedulerTelemetry?.itemsExecuted ??
+    (refreshExecutedWorkItems || (directDiscoveryProducedUsefulDelta ? discoveryPlan.length : 0));
+  const productivityUsefulDelta = {
+    documents: refreshDocumentsDelta || normalizedRecords.length,
+    studyCards: refreshStudyCardsDelta || studyCards.length,
+    contradictions: refreshContradictionsDelta,
+    doctrine: refreshDoctrineDelta,
+  };
+  const productivityNoProgressReasons =
+    directDiscoveryProducedUsefulDelta || productivityExecutedWorkItems > 0
+      ? refreshNoProgressReasons
+      : qualityGateResult.reasons.length > 0
+        ? qualityGateResult.reasons
+        : ['no-ready-work'];
+  const productivityLastCompletedItemKind =
+    refreshLastCompletedItemKind ?? (directDiscoveryProducedUsefulDelta ? 'discover-front-page' : null);
+
   const runReport = parseCorpusRunReport({
     runId,
     mode,
@@ -1244,24 +1264,12 @@ export async function runAdaptiveKnowledgePipeline(
     scheduler: schedulerTelemetry,
     bootstrap: bootstrapTelemetry,
     productivity: {
-      executedWorkItems: schedulerTelemetry?.itemsExecuted ?? refreshExecutedWorkItems,
-      usefulDelta: {
-        documents: refreshDocumentsDelta,
-        studyCards: refreshStudyCardsDelta,
-        contradictions: refreshContradictionsDelta,
-        doctrine: refreshDoctrineDelta,
-      },
-      noProgressReasons:
-        refreshNoProgressReasons.length > 0
-          ? refreshNoProgressReasons
-          : schedulerTelemetry?.itemsExecuted
-            ? []
-            : qualityGateResult.reasons.length > 0
-              ? qualityGateResult.reasons
-              : ['no-ready-work'],
+      executedWorkItems: productivityExecutedWorkItems,
+      usefulDelta: productivityUsefulDelta,
+      noProgressReasons: productivityNoProgressReasons,
       topBacklogShortages: refreshTopBacklogShortages,
       currentItemKind: refreshCurrentItemKind,
-      lastCompletedItemKind: refreshLastCompletedItemKind,
+      lastCompletedItemKind: productivityLastCompletedItemKind,
     },
   });
 

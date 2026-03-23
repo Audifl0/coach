@@ -690,6 +690,37 @@ test('run report distinguishes technical completion from scientific productivity
   assert.equal(typeof (productivity?.lastCompletedItemKind ?? null) === 'string' || productivity?.lastCompletedItemKind === null, true);
 });
 
+test('run report marks direct discovery output as useful productivity', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+
+  const result = await runAdaptiveKnowledgePipeline({
+    runId: 'run-productivity-discovery',
+    mode: 'refresh',
+    now: new Date('2026-03-23T00:00:00.000Z'),
+    outputRootDir,
+    connectors: {
+      pubmed: async () => buildConnectorSuccess('pubmed'),
+      crossref: async () => ({ source: 'crossref', skipped: false, records: [], recordsFetched: 0, recordsSkipped: 0, telemetry: { attempts: 1, hasMore: false } }),
+      openalex: async () => ({ source: 'openalex', skipped: false, records: [], recordsFetched: 0, recordsSkipped: 0, telemetry: { attempts: 1, hasMore: false } }),
+    },
+  });
+
+  const productivity = (result.runReport as {
+    productivity?: {
+      executedWorkItems: number;
+      usefulDelta: { documents: number; studyCards: number; contradictions: number; doctrine: number };
+      noProgressReasons: string[];
+      lastCompletedItemKind: string | null;
+    };
+  }).productivity;
+
+  assert.equal((productivity?.executedWorkItems ?? 0) > 0, true);
+  assert.equal((productivity?.usefulDelta.documents ?? 0) > 0, true);
+  assert.equal((productivity?.usefulDelta.studyCards ?? 0) >= 0, true);
+  assert.deepEqual(productivity?.noProgressReasons ?? [], []);
+  assert.equal(productivity?.lastCompletedItemKind, 'discover-front-page');
+});
+
 test('pipeline triages documentary staging before synthesis and defers non-extractable records', async () => {
   const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
   let synthesizedRecordIds: string[] = [];
