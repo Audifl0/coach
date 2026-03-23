@@ -11,6 +11,8 @@ import {
   parseAdaptiveKnowledgeBootstrapCampaignState,
   parseAdaptiveKnowledgeCollectionJob,
   parseCorpusRunReport,
+  parseQuestionSynthesisDossier,
+  parsePublishedDoctrinePrinciple,
   parseScientificContradiction,
   type StudyCard,
   type ThematicSynthesis,
