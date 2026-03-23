@@ -339,9 +339,14 @@ async function buildDocumentQueueWorkRecords(input: {
         tags: document.topicKeys,
         provenanceIds: [document.recordId],
         documentary: {
-          status: 'abstract-ready' as const,
+          status:
+            document.status === 'full-text-ready'
+              ? 'full-text-ready'
+              : document.status === 'abstract-ready' || document.status === 'extractible' || document.status === 'metadata-ready'
+                ? 'abstract-ready'
+                : 'metadata-only',
           acquisition: {
-            sourceKind: 'abstract' as const,
+            sourceKind: document.status === 'full-text-ready' ? 'full-text' : document.status === 'metadata-ready' ? 'metadata' : 'abstract',
             rejectionReason: null,
           },
         },
@@ -701,177 +706,174 @@ export async function runAdaptiveKnowledgePipeline(
   }
 
   if (mode === 'refresh') {
-    const hasPreexistingBacklog = (refreshDocumentRegistry?.items.length ?? 0) > 0 || refreshResearchFronts.length > 0;
-    const discoveredImmediateRecords = sourceResults.flatMap((source) => source.records);
-    const shouldRunRefreshScheduler = hasPreexistingBacklog && discoveredImmediateRecords.length === 0;
-
-    if (shouldRunRefreshScheduler) {
-      const refreshItems = buildAdaptiveKnowledgeWorkItems({
-        researchFronts: refreshResearchFronts,
-        documents: refreshDocumentRegistry?.items ?? [],
-        questions: (refreshScientificQuestions?.items ?? []).map((question) => ({
-          id: question.questionId,
-          topicKey: question.topicKeys[0] ?? 'unknown-topic',
-          coverage: question.coverageStatus,
-          publicationStatus: question.publicationStatus,
-        })),
-        contradictions: (await refreshQuestionSynthesisDossiers).flatMap((dossier) =>
-          dossier.contradictions.map((contradiction) => ({
-            id: `${dossier.questionId}:${contradiction.reasonCode}`,
-            targetId: `${dossier.questionId}:${contradiction.reasonCode}`,
-            topicKey: refreshScientificQuestions?.items.find((question) => question.questionId === dossier.questionId)?.topicKeys[0] ?? 'unknown-topic',
-            severity: contradiction.severity,
-            resolved: contradiction.resolved,
-          })),
-        ),
-        doctrineCandidates: (await refreshQuestionSynthesisDossiers).map((dossier) => ({
-          id: dossier.questionId,
+    const refreshQuestionDossiers = await refreshQuestionSynthesisDossiers;
+    const refreshItems = buildAdaptiveKnowledgeWorkItems({
+      researchFronts: refreshResearchFronts,
+      documents: refreshDocumentRegistry?.items ?? [],
+      questions: (refreshScientificQuestions?.items ?? []).map((question) => ({
+        id: question.questionId,
+        topicKey: question.topicKeys[0] ?? 'unknown-topic',
+        coverage: question.coverageStatus,
+        publicationStatus: question.publicationStatus,
+      })),
+      contradictions: refreshQuestionDossiers.flatMap((dossier) =>
+        dossier.contradictions.map((contradiction) => ({
+          id: `${dossier.questionId}:${contradiction.reasonCode}`,
+          targetId: `${dossier.questionId}:${contradiction.reasonCode}`,
           topicKey: refreshScientificQuestions?.items.find((question) => question.questionId === dossier.questionId)?.topicKeys[0] ?? 'unknown-topic',
-          publicationReadiness: dossier.publicationReadiness,
+          severity: contradiction.severity,
+          resolved: contradiction.resolved,
         })),
+      ),
+      doctrineCandidates: refreshQuestionDossiers.map((dossier) => ({
+        id: dossier.questionId,
+        topicKey: refreshScientificQuestions?.items.find((question) => question.questionId === dossier.questionId)?.topicKeys[0] ?? 'unknown-topic',
+        publicationReadiness: dossier.publicationReadiness,
+      })),
+      now,
+      hasStudyDossiers: (refreshStudyDossiers?.items.length ?? 0) > 0,
+    });
+    const refreshPlan = scheduleAdaptiveKnowledgeWork({
+      items: refreshItems,
+      limits: {
+        maxItems: config.maxQueriesPerRun,
+        perKind: {
+          'discover-front-page': config.maxQueriesPerRun,
+          'acquire-fulltext': config.maxQueriesPerRun,
+          'extract-study-card': config.maxQueriesPerRun,
+          'link-study-question': config.maxQueriesPerRun,
+          'analyze-contradiction': config.maxQueriesPerRun,
+          'publish-doctrine': config.maxQueriesPerRun,
+        },
+      },
+    });
+
+    const selectedDiscoveryItems = refreshPlan.selectedItems.filter((item) => item.kind === 'discover-front-page');
+    refreshCurrentItemKind = refreshPlan.selectedItems[0]?.kind ?? null;
+    refreshTopBacklogShortages = [...new Set(refreshPlan.selectedItems.map((item) => item.kind))].slice(0, 3);
+    refreshNoProgressReasons = [...(refreshPlan.noProgressSummary?.noProgressReasons ?? [])];
+    for (const item of selectedDiscoveryItems) {
+      const front = refreshResearchFronts.find((candidate) => candidate.id === item.targetId);
+      if (!front) {
+        continue;
+      }
+      const connector = connectors[front.source];
+      const executed = await executeDiscoveryWorkItem({
+        outputRootDir,
         now,
-      });
-      const refreshPlan = scheduleAdaptiveKnowledgeWork({
-        items: refreshItems,
-        limits: {
-          maxItems: config.maxQueriesPerRun,
-          perKind: {
-            'discover-front-page': config.maxQueriesPerRun,
-            'acquire-fulltext': config.maxQueriesPerRun,
-            'extract-study-card': config.maxQueriesPerRun,
-            'link-study-question': config.maxQueriesPerRun,
-          },
+        front,
+        connector,
+        cursorState,
+        connectorInput: {
+          allowedDomains: [...config.allowedDomains],
+          freshnessWindowDays: config.freshnessWindowDays,
+          retryCount: config.maxRetries,
+          timeoutMs: config.requestTimeoutMs,
+          collectionJob: undefined,
         },
       });
-
-      const selectedDiscoveryItems = refreshPlan.selectedItems.filter((item) => item.kind === 'discover-front-page');
-      refreshCurrentItemKind = refreshPlan.selectedItems[0]?.kind ?? null;
-      refreshTopBacklogShortages = [...new Set(refreshPlan.selectedItems.map((item) => item.kind))].slice(0, 3);
-      refreshNoProgressReasons = [...(refreshPlan.noProgressSummary?.noProgressReasons ?? [])];
-      for (const item of selectedDiscoveryItems) {
-        const front = refreshResearchFronts.find((candidate) => candidate.id === item.targetId);
-        if (!front) {
-          continue;
-        }
-        const connector = connectors[front.source];
-        const executed = await executeDiscoveryWorkItem({
-          outputRootDir,
-          now,
-          front,
-          connector,
-          cursorState,
-          connectorInput: {
-            allowedDomains: [...config.allowedDomains],
-            freshnessWindowDays: config.freshnessWindowDays,
-            retryCount: config.maxRetries,
-            timeoutMs: config.requestTimeoutMs,
-            collectionJob: undefined,
-          },
-        });
-        refreshScheduledRecords.push(...executed.records);
-      }
-
-      const documentExecution = refreshDocumentRegistry && refreshScientificQuestions && refreshStudyDossiers && remoteStudyCardClient
-        ? await buildDocumentQueueWorkRecords({
-            outputRootDir,
-            now,
-            selectedItems: refreshPlan.selectedItems.filter((item) =>
-              item.kind === 'acquire-fulltext' || item.kind === 'extract-study-card' || item.kind === 'link-study-question',
-            ),
-            documentRegistry: refreshDocumentRegistry,
-            remoteSynthesisClient: remoteStudyCardClient,
-            existingStudyDossiers: refreshStudyDossiers,
-            scientificQuestions: refreshScientificQuestions,
-          })
-        : { executed: 0, records: [], studyCards: [], deltas: { documentsAcquired: 0, documentsExtracted: 0, studyCards: 0 } };
-      refreshScheduledRecords.push(...documentExecution.records);
-      refreshDocumentsDelta += documentExecution.deltas.documentsAcquired + documentExecution.deltas.documentsExtracted;
-      refreshStudyCardsDelta += documentExecution.deltas.studyCards;
-
-      const contradictionItems = refreshPlan.selectedItems.filter((item) => item.kind === 'analyze-contradiction');
-      let contradictionExecuted = 0;
-      for (const item of contradictionItems) {
-        const contradictionDossiers = await refreshQuestionSynthesisDossiers;
-        const dossier = contradictionDossiers.find((candidate) =>
-          candidate.contradictions.some(
-            (contradiction) => `${candidate.questionId}:${contradiction.reasonCode}` === item.targetId,
-          ),
-        );
-        if (!dossier) {
-          continue;
-        }
-        const question = refreshScientificQuestions?.items.find((candidate) => candidate.questionId === dossier.questionId);
-        if (!question) {
-          continue;
-        }
-        const linkedStudies = (refreshStudyDossiers?.items ?? []).filter((study) => dossier.linkedStudyIds.includes(study.studyId));
-        await executeContradictionWorkItem(item, {
-          outputRootDir,
-          now,
-          question,
-          linkedStudies,
-          contradictions: dossier.contradictions,
-        });
-        contradictionExecuted += 1;
-      }
-      refreshContradictionsDelta += contradictionExecuted;
-
-      const doctrineItems = refreshPlan.selectedItems.filter((item) => item.kind === 'publish-doctrine');
-      let doctrineExecuted = 0;
-      for (const item of doctrineItems) {
-        const question = refreshScientificQuestions?.items.find((candidate) => candidate.questionId === item.targetId);
-        if (!question) {
-          continue;
-        }
-        const dossier = (await refreshQuestionSynthesisDossiers).find((candidate) => candidate.questionId === question.questionId);
-        if (!dossier) {
-          continue;
-        }
-        const candidate = parsePublishedDoctrinePrinciple({
-          principleId: `doctrine:${dossier.questionId}`,
-          statementFr: dossier.summaryFr,
-          conditionsFr: question.inclusionCriteria.join(' ') || 'Conditions explicites non nulles requises.',
-          limitsFr:
-            dossier.contradictions.length > 0
-              ? dossier.contradictions.map((entry) => entry.summaryFr).join(' ')
-              : question.exclusionCriteria.join(' ') || 'Limites explicites requises.',
-          confidenceLevel: dossier.confidenceLevel,
-          questionIds: [dossier.questionId],
-          studyIds: dossier.linkedStudyIds,
-          revisionStatus: 'active',
-          publishedAt: now.toISOString(),
-        });
-        const sourceTiersByStudyId: Record<string, 'academic-primary' | 'academic-secondary' | 'professional-secondary' | undefined> = Object.fromEntries(
-          (refreshStudyDossiers?.items ?? []).map((study) => [
-            study.studyId,
-            study.studyCard.studyType === 'guideline'
-              ? 'academic-primary'
-              : study.studyCard.studyType === 'systematic-review' || study.studyCard.studyType === 'meta-analysis' || study.studyCard.studyType === 'narrative-review'
-                ? 'academic-secondary'
-                : 'professional-secondary',
-          ]),
-        );
-        await executeDoctrineWorkItem(item, {
-          outputRootDir,
-          now,
-          candidate,
-          dossier,
-          sourceTiersByStudyId,
-        });
-        doctrineExecuted += 1;
-      }
-      refreshDoctrineDelta += doctrineExecuted;
-      refreshExecutedWorkItems = selectedDiscoveryItems.length + documentExecution.executed + contradictionExecuted + doctrineExecuted;
-      const lastSelectedItem = refreshPlan.selectedItems[refreshPlan.selectedItems.length - 1] ?? null;
-      refreshLastCompletedItemKind = lastSelectedItem?.kind ?? null;
-
-      schedulerTelemetry = parseAdaptiveKnowledgeSchedulerTelemetry({
-        itemsSelected: refreshPlan.selectedItems.length,
-        itemsExecuted: refreshExecutedWorkItems,
-        selectedKinds: refreshPlan.selectedItems.map((item) => item.kind),
-        noProgressReasons: refreshPlan.noProgressSummary?.noProgressReasons ?? [],
-      });
+      refreshScheduledRecords.push(...executed.records);
     }
+
+    const documentExecution = refreshDocumentRegistry && refreshScientificQuestions && refreshStudyDossiers && remoteStudyCardClient
+      ? await buildDocumentQueueWorkRecords({
+          outputRootDir,
+          now,
+          selectedItems: refreshPlan.selectedItems.filter((item) =>
+            item.kind === 'acquire-fulltext' || item.kind === 'extract-study-card' || item.kind === 'link-study-question',
+          ),
+          documentRegistry: refreshDocumentRegistry,
+          remoteSynthesisClient: remoteStudyCardClient,
+          existingStudyDossiers: refreshStudyDossiers,
+          scientificQuestions: refreshScientificQuestions,
+        })
+      : { executed: 0, records: [], studyCards: [], deltas: { documentsAcquired: 0, documentsExtracted: 0, studyCards: 0 } };
+    refreshScheduledRecords.push(...documentExecution.records);
+    refreshDocumentsDelta += documentExecution.deltas.documentsAcquired + documentExecution.deltas.documentsExtracted;
+    refreshStudyCardsDelta += documentExecution.deltas.studyCards;
+
+    const contradictionItems = refreshPlan.selectedItems.filter((item) => item.kind === 'analyze-contradiction');
+    let contradictionExecuted = 0;
+    for (const item of contradictionItems) {
+      const dossier = refreshQuestionDossiers.find((candidate) =>
+        candidate.contradictions.some(
+          (contradiction) => `${candidate.questionId}:${contradiction.reasonCode}` === item.targetId,
+        ),
+      );
+      if (!dossier) {
+        continue;
+      }
+      const question = refreshScientificQuestions?.items.find((candidate) => candidate.questionId === dossier.questionId);
+      if (!question) {
+        continue;
+      }
+      const linkedStudies = (refreshStudyDossiers?.items ?? []).filter((study) => dossier.linkedStudyIds.includes(study.studyId));
+      await executeContradictionWorkItem(item, {
+        outputRootDir,
+        now,
+        question,
+        linkedStudies,
+        contradictions: dossier.contradictions,
+      });
+      contradictionExecuted += 1;
+    }
+    refreshContradictionsDelta += contradictionExecuted;
+
+    const doctrineItems = refreshPlan.selectedItems.filter((item) => item.kind === 'publish-doctrine');
+    let doctrineExecuted = 0;
+    for (const item of doctrineItems) {
+      const question = refreshScientificQuestions?.items.find((candidate) => candidate.questionId === item.targetId);
+      if (!question) {
+        continue;
+      }
+      const dossier = refreshQuestionDossiers.find((candidate) => candidate.questionId === question.questionId);
+      if (!dossier) {
+        continue;
+      }
+      const candidate = parsePublishedDoctrinePrinciple({
+        principleId: `doctrine:${dossier.questionId}`,
+        statementFr: dossier.summaryFr,
+        conditionsFr: question.inclusionCriteria.join(' ') || 'Conditions explicites non nulles requises.',
+        limitsFr:
+          dossier.contradictions.length > 0
+            ? dossier.contradictions.map((entry) => entry.summaryFr).join(' ')
+            : question.exclusionCriteria.join(' ') || 'Limites explicites requises.',
+        confidenceLevel: dossier.confidenceLevel,
+        questionIds: [dossier.questionId],
+        studyIds: dossier.linkedStudyIds,
+        revisionStatus: 'active',
+        publishedAt: now.toISOString(),
+      });
+      const sourceTiersByStudyId: Record<string, 'academic-primary' | 'academic-secondary' | 'professional-secondary' | undefined> = Object.fromEntries(
+        (refreshStudyDossiers?.items ?? []).map((study) => [
+          study.studyId,
+          study.studyCard.studyType === 'guideline'
+            ? 'academic-primary'
+            : study.studyCard.studyType === 'systematic-review' || study.studyCard.studyType === 'meta-analysis' || study.studyCard.studyType === 'narrative-review'
+              ? 'academic-secondary'
+              : 'professional-secondary',
+        ]),
+      );
+      await executeDoctrineWorkItem(item, {
+        outputRootDir,
+        now,
+        candidate,
+        dossier,
+        sourceTiersByStudyId,
+      });
+      doctrineExecuted += 1;
+    }
+    refreshDoctrineDelta += doctrineExecuted;
+    refreshExecutedWorkItems = selectedDiscoveryItems.length + documentExecution.executed + contradictionExecuted + doctrineExecuted;
+    const lastSelectedItem = refreshPlan.selectedItems[refreshPlan.selectedItems.length - 1] ?? null;
+    refreshLastCompletedItemKind = lastSelectedItem?.kind ?? null;
+
+    schedulerTelemetry = parseAdaptiveKnowledgeSchedulerTelemetry({
+      itemsSelected: refreshPlan.selectedItems.length,
+      itemsExecuted: refreshExecutedWorkItems,
+      selectedKinds: refreshPlan.selectedItems.map((item) => item.kind),
+      noProgressReasons: refreshPlan.noProgressSummary?.noProgressReasons ?? [],
+    });
   }
 
   const skippedSources = sourceResults.filter((source) => source.skipped).length;
@@ -1023,6 +1025,12 @@ export async function runAdaptiveKnowledgePipeline(
     threshold: input.qualityGateOverrides?.threshold,
     criticalContradictions: input.qualityGateOverrides?.criticalContradictions,
     projection: qualityGateProjection,
+    usefulBacklogProgress: {
+      documents: refreshDocumentsDelta,
+      studyCards: refreshStudyCardsDelta,
+      contradictions: refreshContradictionsDelta,
+      doctrine: refreshDoctrineDelta,
+    },
   });
   if (candidateRecordsForSynthesis.length > 0 && recordsForSynthesis.length === 0) {
     stageReports.push({
@@ -1054,6 +1062,12 @@ export async function runAdaptiveKnowledgePipeline(
       threshold: input.qualityGateOverrides?.threshold,
       criticalContradictions: input.qualityGateOverrides?.criticalContradictions,
       projection: qualityGateProjection,
+      usefulBacklogProgress: {
+        documents: refreshDocumentsDelta,
+        studyCards: refreshStudyCardsDelta,
+        contradictions: refreshContradictionsDelta,
+        doctrine: refreshDoctrineDelta,
+      },
     });
   } else if (recordsForSynthesis.length === 0) {
     stageReports.push({
@@ -1089,6 +1103,12 @@ export async function runAdaptiveKnowledgePipeline(
       threshold: input.qualityGateOverrides?.threshold,
       criticalContradictions: input.qualityGateOverrides?.criticalContradictions,
       projection: qualityGateProjection,
+      usefulBacklogProgress: {
+        documents: refreshDocumentsDelta,
+        studyCards: refreshStudyCardsDelta,
+        contradictions: refreshContradictionsDelta,
+        doctrine: refreshDoctrineDelta,
+      },
     });
   } else {
     try {
@@ -1182,6 +1202,12 @@ export async function runAdaptiveKnowledgePipeline(
         threshold: input.qualityGateOverrides?.threshold,
         criticalContradictions: input.qualityGateOverrides?.criticalContradictions,
         projection: qualityGateProjection,
+        usefulBacklogProgress: {
+          documents: refreshDocumentsDelta,
+          studyCards: refreshStudyCardsDelta,
+          contradictions: refreshContradictionsDelta,
+          doctrine: refreshDoctrineDelta,
+        },
       });
     } catch (error) {
       if (!studyCardStageRecorded) {
@@ -1223,10 +1249,10 @@ export async function runAdaptiveKnowledgePipeline(
     status: synthesisErrorMessage ? 'skipped' : qualityGateResult.status === 'progressing' ? 'succeeded' : 'skipped',
     message: synthesisErrorMessage
       ? 'blocked-by-synthesis-failure'
-      : qualityGateResult.publishable
-        ? 'pending-artifact-write'
-        : schedulerTelemetry?.itemsExecuted
-          ? `progressing:items-executed=${schedulerTelemetry.itemsExecuted}`
+      : schedulerTelemetry?.itemsExecuted
+        ? `progressing:items-executed=${schedulerTelemetry.itemsExecuted}`
+        : qualityGateResult.publishable
+          ? 'pending-artifact-write'
           : qualityGateResult.status === 'progressing'
             ? `progressing:${qualityGateResult.reasons.join(',')}`
             : `blocked:${qualityGateResult.reasons.join(',')}`,

@@ -239,6 +239,61 @@ function buildClientProps() {
         },
       ],
     },
+    initialDeliverables: {
+      generatedAt: '2026-03-11T10:00:00.000Z',
+      source: {
+        snapshotId: 'run-ready',
+        runId: 'run-ready',
+        generatedAt: '2026-03-11T10:01:00.000Z',
+        promotedAt: '2026-03-11T10:02:00.000Z',
+        artifactState: 'validated' as const,
+        severity: 'healthy' as const,
+        qualityGateReasons: [],
+      },
+      doctrine: [
+        {
+          principleId: 'doctrine:q-autoregulation-progression',
+          statementFr: 'Progresser avec autoregulation prudente.',
+          confidenceLevel: 'moderate',
+          conditionsFr: 'Intermédiaires',
+          limitsFr: 'Faible volume de preuve',
+          questionIds: ['q-autoregulation-progression'],
+          publishedAt: '2026-03-11T10:01:00.000Z',
+        },
+      ],
+      questions: [
+        {
+          questionId: 'q-rest',
+          label: 'Temps de repos',
+          coverageStatus: 'developing' as const,
+          publicationStatus: 'candidate' as const,
+          publicationReadiness: 'blocked',
+          linkedStudyCount: 2,
+          contradictionCount: 1,
+          summaryFr: 'Synthèse question courte.',
+          updatedAt: '2026-03-11T10:00:00.000Z',
+        },
+      ],
+      studyExtractions: [
+        {
+          recordId: 'record_1',
+          topicKey: 'progression',
+          title: 'Useful review',
+          applicationContext: 'Hypertrophy block',
+          intervention: 'Progressive overload',
+          population: 'Adult lifters',
+          takeaway: 'Positive signal',
+        },
+      ],
+      artifacts: {
+        booklet: { available: true },
+        knowledgeBible: { available: true },
+        validatedSynthesis: { available: true },
+        runReport: { available: true },
+        snapshot: { available: true },
+      },
+      emptyReason: 'none' as const,
+    },
     initialRunDetail: {
       runId: 'run-bootstrap-1',
       snapshotId: 'run-bootstrap-1',
@@ -371,11 +426,71 @@ function buildClientProps() {
   };
 }
 
-test('worker corpus dashboard client renders scientific supervision sections', async () => {
+test('worker corpus dashboard client defaults to livrables-first view with concrete outputs', async () => {
   const { WorkerCorpusDashboardClient } = await import(
     '../../src/app/(private)/dashboard/worker-corpus/_components/worker-corpus-dashboard-client'
   );
   const html = renderToStaticMarkup(<WorkerCorpusDashboardClient {...buildClientProps()} />);
+
+  assert.match(html, /Livrables/i);
+  assert.match(html, /Supervision/i);
+  assert.match(html, /Livrables produits/i);
+  assert.match(html, /Progresser avec autoregulation prudente/i);
+  assert.match(html, /Useful review/i);
+  assert.match(html, /run-ready/i);
+  assert.match(html, /questions_undercovered/i);
+});
+
+test('worker corpus dashboard client keeps livrables useful when doctrine is empty', async () => {
+  const { WorkerCorpusDashboardClient } = await import(
+    '../../src/app/(private)/dashboard/worker-corpus/_components/worker-corpus-dashboard-client'
+  );
+  const props = buildClientProps();
+  props.initialDeliverables.doctrine = [];
+  const html = renderToStaticMarkup(<WorkerCorpusDashboardClient {...props} />);
+
+  assert.match(html, /Questions notables/i);
+  assert.match(html, /Temps de repos/i);
+  assert.match(html, /Études exploitables/i);
+  assert.match(html, /Useful review/i);
+});
+
+test('worker corpus dashboard client shows honest empty copy with no active snapshot', async () => {
+  const { WorkerCorpusDashboardClient } = await import(
+    '../../src/app/(private)/dashboard/worker-corpus/_components/worker-corpus-dashboard-client'
+  );
+  const props = buildClientProps();
+  props.initialDeliverables.source.snapshotId = null;
+  props.initialDeliverables.source.runId = null;
+  props.initialDeliverables.source.generatedAt = null;
+  props.initialDeliverables.source.promotedAt = null;
+  props.initialDeliverables.source.artifactState = null;
+  props.initialDeliverables.source.severity = null;
+  props.initialDeliverables.doctrine = [];
+  props.initialDeliverables.questions = [];
+  props.initialDeliverables.studyExtractions = [];
+  props.initialDeliverables.artifacts.booklet.available = false;
+  props.initialDeliverables.artifacts.knowledgeBible.available = false;
+  props.initialDeliverables.artifacts.validatedSynthesis.available = false;
+  props.initialDeliverables.artifacts.runReport.available = false;
+  props.initialDeliverables.artifacts.snapshot.available = false;
+  props.initialDeliverables.emptyReason = 'no-active-snapshot';
+
+  const html = renderToStaticMarkup(<WorkerCorpusDashboardClient {...props} />);
+
+  assert.match(html, /aucun/i);
+  assert.match(html, /Aucune doctrine publiée sur le snapshot actif/i);
+  assert.match(html, /Aucune question notable prête à afficher/i);
+  assert.match(html, /Aucune extraction d’étude exploitable pour le snapshot actif/i);
+});
+
+test('worker corpus dashboard client still renders scientific supervision sections', async () => {
+  const { WorkerCorpusDashboardClient } = await import(
+    '../../src/app/(private)/dashboard/worker-corpus/_components/worker-corpus-dashboard-client'
+  );
+  const html = renderToStaticMarkup(
+    <WorkerCorpusDashboardClient {...buildClientProps()} initialView="supervision" />,
+  );
 
   assert.match(html, /Workflow status/i);
   assert.match(html, /Document library status/i);
@@ -389,6 +504,20 @@ test('worker corpus dashboard client renders scientific supervision sections', a
   assert.match(html, /Démarrer/i);
   assert.match(html, /Mettre en pause/i);
   assert.match(html, /Le worker n’acceptera pas de nouveau run tant qu’il reste en pause/i);
+});
+
+test('worker corpus dashboard client can render supervision view explicitly', async () => {
+  const { WorkerCorpusDashboardClient } = await import(
+    '../../src/app/(private)/dashboard/worker-corpus/_components/worker-corpus-dashboard-client'
+  );
+  const html = renderToStaticMarkup(
+    <WorkerCorpusDashboardClient {...buildClientProps()} initialView="supervision" />,
+  );
+
+  assert.match(html, /Workflow status/i);
+  assert.match(html, /Document library status/i);
+  assert.match(html, /Scientific questions/i);
+  assert.match(html, /Published doctrine/i);
 });
 
 test('worker corpus dashboard client renders running operator badge when operator mode is running', async () => {

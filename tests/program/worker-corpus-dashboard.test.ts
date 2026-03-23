@@ -9,6 +9,7 @@ import {
   parseWorkerCorpusOverviewResponse,
   parseWorkerCorpusRunDetail,
   parseWorkerCorpusSnapshotDetail,
+  parseWorkerCorpusDeliverablesResponse,
 } from '../../src/lib/program/contracts';
 import { loadWorkerCorpusOverviewSection } from '../../src/app/(private)/dashboard/worker-corpus/loaders/overview';
 import {
@@ -18,6 +19,7 @@ import {
   loadWorkerCorpusOverview,
 } from '../../src/server/dashboard/worker-dashboard';
 import { loadWorkerCorpusSupervision } from '../../src/server/services/worker-corpus-supervision';
+import { loadWorkerCorpusDeliverables } from '../../src/server/services/worker-corpus-deliverables';
 
 async function writeJson(filePath: string, payload: unknown) {
   await mkdir(path.dirname(filePath), { recursive: true });
@@ -617,6 +619,19 @@ test('worker corpus supervision projects workflow, documents, questions, doctrin
   assert.equal(Array.isArray(supervision.questions.notableQuestions), true);
   assert.equal(typeof supervision.doctrine.activePrinciples, 'number');
   assert.equal(Array.isArray(supervision.recentResearchJournal), true);
+});
+
+test('worker corpus deliverables loader returns parse-validated snapshot-backed outputs', async () => {
+  const { rootDir } = await buildWorkerFixture();
+
+  const deliverables = await loadWorkerCorpusDeliverables({
+    knowledgeRootDir: rootDir,
+    now: new Date('2026-03-11T10:03:00.000Z'),
+  });
+
+  const parsed = parseWorkerCorpusDeliverablesResponse(deliverables);
+  assert.equal(parsed.source.snapshotId, 'run-ready');
+  assert.equal(parsed.artifacts.runReport.available, true);
 });
 
 test('worker dashboard drilldowns expose validated library details', async () => {

@@ -34,6 +34,7 @@ export type BuildAdaptiveKnowledgeWorkItemsInput = {
   readonly doctrineCandidates: readonly AdaptiveKnowledgeDoctrineCandidateLike[];
   readonly now: Date;
   readonly freshnessPriorityWeight?: number;
+  readonly hasStudyDossiers?: boolean;
 };
 
 const BASE_SCORES: Record<AdaptiveKnowledgeWorkItem['kind'], number> = {
@@ -210,9 +211,11 @@ export function buildAdaptiveKnowledgeWorkItems(input: BuildAdaptiveKnowledgeWor
   }
 
   for (const question of input.questions) {
-    const item = buildQuestionWorkItem(question);
-    if (item) {
-      items.push(item);
+    if (input.hasStudyDossiers !== false) {
+      const item = buildQuestionWorkItem(question);
+      if (item) {
+        items.push(item);
+      }
     }
   }
 

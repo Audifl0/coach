@@ -41,6 +41,12 @@ export type EvaluateCorpusQualityGateInput = {
   };
   questionDossiers?: QuestionSynthesisDossier[];
   doctrinePrinciples?: PublishedDoctrinePrinciple[];
+  usefulBacklogProgress?: {
+    documents?: number;
+    studyCards?: number;
+    contradictions?: number;
+    doctrine?: number;
+  };
 };
 
 export type CorpusQualityGateResult = {
@@ -232,7 +238,12 @@ export function evaluateCorpusQualityGate(input: EvaluateCorpusQualityGateInput)
   const criticalContradictions = countCriticalContradictions(input.criticalContradictions, input.validatedSynthesis);
 
   const reasons: QualityGateReason[] = [];
-  if (projection.libraryRecordCount === 0) {
+  const usefulBacklogProgressTotal =
+    (input.usefulBacklogProgress?.documents ?? 0) +
+    (input.usefulBacklogProgress?.studyCards ?? 0) +
+    (input.usefulBacklogProgress?.contradictions ?? 0) +
+    (input.usefulBacklogProgress?.doctrine ?? 0);
+  if (projection.libraryRecordCount === 0 && usefulBacklogProgressTotal === 0) {
     reasons.push('no_library_progress');
   }
   if (!projection.projectionSafe) {

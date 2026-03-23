@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 
 import type {
+  WorkerCorpusDeliverablesResponse,
   WorkerCorpusLibraryDetail,
   WorkerCorpusOverviewSection,
   WorkerCorpusRunDetail,
@@ -14,6 +15,7 @@ import { WorkerCorpusDashboardClient } from './worker-corpus-dashboard-client';
 type WorkerCorpusDashboardClientShellProps = {
   initialSection: WorkerCorpusOverviewSection;
   initialSupervision: WorkerCorpusSupervisionResponse;
+  initialDeliverables: WorkerCorpusDeliverablesResponse;
   initialRunDetail: WorkerCorpusRunDetail | null;
   initialSnapshotDetail: WorkerCorpusSnapshotDetail | null;
   initialLibraryDetail: WorkerCorpusLibraryDetail | null;

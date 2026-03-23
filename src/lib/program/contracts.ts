@@ -763,6 +763,66 @@ export const workerCorpusRunDetailSectionSchema = z.discriminatedUnion('status',
   }),
 ]);
 
+export const workerCorpusDeliverablesSourceSchema = z.object({
+  snapshotId: z.string().trim().min(1).nullable().default(null),
+  runId: z.string().trim().min(1).nullable().default(null),
+  generatedAt: z.iso.datetime().nullable().default(null),
+  promotedAt: z.iso.datetime().nullable().default(null),
+  artifactState: z.enum(['candidate', 'validated']).nullable().default(null),
+  severity: z.enum(['healthy', 'degraded', 'critical']).nullable().default(null),
+  qualityGateReasons: z.array(z.string().trim().min(1)).default([]),
+});
+
+export const workerCorpusDeliverablesDoctrineItemSchema = z.object({
+  principleId: z.string().trim().min(1),
+  statementFr: z.string().trim().min(1),
+  confidenceLevel: z.string().trim().min(1),
+  conditionsFr: z.string().trim().min(1),
+  limitsFr: z.string().trim().min(1),
+  questionIds: z.array(z.string().trim().min(1)).default([]),
+  publishedAt: z.iso.datetime(),
+});
+
+export const workerCorpusDeliverablesQuestionItemSchema = z.object({
+  questionId: z.string().trim().min(1),
+  label: z.string().trim().min(1),
+  coverageStatus: z.string().trim().min(1),
+  publicationStatus: z.string().trim().min(1),
+  publicationReadiness: z.string().trim().min(1).nullable().default(null),
+  linkedStudyCount: z.number().int().nonnegative(),
+  contradictionCount: z.number().int().nonnegative(),
+  summaryFr: z.string().trim().min(1).nullable().default(null),
+  updatedAt: z.iso.datetime().nullable().default(null),
+});
+
+export const workerCorpusDeliverablesStudyExtractionItemSchema = z.object({
+  recordId: z.string().trim().min(1),
+  topicKey: z.string().trim().min(1).nullable().default(null),
+  title: z.string().trim().min(1).nullable().default(null),
+  applicationContext: z.string().trim().min(1).nullable().default(null),
+  intervention: z.string().trim().min(1).nullable().default(null),
+  population: z.string().trim().min(1).nullable().default(null),
+  takeaway: z.string().trim().min(1).nullable().default(null),
+});
+
+export const workerCorpusDeliverablesArtifactsSchema = z.object({
+  booklet: z.object({ available: z.boolean() }),
+  knowledgeBible: z.object({ available: z.boolean() }),
+  validatedSynthesis: z.object({ available: z.boolean() }),
+  runReport: z.object({ available: z.boolean() }),
+  snapshot: z.object({ available: z.boolean() }),
+});
+
+export const workerCorpusDeliverablesResponseSchema = z.object({
+  generatedAt: z.iso.datetime(),
+  source: workerCorpusDeliverablesSourceSchema,
+  doctrine: z.array(workerCorpusDeliverablesDoctrineItemSchema).default([]),
+  questions: z.array(workerCorpusDeliverablesQuestionItemSchema).default([]),
+  studyExtractions: z.array(workerCorpusDeliverablesStudyExtractionItemSchema).default([]),
+  artifacts: workerCorpusDeliverablesArtifactsSchema,
+  emptyReason: z.enum(['none', 'no-active-snapshot', 'no-deliverables']).default('none'),
+});
+
 export const workerCorpusSnapshotDetailSectionSchema = z.discriminatedUnion('status', [
   z.object({
     status: z.literal('ready'),
@@ -816,6 +876,7 @@ export type WorkerCorpusLibraryEntry = z.infer<typeof workerCorpusLibraryEntrySc
 export type WorkerCorpusLibraryResponse = z.infer<typeof workerCorpusLibraryResponseSchema>;
 export type WorkerCorpusSupervisionResponse = z.infer<typeof workerCorpusSupervisionResponseSchema>;
 export type WorkerCorpusLibraryDetail = z.infer<typeof workerCorpusLibraryDetailSchema>;
+export type WorkerCorpusDeliverablesResponse = z.infer<typeof workerCorpusDeliverablesResponseSchema>;
 export type WorkerCorpusRunDetailSection = z.infer<typeof workerCorpusRunDetailSectionSchema>;
 export type WorkerCorpusSnapshotDetailSection = z.infer<typeof workerCorpusSnapshotDetailSectionSchema>;
 
@@ -921,6 +982,10 @@ export function parseWorkerCorpusSupervisionResponse(input: unknown): WorkerCorp
 
 export function parseWorkerCorpusLibraryDetail(input: unknown): WorkerCorpusLibraryDetail {
   return workerCorpusLibraryDetailSchema.parse(input);
+}
+
+export function parseWorkerCorpusDeliverablesResponse(input: unknown): WorkerCorpusDeliverablesResponse {
+  return workerCorpusDeliverablesResponseSchema.parse(input);
 }
 
 export {

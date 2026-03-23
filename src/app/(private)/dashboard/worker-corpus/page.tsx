@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 
 import { buildDefaultSessionGateRepository, validateSessionFromCookies } from '@/lib/auth/session-gate';
 import {
+  type WorkerCorpusDeliverablesResponse,
   type WorkerCorpusLibraryDetail,
   type WorkerCorpusOverviewSection,
   type WorkerCorpusRunDetail,
@@ -13,6 +14,7 @@ import {
   getWorkerCorpusRunDetail,
   getWorkerCorpusSnapshotDetail,
 } from '@/server/dashboard/worker-dashboard';
+import { loadWorkerCorpusDeliverables } from '@/server/services/worker-corpus-deliverables';
 import { loadWorkerCorpusSupervision } from '@/server/services/worker-corpus-supervision';
 import { loadWorkerCorpusOverviewSection } from './loaders/overview';
 import { WorkerCorpusDashboardClientShell } from './_components/worker-corpus-dashboard-client-shell';
@@ -73,6 +75,32 @@ function buildFallbackSupervision(now: Date): WorkerCorpusSupervisionResponse {
   };
 }
 
+function buildFallbackDeliverables(now: Date): WorkerCorpusDeliverablesResponse {
+  return {
+    generatedAt: now.toISOString(),
+    source: {
+      snapshotId: null,
+      runId: null,
+      generatedAt: null,
+      promotedAt: null,
+      artifactState: null,
+      severity: null,
+      qualityGateReasons: [],
+    },
+    doctrine: [],
+    questions: [],
+    studyExtractions: [],
+    artifacts: {
+      booklet: { available: false },
+      knowledgeBible: { available: false },
+      validatedSynthesis: { available: false },
+      runReport: { available: false },
+      snapshot: { available: false },
+    },
+    emptyReason: 'no-active-snapshot',
+  };
+}
+
 export default async function WorkerCorpusDashboardPage(_props: PageProps<'/dashboard/worker-corpus'>) {
   const sessionRepository = await buildDefaultSessionGateRepository();
   const session = await validateSessionFromCookies(sessionRepository);
@@ -82,7 +110,12 @@ export default async function WorkerCorpusDashboardPage(_props: PageProps<'/dash
 
   const now = new Date();
   const overviewSection = await loadWorkerCorpusOverviewSection({});
-  const supervision = (await loadWorkerCorpusSupervision().catch(() => null)) ?? buildFallbackSupervision(now);
+  const [supervision, deliverables] = await Promise.all([
+    loadWorkerCorpusSupervision().catch(() => null),
+    loadWorkerCorpusDeliverables().catch(() => null),
+  ]);
+  const safeSupervision = supervision ?? buildFallbackSupervision(now);
+  const safeDeliverables = deliverables ?? buildFallbackDeliverables(now);
 
   const leadRunId = overviewSection.status === 'ready' ? overviewSection.data.recentRuns[0]?.runId ?? null : null;
   const focusSnapshotId = overviewSection.status === 'ready' ? overviewSection.data.publication.activeSnapshotId ?? null : null;
@@ -101,7 +134,8 @@ export default async function WorkerCorpusDashboardPage(_props: PageProps<'/dash
   return (
     <WorkerCorpusDashboardClientShell
       initialSection={safeSection}
-      initialSupervision={supervision}
+      initialSupervision={safeSupervision}
+      initialDeliverables={safeDeliverables}
       initialRunDetail={runDetail}
       initialSnapshotDetail={snapshotDetail}
       initialLibraryDetail={libraryDetail}
