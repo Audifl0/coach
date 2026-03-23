@@ -653,6 +653,43 @@ test('pipeline keeps useful work when discovery returns only old or already-seen
   assert.ok(((result.runReport as { scheduler?: { itemsExecuted?: number } }).scheduler?.itemsExecuted ?? 0) > 0);
 });
 
+test('run report distinguishes technical completion from scientific productivity', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+
+  const result = await runAdaptiveKnowledgePipeline({
+    runId: 'run-productivity-empty',
+    mode: 'refresh',
+    now: new Date('2026-03-23T00:00:00.000Z'),
+    outputRootDir,
+    connectors: {
+      pubmed: async () => ({ source: 'pubmed', skipped: false, records: [], recordsFetched: 0, recordsSkipped: 0, telemetry: { attempts: 1, hasMore: false } }),
+      crossref: async () => ({ source: 'crossref', skipped: false, records: [], recordsFetched: 0, recordsSkipped: 0, telemetry: { attempts: 1, hasMore: false } }),
+      openalex: async () => ({ source: 'openalex', skipped: false, records: [], recordsFetched: 0, recordsSkipped: 0, telemetry: { attempts: 1, hasMore: false } }),
+    },
+  });
+
+  const productivity = (result.runReport as {
+    productivity?: {
+      executedWorkItems: number;
+      usefulDelta: { documents: number; studyCards: number; contradictions: number; doctrine: number };
+      noProgressReasons: string[];
+      topBacklogShortages: string[];
+      currentItemKind: string | null;
+      lastCompletedItemKind: string | null;
+    };
+  }).productivity;
+
+  assert.equal(productivity?.usefulDelta.documents, 0);
+  assert.equal(productivity?.usefulDelta.studyCards, 0);
+  assert.equal(productivity?.usefulDelta.contradictions, 0);
+  assert.equal(productivity?.usefulDelta.doctrine, 0);
+  assert.equal((productivity?.executedWorkItems ?? 0) >= 0, true);
+  assert.equal((productivity?.noProgressReasons.length ?? 0) > 0 || (productivity?.executedWorkItems ?? 0) > 0, true);
+  assert.equal((productivity?.topBacklogShortages.length ?? 0) >= 0, true);
+  assert.equal(typeof (productivity?.currentItemKind ?? null) === 'string' || productivity?.currentItemKind === null, true);
+  assert.equal(typeof (productivity?.lastCompletedItemKind ?? null) === 'string' || productivity?.lastCompletedItemKind === null, true);
+});
+
 test('pipeline triages documentary staging before synthesis and defers non-extractable records', async () => {
   const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
   let synthesizedRecordIds: string[] = [];

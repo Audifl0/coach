@@ -680,6 +680,15 @@ export async function runAdaptiveKnowledgePipeline(
 
   let schedulerTelemetry: AdaptiveKnowledgeSchedulerTelemetry | undefined;
   let refreshScheduledRecords: NormalizedEvidenceRecord[] = [];
+  let refreshExecutedWorkItems = 0;
+  let refreshDocumentsDelta = 0;
+  let refreshStudyCardsDelta = 0;
+  let refreshContradictionsDelta = 0;
+  let refreshDoctrineDelta = 0;
+  let refreshNoProgressReasons: string[] = [];
+  let refreshTopBacklogShortages: string[] = [];
+  let refreshCurrentItemKind: string | null = null;
+  let refreshLastCompletedItemKind: string | null = null;
   let remoteStudyCardClient: CorpusRemoteSynthesisClient | null = input.remoteSynthesisClient ?? null;
   if (!remoteStudyCardClient) {
     try {
@@ -736,6 +745,9 @@ export async function runAdaptiveKnowledgePipeline(
       });
 
       const selectedDiscoveryItems = refreshPlan.selectedItems.filter((item) => item.kind === 'discover-front-page');
+      refreshCurrentItemKind = refreshPlan.selectedItems[0]?.kind ?? null;
+      refreshTopBacklogShortages = [...new Set(refreshPlan.selectedItems.map((item) => item.kind))].slice(0, 3);
+      refreshNoProgressReasons = [...(refreshPlan.noProgressSummary?.noProgressReasons ?? [])];
       for (const item of selectedDiscoveryItems) {
         const front = refreshResearchFronts.find((candidate) => candidate.id === item.targetId);
         if (!front) {
@@ -773,6 +785,8 @@ export async function runAdaptiveKnowledgePipeline(
           })
         : { executed: 0, records: [], studyCards: [], deltas: { documentsAcquired: 0, documentsExtracted: 0, studyCards: 0 } };
       refreshScheduledRecords.push(...documentExecution.records);
+      refreshDocumentsDelta += documentExecution.deltas.documentsAcquired + documentExecution.deltas.documentsExtracted;
+      refreshStudyCardsDelta += documentExecution.deltas.studyCards;
 
       const contradictionItems = refreshPlan.selectedItems.filter((item) => item.kind === 'analyze-contradiction');
       let contradictionExecuted = 0;
@@ -800,6 +814,7 @@ export async function runAdaptiveKnowledgePipeline(
         });
         contradictionExecuted += 1;
       }
+      refreshContradictionsDelta += contradictionExecuted;
 
       const doctrineItems = refreshPlan.selectedItems.filter((item) => item.kind === 'publish-doctrine');
       let doctrineExecuted = 0;
@@ -838,10 +853,13 @@ export async function runAdaptiveKnowledgePipeline(
         });
         doctrineExecuted += 1;
       }
+      refreshDoctrineDelta += doctrineExecuted;
+      refreshExecutedWorkItems = selectedDiscoveryItems.length + documentExecution.executed + contradictionExecuted + doctrineExecuted;
+      refreshLastCompletedItemKind = refreshPlan.selectedItems.findLast((item) => item.kind)?.kind ?? null;
 
       schedulerTelemetry = parseAdaptiveKnowledgeSchedulerTelemetry({
         itemsSelected: refreshPlan.selectedItems.length,
-        itemsExecuted: selectedDiscoveryItems.length + documentExecution.executed + contradictionExecuted + doctrineExecuted,
+        itemsExecuted: refreshExecutedWorkItems,
         selectedKinds: refreshPlan.selectedItems.map((item) => item.kind),
         noProgressReasons: refreshPlan.noProgressSummary?.noProgressReasons ?? [],
       });
@@ -1217,6 +1235,26 @@ export async function runAdaptiveKnowledgePipeline(
     ranking: rankingTelemetry,
     scheduler: schedulerTelemetry,
     bootstrap: bootstrapTelemetry,
+    productivity: {
+      executedWorkItems: schedulerTelemetry?.itemsExecuted ?? refreshExecutedWorkItems,
+      usefulDelta: {
+        documents: refreshDocumentsDelta,
+        studyCards: refreshStudyCardsDelta,
+        contradictions: refreshContradictionsDelta,
+        doctrine: refreshDoctrineDelta,
+      },
+      noProgressReasons:
+        refreshNoProgressReasons.length > 0
+          ? refreshNoProgressReasons
+          : schedulerTelemetry?.itemsExecuted
+            ? []
+            : qualityGateResult.reasons.length > 0
+              ? qualityGateResult.reasons
+              : ['no-ready-work'],
+      topBacklogShortages: refreshTopBacklogShortages,
+      currentItemKind: refreshCurrentItemKind,
+      lastCompletedItemKind: refreshLastCompletedItemKind,
+    },
   });
 
   manifest = parseCorpusSnapshotManifest({

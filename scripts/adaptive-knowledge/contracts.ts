@@ -763,6 +763,24 @@ export const corpusRunReportSchema = z
     ranking: adaptiveKnowledgeRankingTelemetrySchema.optional(),
     scheduler: adaptiveKnowledgeSchedulerTelemetrySchema.optional(),
     bootstrap: adaptiveKnowledgeBootstrapRunTelemetrySchema.optional(),
+    productivity: z
+      .object({
+        executedWorkItems: z.number().int().nonnegative(),
+        usefulDelta: z
+          .object({
+            documents: z.number().int().nonnegative(),
+            studyCards: z.number().int().nonnegative(),
+            contradictions: z.number().int().nonnegative(),
+            doctrine: z.number().int().nonnegative(),
+          })
+          .strict(),
+        noProgressReasons: z.array(z.string().min(1)),
+        topBacklogShortages: z.array(z.string().min(1)),
+        currentItemKind: z.string().min(1).nullable(),
+        lastCompletedItemKind: z.string().min(1).nullable(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -826,6 +844,7 @@ export type AdaptiveKnowledgeRankingTelemetry = z.infer<typeof adaptiveKnowledge
 export type CorpusPrinciple = z.infer<typeof corpusPrincipleSchema>;
 export type AdaptiveKnowledgeBootstrapCampaignState = z.infer<typeof adaptiveKnowledgeBootstrapCampaignStateSchema>;
 export type AdaptiveKnowledgeCollectionJob = z.infer<typeof adaptiveKnowledgeCollectionJobSchema>;
+export type AdaptiveKnowledgeSourceTier = (typeof ADAPTIVE_KNOWLEDGE_SOURCE_TIER_VALUES)[number];
 export type AdaptiveKnowledgeSourceCatalogEntry = z.infer<typeof adaptiveKnowledgeSourceCatalogEntrySchema>;
 export type AdaptiveKnowledgeResearchFront = z.infer<typeof adaptiveKnowledgeResearchFrontSchema>;
 export type AdaptiveKnowledgeWorkItem = z.infer<typeof adaptiveKnowledgeWorkItemSchema>;

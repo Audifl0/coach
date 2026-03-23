@@ -8,6 +8,34 @@ import {
   releaseAdaptiveKnowledgeLease,
 } from './worker-state';
 
+function formatRefreshCompletionMessage(result: AdaptivePipelineRunResult): string {
+  const mode = (result as { runReport?: { mode?: string } }).runReport?.mode ?? 'refresh';
+  const productivity = (result.runReport as {
+    productivity?: {
+      executedWorkItems: number;
+      usefulDelta: { documents: number; studyCards: number; contradictions: number; doctrine: number };
+      noProgressReasons: string[];
+    };
+  } | undefined)?.productivity;
+
+  if (!productivity) {
+    return `[OK] Adaptive knowledge worker completed (${mode}) - run=${result.runId} candidate=${result.candidateDir}`;
+  }
+
+  const totalUsefulDelta =
+    productivity.usefulDelta.documents +
+    productivity.usefulDelta.studyCards +
+    productivity.usefulDelta.contradictions +
+    productivity.usefulDelta.doctrine;
+
+  const productivityMessage =
+    totalUsefulDelta > 0
+      ? `executed=${productivity.executedWorkItems}; documents=${productivity.usefulDelta.documents}; studyCards=${productivity.usefulDelta.studyCards}; contradictions=${productivity.usefulDelta.contradictions}; doctrine=${productivity.usefulDelta.doctrine}`
+      : `completed without useful delta; reasons=${productivity.noProgressReasons.join(',') || 'none'}`;
+
+  return `[OK] Adaptive knowledge worker completed (${result.runReport.mode}) - run=${result.runId} candidate=${result.candidateDir}; ${productivityMessage}`;
+}
+
 type ExitCode = 0 | 1 | 3;
 type WorkerCommandStatus = 'completed' | 'failed' | 'blocked-by-lease' | 'paused-by-operator';
 
@@ -113,6 +141,8 @@ export async function runRefreshCorpusCommand(
       runId,
       now: new Date(now.getTime() + 100),
       message: 'pipeline-starting',
+      currentItemKind: mode === 'refresh' ? 'backlog-execution' : null,
+      lastCompletedItemKind: null,
     });
     const result = await runPipeline({
       mode,
@@ -131,9 +161,13 @@ export async function runRefreshCorpusCommand(
           : mode === 'bootstrap'
             ? 'bootstrap completed'
             : 'refresh completed',
+      currentItemKind:
+        (result as { runReport?: { productivity?: { currentItemKind?: string | null } } }).runReport?.productivity?.currentItemKind ?? null,
+      lastCompletedItemKind:
+        (result as { runReport?: { productivity?: { lastCompletedItemKind?: string | null } } }).runReport?.productivity?.lastCompletedItemKind ?? null,
     });
     leaseReleased = true;
-    log.log(`[OK] Adaptive knowledge worker completed (${mode}) - run=${result.runId} candidate=${result.candidateDir}`);
+    log.log(formatRefreshCompletionMessage(result));
     return {
       status: 'completed',
       exitCode: 0,

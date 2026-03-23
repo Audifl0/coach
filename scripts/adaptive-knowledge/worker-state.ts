@@ -24,6 +24,8 @@ export type AdaptiveKnowledgeWorkerState = {
   heartbeatAt: string;
   leaseExpiresAt: string;
   message?: string;
+  currentItemKind?: string | null;
+  lastCompletedItemKind?: string | null;
 };
 
 export type AcquireAdaptiveKnowledgeLeaseInput = {
@@ -51,6 +53,8 @@ type UpdateAdaptiveKnowledgeLeaseInput = {
   now?: Date;
   leaseMs?: number;
   message?: string;
+  currentItemKind?: string | null;
+  lastCompletedItemKind?: string | null;
 };
 
 type ReleaseAdaptiveKnowledgeLeaseInput = {
@@ -60,6 +64,8 @@ type ReleaseAdaptiveKnowledgeLeaseInput = {
   now?: Date;
   leaseMs?: number;
   message?: string;
+  currentItemKind?: string | null;
+  lastCompletedItemKind?: string | null;
 };
 
 type UpsertAdaptiveKnowledgeBootstrapCampaignInput = {
@@ -101,6 +107,8 @@ function buildLeaseState(input: {
   leaseMs: number;
   startedAt?: string;
   message?: string;
+  currentItemKind?: string | null;
+  lastCompletedItemKind?: string | null;
 }): AdaptiveKnowledgeWorkerState {
   return {
     runId: input.runId,
@@ -110,6 +118,8 @@ function buildLeaseState(input: {
     heartbeatAt: toIso(input.now),
     leaseExpiresAt: toIso(new Date(input.now.getTime() + input.leaseMs)),
     message: input.message,
+    currentItemKind: input.currentItemKind ?? null,
+    lastCompletedItemKind: input.lastCompletedItemKind ?? null,
   };
 }
 
@@ -283,6 +293,8 @@ export async function heartbeatAdaptiveKnowledgeLease(
     leaseMs,
     startedAt: existingState.startedAt,
     message: input.message,
+    currentItemKind: input.currentItemKind ?? existingState.currentItemKind ?? null,
+    lastCompletedItemKind: input.lastCompletedItemKind ?? existingState.lastCompletedItemKind ?? null,
   });
   await writeWorkerState(statePath, updated);
   return updated;
@@ -308,6 +320,8 @@ export async function releaseAdaptiveKnowledgeLease(
     leaseMs,
     startedAt: existingState.startedAt,
     message: input.message,
+    currentItemKind: input.currentItemKind ?? existingState.currentItemKind ?? null,
+    lastCompletedItemKind: input.lastCompletedItemKind ?? existingState.lastCompletedItemKind ?? null,
   });
   await writeWorkerState(statePath, released);
   await safeRemove(lockPath);

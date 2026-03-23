@@ -527,6 +527,72 @@ test('worker command can complete with open scientific questions and no new doct
   assert.equal(doctrineHistory.entries.filter((entry) => entry.changeType === 'published').length >= 0, true);
 });
 
+test('refresh command logging reflects backlog execution and scientific no-progress', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-worker-logging-'));
+  const messages: string[] = [];
+
+  const result = await runRefreshCorpusCommand(['node', 'refresh-corpus.ts'], {
+    outputRootDir,
+    now: new Date('2026-03-23T01:00:00.000Z'),
+    log: {
+      log: (message: string) => messages.push(message),
+      warn: (message: string) => messages.push(message),
+      error: (message: string) => messages.push(message),
+    },
+    runPipeline: async () => ({
+      runId: 'run-refresh-logging',
+      candidateDir: path.join(outputRootDir, 'snapshots', 'run-refresh-logging', 'candidate'),
+      sources: [],
+      normalizedRecords: [],
+      principles: [],
+      validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+        records: [],
+        principles: [],
+        modelRun: {
+          provider: 'deterministic',
+          model: 'test-remote-synthesis',
+          promptVersion: 'test-v1',
+        },
+      }),
+      runReport: {
+        runId: 'run-refresh-logging',
+        mode: 'refresh',
+        startedAt: '2026-03-23T01:00:00.000Z',
+        completedAt: '2026-03-23T01:00:01.000Z',
+        snapshotId: 'run-refresh-logging',
+        stageReports: [],
+        productivity: {
+          executedWorkItems: 0,
+          usefulDelta: {
+            documents: 0,
+            studyCards: 0,
+            contradictions: 0,
+            doctrine: 0,
+          },
+          noProgressReasons: ['duplicate-heavy', 'blocked-by-downstream'],
+          topBacklogShortages: ['extract-study-card'],
+          currentItemKind: null,
+          lastCompletedItemKind: null,
+        },
+      } as unknown as Awaited<ReturnType<typeof runAdaptiveKnowledgePipeline>>['runReport'],
+      publish: {
+        status: 'needs_more_evidence',
+        publishable: false,
+        score: 0,
+        threshold: 0.85,
+        reasons: ['insufficient_evidence'],
+        evaluatedAt: '2026-03-23T01:00:01.000Z',
+        evidenceCount: 0,
+        principleCount: 0,
+        contradictedPrinciples: [],
+      },
+    }),
+  });
+
+  assert.equal(result.status, 'completed');
+  assert.equal(messages.some((message) => message.includes('completed without useful delta; reasons=duplicate-heavy,blocked-by-downstream')), true);
+});
+
 test('document executor acquires and extracts when extractible documents remain', async () => {
   const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-document-executor-'));
   const now = new Date('2026-03-23T00:00:00.000Z');
