@@ -53,7 +53,6 @@ export type CorpusQualityGateResult = {
 };
 
 const DEFAULT_THRESHOLD = 0.7;
-const MAX_RECENCY_DAYS = 365 * 5;
 
 const SOURCE_CLASS_WEIGHT: Record<NormalizedEvidenceRecord['sourceType'], number> = {
   guideline: 1,
@@ -83,21 +82,6 @@ function computeSourceClassScore(records: NormalizedEvidenceRecord[]): number {
   }
 
   const sum = records.reduce((acc, record) => acc + SOURCE_CLASS_WEIGHT[record.sourceType], 0);
-  return sum / records.length;
-}
-
-function computeRecencyScore(now: Date, records: NormalizedEvidenceRecord[]): number {
-  if (records.length === 0) {
-    return 0;
-  }
-
-  const nowMs = now.getTime();
-  const sum = records.reduce((acc, record) => {
-    const publishedAt = new Date(`${record.publishedAt}T00:00:00.000Z`).getTime();
-    const ageDays = Math.max(0, Math.floor((nowMs - publishedAt) / 86_400_000));
-    const score = clamp01(1 - ageDays / MAX_RECENCY_DAYS);
-    return acc + score;
-  }, 0);
   return sum / records.length;
 }
 
@@ -235,7 +219,6 @@ function hasReopenedDoctrine(doctrinePrinciples: readonly PublishedDoctrinePrinc
 export function evaluateCorpusQualityGate(input: EvaluateCorpusQualityGateInput): CorpusQualityGateResult {
   const threshold = input.threshold ?? DEFAULT_THRESHOLD;
   const sourceClassScore = computeSourceClassScore(input.records);
-  const recencyScore = computeRecencyScore(input.now, input.records);
   const completenessScore = computeCompletenessScore(input.records);
   const projection = input.projection ?? {
     libraryRecordCount: input.records.length,
@@ -245,7 +228,7 @@ export function evaluateCorpusQualityGate(input: EvaluateCorpusQualityGateInput)
     canonicalRecordsOnly: true,
   };
 
-  const compositeScore = round3(sourceClassScore * 0.45 + recencyScore * 0.35 + completenessScore * 0.2);
+  const compositeScore = round3(sourceClassScore * 0.75 + completenessScore * 0.25);
   const criticalContradictions = countCriticalContradictions(input.criticalContradictions, input.validatedSynthesis);
 
   const reasons: QualityGateReason[] = [];

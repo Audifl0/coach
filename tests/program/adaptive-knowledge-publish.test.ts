@@ -271,6 +271,76 @@ test('quality gate emits deterministic reasons for observability', async () => {
   assert.equal(gate.criticalContradictions, 1);
 });
 
+test('quality gate does not penalize old-but-complete evidence solely for recency', async () => {
+  const gate = evaluateCorpusQualityGate({
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    threshold: 0.7,
+    records: [
+      {
+        id: 'record-1',
+        sourceType: 'guideline',
+        sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/1/',
+        sourceDomain: 'pubmed.ncbi.nlm.nih.gov',
+        publishedAt: '2009-03-01',
+        title: 'Older guideline',
+        summaryEn: 'Complete older guidance.',
+        tags: ['progression', 'fatigue'],
+        provenanceIds: ['record-1'],
+      },
+      {
+        id: 'record-2',
+        sourceType: 'review',
+        sourceUrl: 'https://doi.org/2',
+        sourceDomain: 'doi.org',
+        publishedAt: '2010-04-01',
+        title: 'Older review',
+        summaryEn: 'Complete older review.',
+        tags: ['hypertrophy', 'volume'],
+        provenanceIds: ['record-2'],
+      },
+    ],
+    validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+      records: [
+        {
+          id: 'record-1',
+          sourceType: 'guideline',
+          sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/1/',
+          sourceDomain: 'pubmed.ncbi.nlm.nih.gov',
+          publishedAt: '2009-03-01',
+          title: 'Older guideline',
+          summaryEn: 'Complete older guidance.',
+          tags: ['progression', 'fatigue'],
+          provenanceIds: ['record-1'],
+        },
+        {
+          id: 'record-2',
+          sourceType: 'review',
+          sourceUrl: 'https://doi.org/2',
+          sourceDomain: 'doi.org',
+          publishedAt: '2010-04-01',
+          title: 'Older review',
+          summaryEn: 'Complete older review.',
+          tags: ['hypertrophy', 'volume'],
+          provenanceIds: ['record-2'],
+        },
+      ],
+      principles: [
+        {
+          id: 'p-1',
+          title: 'Historic but valid principle',
+          summaryFr: 'Principe valide malgré l ancienneté.',
+          guidanceFr: 'Ne pas pénaliser la date seule.',
+          provenanceRecordIds: ['record-1', 'record-2'],
+          evidenceLevel: 'review',
+          guardrail: 'SAFE-03',
+        },
+      ],
+    }),
+  });
+
+  assert.equal(gate.reasons.includes('score_below_threshold'), false);
+});
+
 test('quality gate blocks snapshots with insufficient thematic diversity', async () => {
   const gate = evaluateCorpusQualityGate({
     now: new Date('2026-03-05T00:00:00.000Z'),
