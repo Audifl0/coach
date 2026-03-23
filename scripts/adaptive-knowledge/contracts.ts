@@ -548,6 +548,16 @@ export const adaptiveKnowledgeResearchFrontSchema = z
         sourcesVisited: z.number().int().nonnegative(),
       })
       .strict(),
+    statusReason: z.string().min(1).nullable().optional(),
+    cooldownReason: z.string().min(1).nullable().optional(),
+    cooldownUntil: z.string().datetime().nullable().optional(),
+    sourceTier: z.enum(ADAPTIVE_KNOWLEDGE_SOURCE_TIER_VALUES).optional(),
+    sourceMetadata: adaptiveKnowledgeSourceCatalogEntrySchema.nullable().optional(),
+    topicLabel: z.string().min(1).nullable().optional(),
+    subtopicKey: z.string().min(1).nullable().optional(),
+    subtopicLabel: z.string().min(1).nullable().optional(),
+    priority: z.number().int().positive().optional(),
+    targetPopulation: z.string().min(1).nullable().optional(),
   })
   .strict();
 

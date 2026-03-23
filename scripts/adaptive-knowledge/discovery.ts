@@ -2,8 +2,10 @@ import {
   parseAdaptiveKnowledgeCollectionJob,
   type AdaptiveKnowledgeCollectionJob,
   type AdaptiveKnowledgeDiscoveryQuery,
+  type AdaptiveKnowledgeResearchFront,
 } from './contracts';
 import type { ConnectorSource } from './connectors/shared';
+import { buildAdaptiveKnowledgeDiscoveryResearchFronts } from './registry/research-fronts';
 
 type DiscoverySubtopic = {
   key: string;
@@ -336,4 +338,20 @@ export function buildAdaptiveKnowledgeBootstrapCollectionJobs(input?: {
   return generatedJobs
     .sort((left, right) => left.priority - right.priority || left.id.localeCompare(right.id))
     .slice(0, maxJobs);
+}
+
+export { buildAdaptiveKnowledgeDiscoveryResearchFronts };
+
+export function buildAdaptiveKnowledgeBootstrapResearchFronts(input?: {
+  sources?: readonly ConnectorSource[];
+  topicSeeds?: readonly string[];
+  maxFronts?: number;
+  existingFronts?: readonly AdaptiveKnowledgeResearchFront[];
+}): AdaptiveKnowledgeResearchFront[] {
+  return buildAdaptiveKnowledgeDiscoveryResearchFronts({
+    sources: input?.sources,
+    topicSeeds: input?.topicSeeds,
+    maxFronts: input?.maxFronts,
+    existingFronts: input?.existingFronts,
+  });
 }
