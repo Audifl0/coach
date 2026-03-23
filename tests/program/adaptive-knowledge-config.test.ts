@@ -21,12 +21,13 @@ function buildEnv(overrides: Partial<Record<string, string | undefined>> = {}) {
   };
 }
 
-test('defaults resolve five-year freshness policy, bounded retries, and weekly schedule metadata', () => {
+test('defaults keep freshness as prioritization metadata rather than a hard gate', () => {
   const parsed = parseAdaptiveKnowledgePipelineConfig(buildEnv());
 
   assert.equal(DEFAULT_PIPELINE_FRESHNESS_DAYS, 1825);
   assert.equal(DEFAULT_PIPELINE_RETRY_COUNT, 2);
   assert.equal(parsed.freshnessWindowDays, 1825);
+  assert.equal(parsed.freshnessPriorityWeight, 0.05);
   assert.equal(parsed.maxRetries, 2);
   assert.equal(parsed.backfillMaxDays >= parsed.freshnessWindowDays, true);
   assert.equal(parsed.schedule.cron, '0 4 * * 1');
@@ -56,6 +57,18 @@ test('allowlist parser rejects non-approved domains and malformed URL hosts', ()
   );
 });
 
+test('backfill can be narrower than freshness priority metadata because freshness is not a hard gate', () => {
+  const parsed = parseAdaptiveKnowledgePipelineConfig({
+    freshnessWindowDays: 3650,
+    backfillMaxDays: 365,
+    freshnessPriorityWeight: 0.2,
+  });
+
+  assert.equal(parsed.freshnessWindowDays, 3650);
+  assert.equal(parsed.backfillMaxDays, 365);
+  assert.equal(parsed.freshnessPriorityWeight, 0.2);
+});
+
 test('invalid freshness and retry overrides fail fast with deterministic validation errors', () => {
   assert.throws(
     () =>
@@ -65,17 +78,6 @@ test('invalid freshness and retry overrides fail fast with deterministic validat
         }),
       ),
     /PIPELINE_FRESHNESS_WINDOW_DAYS/,
-  );
-
-  assert.throws(
-    () =>
-      parseAdaptiveKnowledgePipelineConfig(
-        buildEnv({
-          PIPELINE_BACKFILL_MAX_DAYS: '100',
-          PIPELINE_FRESHNESS_WINDOW_DAYS: '365',
-        }),
-      ),
-    /PIPELINE_BACKFILL_MAX_DAYS/,
   );
 
   assert.throws(

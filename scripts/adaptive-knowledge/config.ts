@@ -18,6 +18,8 @@ const DEFAULT_BOOTSTRAP_MAX_RUNTIME_MS = 15 * 60 * 1000;
 const MAX_PIPELINE_RETRY_COUNT = 3;
 const DEFAULT_PAGES_PER_QUERY = 5;
 const DEFAULT_FULLTEXT_BUDGET_PER_RUN = 20;
+const DEFAULT_MAX_WORK_ITEMS_PER_RUN = 12;
+const DEFAULT_FRESHNESS_PRIORITY_WEIGHT = 0.05;
 
 export const DEFAULT_PIPELINE_FRESHNESS_DAYS = 1825;
 export const DEFAULT_PIPELINE_RETRY_COUNT = 2;
@@ -25,12 +27,23 @@ export const DEFAULT_PIPELINE_RETRY_COUNT = 2;
 export type AdaptiveKnowledgePipelineConfig = {
   readonly allowedDomains: readonly string[];
   readonly freshnessWindowDays: number;
+  readonly freshnessPriorityWeight: number;
   readonly backfillMaxDays: number;
   readonly maxRetries: number;
   readonly requestTimeoutMs: number;
   readonly maxQueriesPerRun: number;
   readonly pagesPerQuery: number;
   readonly fulltextBudgetPerRun: number;
+  readonly maxWorkItemsPerRun: number;
+  readonly workItemCaps: {
+    readonly 'discover-front-page'?: number;
+    readonly 'revisit-front'?: number;
+    readonly 'acquire-fulltext'?: number;
+    readonly 'extract-study-card'?: number;
+    readonly 'link-study-question'?: number;
+    readonly 'analyze-contradiction'?: number;
+    readonly 'publish-doctrine'?: number;
+  };
   readonly schedule: {
     readonly cron: string;
     readonly timezone: string;
@@ -48,6 +61,7 @@ type EnvInput = Partial<Record<string, string | undefined>>;
 type OverridesInput = Partial<{
   allowedDomains: string[];
   freshnessWindowDays: number;
+  freshnessPriorityWeight: number;
   backfillMaxDays: number;
   retryCount: number;
   maxRetries: number;
@@ -56,6 +70,8 @@ type OverridesInput = Partial<{
   maxQueriesPerRun: number;
   pagesPerQuery: number;
   fulltextBudgetPerRun: number;
+  maxWorkItemsPerRun: number;
+  workItemCaps: AdaptiveKnowledgePipelineConfig['workItemCaps'];
   bootstrapMaxJobsPerRun: number;
   bootstrapMaxPagesPerJob: number;
   bootstrapMaxCanonicalRecordsPerRun: number;
@@ -88,6 +104,24 @@ function parseMaybeInteger(value: string | undefined, label: string): number | u
     return undefined;
   }
   return parsePositiveInteger(value, label);
+}
+
+function parseProbability(value: string, label: string): number {
+  if (!/^\d+(?:\.\d+)?$/.test(value)) {
+    throw new Error(`${label} must be a number between 0 and 1`);
+  }
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+    throw new Error(`${label} must be a number between 0 and 1`);
+  }
+  return parsed;
+}
+
+function parseMaybeProbability(value: string | undefined, label: string): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return parseProbability(value, label);
 }
 
 function parseDomainToken(token: string): string {
@@ -133,6 +167,30 @@ function assertAllowedDomains(domains: readonly string[]): void {
   }
 }
 
+function parseWorkItemCapsFromEnv(env: EnvInput): AdaptiveKnowledgePipelineConfig['workItemCaps'] {
+  return Object.freeze({
+    'discover-front-page': parseMaybeInteger(env.PIPELINE_MAX_DISCOVER_FRONT_PAGE_ITEMS, 'PIPELINE_MAX_DISCOVER_FRONT_PAGE_ITEMS'),
+    'revisit-front': parseMaybeInteger(env.PIPELINE_MAX_REVISIT_FRONT_ITEMS, 'PIPELINE_MAX_REVISIT_FRONT_ITEMS'),
+    'acquire-fulltext': parseMaybeInteger(env.PIPELINE_MAX_ACQUIRE_FULLTEXT_ITEMS, 'PIPELINE_MAX_ACQUIRE_FULLTEXT_ITEMS'),
+    'extract-study-card': parseMaybeInteger(env.PIPELINE_MAX_EXTRACT_STUDY_CARD_ITEMS, 'PIPELINE_MAX_EXTRACT_STUDY_CARD_ITEMS'),
+    'link-study-question': parseMaybeInteger(env.PIPELINE_MAX_LINK_STUDY_QUESTION_ITEMS, 'PIPELINE_MAX_LINK_STUDY_QUESTION_ITEMS'),
+    'analyze-contradiction': parseMaybeInteger(env.PIPELINE_MAX_ANALYZE_CONTRADICTION_ITEMS, 'PIPELINE_MAX_ANALYZE_CONTRADICTION_ITEMS'),
+    'publish-doctrine': parseMaybeInteger(env.PIPELINE_MAX_PUBLISH_DOCTRINE_ITEMS, 'PIPELINE_MAX_PUBLISH_DOCTRINE_ITEMS'),
+  });
+}
+
+function parseWorkItemCapsFromOverrides(
+  caps: AdaptiveKnowledgePipelineConfig['workItemCaps'] | undefined,
+): AdaptiveKnowledgePipelineConfig['workItemCaps'] {
+  const parsed = caps ?? {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (value !== undefined && (!Number.isInteger(value) || value <= 0)) {
+      throw new Error(`workItemCaps.${key} must be a positive integer`);
+    }
+  }
+  return Object.freeze({ ...parsed });
+}
+
 function parseFromEnv(env: EnvInput): AdaptiveKnowledgePipelineConfig {
   const allowedDomains = parseAllowedDomainsFromEnv(env.PIPELINE_ALLOWED_DOMAINS);
   assertAllowedDomains(allowedDomains);
@@ -140,6 +198,10 @@ function parseFromEnv(env: EnvInput): AdaptiveKnowledgePipelineConfig {
   const freshnessWindowDays =
     parseMaybeInteger(env.PIPELINE_FRESHNESS_WINDOW_DAYS, 'PIPELINE_FRESHNESS_WINDOW_DAYS') ??
     DEFAULT_PIPELINE_FRESHNESS_DAYS;
+
+  const freshnessPriorityWeight =
+    parseMaybeProbability(env.PIPELINE_FRESHNESS_PRIORITY_WEIGHT, 'PIPELINE_FRESHNESS_PRIORITY_WEIGHT') ??
+    DEFAULT_FRESHNESS_PRIORITY_WEIGHT;
 
   const backfillMaxDays =
     parseMaybeInteger(env.PIPELINE_BACKFILL_MAX_DAYS, 'PIPELINE_BACKFILL_MAX_DAYS') ?? DEFAULT_BACKFILL_MAX_DAYS;
@@ -158,6 +220,9 @@ function parseFromEnv(env: EnvInput): AdaptiveKnowledgePipelineConfig {
   const fulltextBudgetPerRun =
     parseMaybeInteger(env.PIPELINE_FULLTEXT_BUDGET_PER_RUN, 'PIPELINE_FULLTEXT_BUDGET_PER_RUN') ??
     DEFAULT_FULLTEXT_BUDGET_PER_RUN;
+  const maxWorkItemsPerRun =
+    parseMaybeInteger(env.PIPELINE_MAX_WORK_ITEMS_PER_RUN, 'PIPELINE_MAX_WORK_ITEMS_PER_RUN') ??
+    DEFAULT_MAX_WORK_ITEMS_PER_RUN;
   const bootstrapMaxJobsPerRun =
     parseMaybeInteger(env.PIPELINE_BOOTSTRAP_MAX_JOBS_PER_RUN, 'PIPELINE_BOOTSTRAP_MAX_JOBS_PER_RUN') ??
     DEFAULT_BOOTSTRAP_MAX_JOBS_PER_RUN;
@@ -173,22 +238,21 @@ function parseFromEnv(env: EnvInput): AdaptiveKnowledgePipelineConfig {
     parseMaybeInteger(env.PIPELINE_BOOTSTRAP_MAX_RUNTIME_MS, 'PIPELINE_BOOTSTRAP_MAX_RUNTIME_MS') ??
     DEFAULT_BOOTSTRAP_MAX_RUNTIME_MS;
 
-  if (backfillMaxDays < freshnessWindowDays) {
-    throw new Error('PIPELINE_BACKFILL_MAX_DAYS must be greater than or equal to PIPELINE_FRESHNESS_WINDOW_DAYS');
-  }
-
   const cron = env.PIPELINE_SCHEDULE_CRON?.trim() || DEFAULT_PIPELINE_SCHEDULE_CRON;
   const timezone = env.PIPELINE_SCHEDULE_TIMEZONE?.trim() || DEFAULT_PIPELINE_SCHEDULE_TIMEZONE;
 
   return Object.freeze({
     allowedDomains,
     freshnessWindowDays,
+    freshnessPriorityWeight,
     backfillMaxDays,
     maxRetries,
     requestTimeoutMs,
     maxQueriesPerRun,
     pagesPerQuery,
     fulltextBudgetPerRun,
+    maxWorkItemsPerRun,
+    workItemCaps: parseWorkItemCapsFromEnv(env),
     schedule: Object.freeze({
       cron,
       timezone,
@@ -210,6 +274,11 @@ function parseFromOverrides(overrides: OverridesInput = {}): AdaptiveKnowledgePi
   const freshnessWindowDays = overrides.freshnessWindowDays ?? DEFAULT_PIPELINE_FRESHNESS_DAYS;
   if (!Number.isInteger(freshnessWindowDays) || freshnessWindowDays <= 0) {
     throw new Error('freshnessWindowDays must be a positive integer');
+  }
+
+  const freshnessPriorityWeight = overrides.freshnessPriorityWeight ?? DEFAULT_FRESHNESS_PRIORITY_WEIGHT;
+  if (!Number.isFinite(freshnessPriorityWeight) || freshnessPriorityWeight < 0 || freshnessPriorityWeight > 1) {
+    throw new Error('freshnessPriorityWeight must be a number between 0 and 1');
   }
 
   const backfillMaxDays = overrides.backfillMaxDays ?? DEFAULT_BACKFILL_MAX_DAYS;
@@ -238,6 +307,10 @@ function parseFromOverrides(overrides: OverridesInput = {}): AdaptiveKnowledgePi
   if (!Number.isInteger(fulltextBudgetPerRun) || fulltextBudgetPerRun <= 0) {
     throw new Error('fulltextBudgetPerRun must be a positive integer');
   }
+  const maxWorkItemsPerRun = overrides.maxWorkItemsPerRun ?? DEFAULT_MAX_WORK_ITEMS_PER_RUN;
+  if (!Number.isInteger(maxWorkItemsPerRun) || maxWorkItemsPerRun <= 0) {
+    throw new Error('maxWorkItemsPerRun must be a positive integer');
+  }
   const bootstrapMaxJobsPerRun = overrides.bootstrapMaxJobsPerRun ?? DEFAULT_BOOTSTRAP_MAX_JOBS_PER_RUN;
   if (!Number.isInteger(bootstrapMaxJobsPerRun) || bootstrapMaxJobsPerRun <= 0) {
     throw new Error('bootstrapMaxJobsPerRun must be a positive integer');
@@ -256,19 +329,18 @@ function parseFromOverrides(overrides: OverridesInput = {}): AdaptiveKnowledgePi
     throw new Error('bootstrapMaxRuntimeMs must be a positive integer');
   }
 
-  if (backfillMaxDays < freshnessWindowDays) {
-    throw new Error('backfillMaxDays must be greater than or equal to freshnessWindowDays');
-  }
-
   return Object.freeze({
     allowedDomains,
     freshnessWindowDays,
+    freshnessPriorityWeight,
     backfillMaxDays,
     maxRetries: retries,
     requestTimeoutMs,
     maxQueriesPerRun,
     pagesPerQuery,
     fulltextBudgetPerRun,
+    maxWorkItemsPerRun,
+    workItemCaps: parseWorkItemCapsFromOverrides(overrides.workItemCaps),
     schedule: Object.freeze({
       cron: overrides.scheduleCron?.trim() || DEFAULT_PIPELINE_SCHEDULE_CRON,
       timezone: overrides.scheduleTimezone?.trim() || DEFAULT_PIPELINE_SCHEDULE_TIMEZONE,
