@@ -162,6 +162,10 @@ function isLeaseExpired(state: AdaptiveKnowledgeWorkerState, now: Date): boolean
   return Date.parse(state.leaseExpiresAt) <= now.getTime();
 }
 
+function resolveOptionalKind(nextValue: string | null | undefined, existingValue: string | null | undefined): string | null {
+  return nextValue === undefined ? existingValue ?? null : nextValue;
+}
+
 export async function readAdaptiveKnowledgeWorkerState(outputRootDir: string): Promise<AdaptiveKnowledgeWorkerState | null> {
   const { statePath } = buildStatePaths(outputRootDir);
   return safeReadWorkerState(statePath);
@@ -293,8 +297,8 @@ export async function heartbeatAdaptiveKnowledgeLease(
     leaseMs,
     startedAt: existingState.startedAt,
     message: input.message,
-    currentItemKind: input.currentItemKind ?? existingState.currentItemKind ?? null,
-    lastCompletedItemKind: input.lastCompletedItemKind ?? existingState.lastCompletedItemKind ?? null,
+    currentItemKind: resolveOptionalKind(input.currentItemKind, existingState.currentItemKind),
+    lastCompletedItemKind: resolveOptionalKind(input.lastCompletedItemKind, existingState.lastCompletedItemKind),
   });
   await writeWorkerState(statePath, updated);
   return updated;
@@ -320,8 +324,8 @@ export async function releaseAdaptiveKnowledgeLease(
     leaseMs,
     startedAt: existingState.startedAt,
     message: input.message,
-    currentItemKind: input.currentItemKind ?? existingState.currentItemKind ?? null,
-    lastCompletedItemKind: input.lastCompletedItemKind ?? existingState.lastCompletedItemKind ?? null,
+    currentItemKind: resolveOptionalKind(input.currentItemKind, existingState.currentItemKind),
+    lastCompletedItemKind: resolveOptionalKind(input.lastCompletedItemKind, existingState.lastCompletedItemKind),
   });
   await writeWorkerState(statePath, released);
   await safeRemove(lockPath);

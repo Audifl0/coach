@@ -593,6 +593,46 @@ test('refresh command logging reflects backlog execution and scientific no-progr
   assert.equal(messages.some((message) => message.includes('completed without useful delta; reasons=duplicate-heavy,blocked-by-downstream')), true);
 });
 
+test('worker state persists current item kind separately from last completed item kind', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-worker-state-kinds-'));
+  const now = new Date('2026-03-23T01:10:00.000Z');
+
+  await acquireAdaptiveKnowledgeLease({
+    outputRootDir,
+    runId: 'run-item-kinds',
+    mode: 'refresh',
+    now,
+    leaseMs: 30_000,
+  });
+
+  await heartbeatAdaptiveKnowledgeLease({
+    outputRootDir,
+    runId: 'run-item-kinds',
+    now: new Date(now.getTime() + 1_000),
+    leaseMs: 30_000,
+    currentItemKind: 'extract-study-card',
+    lastCompletedItemKind: 'fetch-document',
+  });
+
+  const heartbeatedState = await readAdaptiveKnowledgeWorkerState(outputRootDir);
+  assert.equal(heartbeatedState?.currentItemKind, 'extract-study-card');
+  assert.equal(heartbeatedState?.lastCompletedItemKind, 'fetch-document');
+
+  await releaseAdaptiveKnowledgeLease({
+    outputRootDir,
+    runId: 'run-item-kinds',
+    status: 'completed',
+    now: new Date(now.getTime() + 2_000),
+    leaseMs: 30_000,
+    currentItemKind: null,
+    lastCompletedItemKind: 'extract-study-card',
+  });
+
+  const releasedState = await readAdaptiveKnowledgeWorkerState(outputRootDir);
+  assert.equal(releasedState?.currentItemKind, null);
+  assert.equal(releasedState?.lastCompletedItemKind, 'extract-study-card');
+});
+
 test('document executor acquires and extracts when extractible documents remain', async () => {
   const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-document-executor-'));
   const now = new Date('2026-03-23T00:00:00.000Z');
