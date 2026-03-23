@@ -36,6 +36,8 @@ import { buildAdaptiveKnowledgeBootstrapCollectionJobs, buildAdaptiveKnowledgeDi
 import { fetchOpenAlexEvidenceBatch } from './connectors/openalex';
 import { fetchPubmedEvidenceBatch } from './connectors/pubmed';
 import { executeDiscoveryWorkItem } from './executors/discovery-executor';
+import { executeDocumentWorkItem } from './executors/document-executor';
+import { executeQuestionWorkItem } from './executors/question-executor';
 import {
   buildDocumentaryRecordStagingArtifact,
   dedupeNormalizedEvidenceRecords,
@@ -66,7 +68,7 @@ import { synthesizeThematicPrinciples } from './thematic-synthesis';
 import { renderBookletMarkdown } from './booklet-renderer';
 import { buildDocumentRegistryRecordFromNormalizedRecord, loadDocumentRegistry, upsertDocumentRegistryRecords } from './registry/doc-library';
 import { ensureDiscoveryResearchFronts, loadResearchFronts } from './registry/research-fronts';
-import { buildStudyDossierFromStudyCard, upsertStudyDossiers } from './registry/study-dossiers';
+import { buildStudyDossierFromStudyCard, loadStudyDossierRegistry, upsertStudyDossiers } from './registry/study-dossiers';
 import { loadScientificQuestions, upsertScientificQuestions } from './registry/scientific-questions';
 import { enqueueWorkItems } from './registry/work-queues';
 import { linkStudiesToScientificQuestions } from './question-linking';
@@ -107,6 +109,12 @@ type PipelineStage = {
 type ScheduledDocumentExecution = {
   executed: number;
   records: NormalizedEvidenceRecord[];
+  studyCards: import('./contracts').StudyCard[];
+  deltas: {
+    documentsAcquired: number;
+    documentsExtracted: number;
+    studyCards: number;
+  };
 };
 
 type PipelineMode = 'bootstrap' | 'refresh' | 'check';
@@ -303,38 +311,107 @@ function summarizeBootstrapQueue(jobs: readonly AdaptiveKnowledgeCollectionJob[]
   };
 }
 
-function buildDocumentQueueWorkRecords(input: {
+async function buildDocumentQueueWorkRecords(input: {
   outputRootDir: string;
   now: Date;
-  selectedTargetIds: readonly string[];
+  selectedItems: readonly import('./contracts').AdaptiveKnowledgeWorkItem[];
   documentRegistry: Awaited<ReturnType<typeof loadDocumentRegistry>>;
-}): ScheduledDocumentExecution {
-  const selectedIds = new Set(input.selectedTargetIds);
-  const records = input.documentRegistry.items
-    .filter((document) => selectedIds.has(document.documentId) && document.status === 'extractible')
-    .map((document) => ({
-      id: document.recordId,
-      canonicalId: document.canonicalId ?? document.documentId,
-      sourceType: 'review' as const,
-      sourceUrl: document.sourceUrl,
-      sourceDomain: document.sourceDomain,
-      publishedAt: input.now.toISOString().slice(0, 10),
-      title: document.title,
-      summaryEn: `${document.title} queued for extraction.`,
-      tags: document.topicKeys,
-      provenanceIds: [document.recordId],
-      documentary: {
-        status: 'abstract-ready' as const,
-        acquisition: {
-          sourceKind: 'abstract' as const,
-          rejectionReason: null,
+  remoteSynthesisClient: CorpusRemoteSynthesisClient;
+  existingStudyDossiers: Awaited<ReturnType<typeof loadStudyDossierRegistry>>;
+  scientificQuestions: Awaited<ReturnType<typeof loadScientificQuestions>>;
+}): Promise<ScheduledDocumentExecution> {
+  const documentsById = new Map(input.documentRegistry.items.map((document) => [document.documentId, document]));
+  const recordsByDocumentId = new Map<string, NormalizedEvidenceRecord>(
+    input.documentRegistry.items.map((document) => [
+      document.documentId,
+      {
+        id: document.recordId,
+        canonicalId: document.canonicalId ?? document.documentId,
+        sourceType: 'review' as const,
+        sourceUrl: document.sourceUrl,
+        sourceDomain: document.sourceDomain,
+        publishedAt: input.now.toISOString().slice(0, 10),
+        title: document.title,
+        summaryEn: `${document.title} queued for extraction.`,
+        tags: document.topicKeys,
+        provenanceIds: [document.recordId],
+        documentary: {
+          status: 'abstract-ready' as const,
+          acquisition: {
+            sourceKind: 'abstract' as const,
+            rejectionReason: null,
+          },
         },
       },
-    }));
+    ]),
+  );
+
+  const documentItems = input.selectedItems.filter(
+    (item) => item.kind === 'acquire-fulltext' || item.kind === 'extract-study-card',
+  );
+  const questionItems = input.selectedItems.filter((item) => item.kind === 'link-study-question');
+
+  const studyCards: import('./contracts').StudyCard[] = [];
+  let documentsAcquired = 0;
+  let documentsExtracted = 0;
+  let questionsLinked = 0;
+  const executedRecords: NormalizedEvidenceRecord[] = [];
+
+  for (const item of documentItems) {
+    const document = documentsById.get(item.targetId);
+    if (!document) {
+      continue;
+    }
+
+    const outcome = await executeDocumentWorkItem(item, {
+      outputRootDir: input.outputRootDir,
+      now: input.now,
+      document,
+      recordsByDocumentId,
+      remoteSynthesisClient: input.remoteSynthesisClient,
+    });
+
+    documentsById.set(outcome.document.documentId, outcome.document);
+    documentsAcquired += outcome.delta.documentsAcquired;
+    documentsExtracted += outcome.delta.documentsExtracted;
+    studyCards.push(...outcome.studyCards);
+
+    const record = recordsByDocumentId.get(outcome.document.documentId);
+    if (record) {
+      executedRecords.push(record);
+    }
+  }
+
+  const refreshedStudyDossiers = studyCards.length > 0 ? await loadStudyDossierRegistry(input.outputRootDir) : input.existingStudyDossiers;
+  const questionsById = new Map(input.scientificQuestions.items.map((question) => [question.questionId, question]));
+  let backlogReasons: string[] = [];
+
+  for (const item of questionItems) {
+    const question = questionsById.get(item.targetId);
+    if (!question) {
+      continue;
+    }
+
+    const outcome = await executeQuestionWorkItem(item, {
+      outputRootDir: input.outputRootDir,
+      now: input.now,
+      question,
+      studyDossiers: refreshedStudyDossiers.items,
+    });
+    questionsById.set(outcome.question.questionId, outcome.question);
+    questionsLinked += outcome.delta.questionsLinked;
+    backlogReasons = [...new Set([...backlogReasons, ...outcome.backlogReasons])];
+  }
 
   return {
-    executed: records.length,
-    records,
+    executed: documentItems.length + questionItems.length,
+    records: executedRecords,
+    studyCards,
+    deltas: {
+      documentsAcquired,
+      documentsExtracted: documentsExtracted + questionsLinked,
+      studyCards: studyCards.length,
+    },
   };
 }
 
@@ -530,6 +607,8 @@ export async function runAdaptiveKnowledgePipeline(
 
   const refreshResearchFronts = mode === 'refresh' ? await loadResearchFronts(outputRootDir) : [];
   const refreshDocumentRegistry = mode === 'refresh' ? await loadDocumentRegistry(outputRootDir) : null;
+  const refreshStudyDossiers = mode === 'refresh' ? await loadStudyDossierRegistry(outputRootDir) : null;
+  const refreshScientificQuestions = mode === 'refresh' ? await loadScientificQuestions(outputRootDir) : null;
 
   const stageReports: PipelineStage[] = [];
 
@@ -588,6 +667,16 @@ export async function runAdaptiveKnowledgePipeline(
 
   let schedulerTelemetry: AdaptiveKnowledgeSchedulerTelemetry | undefined;
   let refreshScheduledRecords: NormalizedEvidenceRecord[] = [];
+  let remoteStudyCardClient: CorpusRemoteSynthesisClient | null = input.remoteSynthesisClient ?? null;
+  if (!remoteStudyCardClient) {
+    try {
+      remoteStudyCardClient = createConfiguredOpenAiCorpusSynthesisClient();
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes('not configured')) {
+        throw error;
+      }
+    }
+  }
 
   if (mode === 'refresh') {
     const hasPreexistingBacklog = (refreshDocumentRegistry?.items.length ?? 0) > 0 || refreshResearchFronts.length > 0;
@@ -598,7 +687,12 @@ export async function runAdaptiveKnowledgePipeline(
       const refreshItems = buildAdaptiveKnowledgeWorkItems({
         researchFronts: refreshResearchFronts,
         documents: refreshDocumentRegistry?.items ?? [],
-        questions: [],
+        questions: (refreshScientificQuestions?.items ?? []).map((question) => ({
+          id: question.questionId,
+          topicKey: question.topicKeys[0] ?? 'unknown-topic',
+          coverage: question.coverageStatus,
+          publicationStatus: question.publicationStatus,
+        })),
         contradictions: [],
         doctrineCandidates: [],
         now,
@@ -609,7 +703,9 @@ export async function runAdaptiveKnowledgePipeline(
           maxItems: config.maxQueriesPerRun,
           perKind: {
             'discover-front-page': config.maxQueriesPerRun,
+            'acquire-fulltext': config.maxQueriesPerRun,
             'extract-study-card': config.maxQueriesPerRun,
+            'link-study-question': config.maxQueriesPerRun,
           },
         },
       });
@@ -638,16 +734,19 @@ export async function runAdaptiveKnowledgePipeline(
         refreshScheduledRecords.push(...executed.records);
       }
 
-      const documentExecution = refreshDocumentRegistry
-        ? buildDocumentQueueWorkRecords({
+      const documentExecution = refreshDocumentRegistry && refreshScientificQuestions && refreshStudyDossiers && remoteStudyCardClient
+        ? await buildDocumentQueueWorkRecords({
             outputRootDir,
             now,
-            selectedTargetIds: refreshPlan.selectedItems
-              .filter((item) => item.kind === 'extract-study-card')
-              .map((item) => item.targetId),
+            selectedItems: refreshPlan.selectedItems.filter((item) =>
+              item.kind === 'acquire-fulltext' || item.kind === 'extract-study-card' || item.kind === 'link-study-question',
+            ),
             documentRegistry: refreshDocumentRegistry,
+            remoteSynthesisClient: remoteStudyCardClient,
+            existingStudyDossiers: refreshStudyDossiers,
+            scientificQuestions: refreshScientificQuestions,
           })
-        : { executed: 0, records: [] };
+        : { executed: 0, records: [], studyCards: [], deltas: { documentsAcquired: 0, documentsExtracted: 0, studyCards: 0 } };
       refreshScheduledRecords.push(...documentExecution.records);
 
       schedulerTelemetry = parseAdaptiveKnowledgeSchedulerTelemetry({
@@ -802,16 +901,6 @@ export async function runAdaptiveKnowledgePipeline(
   let studyCardStageRecorded = false;
   let thematicSynthesisStageRecorded = false;
   let studyCardStageMessage = 'remote-client-unavailable';
-  let remoteStudyCardClient: CorpusRemoteSynthesisClient | null = input.remoteSynthesisClient ?? null;
-  if (!remoteStudyCardClient) {
-    try {
-      remoteStudyCardClient = createConfiguredOpenAiCorpusSynthesisClient();
-    } catch (error) {
-      if (!(error instanceof Error) || !error.message.includes('not configured')) {
-        throw error;
-      }
-    }
-  }
   let qualityGateResult = evaluateCorpusQualityGate({
     now,
     records: [],

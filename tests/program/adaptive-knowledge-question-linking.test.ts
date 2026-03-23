@@ -145,3 +145,32 @@ test('question remains partial when coverage is still thin', () => {
   assert.equal(result.questions[0]?.linkedStudyIds.length, 1);
   assert.equal(result.questions[0]?.coverageStatus, 'partial');
 });
+
+test('question linking reports undercovered backlog reasons for non-mature questions', () => {
+  const emptyQuestion = buildQuestion({
+    questionId: 'q-empty',
+    topicKeys: ['progression'],
+    coverageStatus: 'empty',
+    linkedStudyIds: [],
+  });
+  const partialQuestion = buildQuestion({
+    questionId: 'q-partial',
+    topicKeys: ['hypertrophy-dose'],
+    coverageStatus: 'partial',
+    linkedStudyIds: ['study-1'],
+  });
+  const matureQuestion = buildQuestion({
+    questionId: 'q-mature',
+    topicKeys: ['rest-intervals'],
+    coverageStatus: 'mature',
+    linkedStudyIds: ['study-1', 'study-2', 'study-3', 'study-4'],
+  });
+
+  const result = linkStudiesToScientificQuestions({
+    studyDossiers: [],
+    questions: [emptyQuestion, partialQuestion, matureQuestion],
+  });
+
+  assert.deepEqual(result.undercoveredQuestionIds, ['q-empty', 'q-partial']);
+  assert.deepEqual(result.backlogReasons, ['undercovered-question']);
+});

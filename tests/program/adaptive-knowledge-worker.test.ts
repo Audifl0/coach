@@ -7,6 +7,7 @@ import test from 'node:test';
 import type { ConnectorFetchResult } from '../../scripts/adaptive-knowledge/connectors/shared';
 import { setWorkerControlMode } from '../../scripts/adaptive-knowledge/control-state';
 import { runAdaptiveKnowledgePipeline } from '../../scripts/adaptive-knowledge/pipeline-run';
+import { executeDocumentWorkItem } from '../../scripts/adaptive-knowledge/executors/document-executor';
 import { runRefreshCorpusCommand } from '../../scripts/adaptive-knowledge/refresh-corpus';
 import { buildValidatedSynthesisFromPrinciples, synthesizeCorpusPrinciples } from '../../scripts/adaptive-knowledge/synthesis';
 import {
@@ -524,4 +525,91 @@ test('worker command can complete with open scientific questions and no new doct
   assert.equal(doctrine.principles.length >= 0, true);
   assert.equal(questions.items.some((item) => item.publicationStatus !== 'published'), true);
   assert.equal(doctrineHistory.entries.filter((entry) => entry.changeType === 'published').length >= 0, true);
+});
+
+test('document executor acquires and extracts when extractible documents remain', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-document-executor-'));
+  const now = new Date('2026-03-23T00:00:00.000Z');
+
+  const outcome = await executeDocumentWorkItem(
+    {
+      id: 'extract:pubmed-1',
+      kind: 'extract-study-card',
+      status: 'ready',
+      topicKey: 'progression',
+      priorityScore: 0.74,
+      blockedBy: [],
+      targetId: 'pubmed-1',
+    },
+    {
+      outputRootDir,
+      now,
+      document: {
+        documentId: 'pubmed-1',
+        canonicalId: 'pubmed-1',
+        recordId: 'pubmed-1',
+        title: 'PubMed progression study',
+        sourceDomain: 'pubmed.ncbi.nlm.nih.gov',
+        sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/pubmed-1',
+        status: 'extractible',
+        topicKeys: ['progression'],
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      },
+      recordsByDocumentId: new Map([
+        ['pubmed-1', buildConnectorSuccess('pubmed').records[0]!],
+      ]),
+      remoteSynthesisClient: {
+        async extractStudyCards(input: { records: Array<{ id: string; title: string; tags: string[] }>; payloadByRecordId: Map<string, { extractionSource?: string }> }) {
+          return input.records.map((record) => ({
+            recordId: record.id,
+            title: record.title,
+            authors: 'Doe et al.',
+            year: 2024,
+            journal: 'Journal of Strength Research',
+            doi: null,
+            studyType: 'rct' as const,
+            population: {
+              description: 'Adult lifters',
+              size: 30,
+              trainingLevel: 'intermediate' as const,
+            },
+            protocol: {
+              duration: '8 semaines',
+              intervention: 'Progression encadree',
+              comparison: 'Charge fixe',
+            },
+            results: {
+              primary: 'Amelioration de la force.',
+              secondary: ['Amelioration legere de la masse maigre.'],
+            },
+            practicalTakeaways: ['Monter la charge progressivement.'],
+            limitations: ['Petit echantillon.'],
+            safetySignals: ['Pas d evenement grave.'],
+            evidenceLevel: 'moderate' as const,
+            topicKeys: record.tags,
+            extractionSource: input.payloadByRecordId.get(record.id)?.extractionSource ?? 'abstract',
+            langueFr: {
+              titreFr: `FR ${record.title}`,
+              resumeFr: 'Resume francais.',
+              conclusionFr: 'Conclusion francaise.',
+            },
+          }));
+        },
+        async synthesizeThematicPrinciples() {
+          throw new Error('not used');
+        },
+        async synthesizeLot() {
+          throw new Error('not used');
+        },
+        async consolidate() {
+          throw new Error('not used');
+        },
+      },
+    },
+  );
+
+  assert.equal(outcome.status, 'completed');
+  assert.equal(outcome.delta.studyCards, 1);
+  assert.equal(outcome.delta.documentsExtracted, 1);
 });

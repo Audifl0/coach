@@ -111,6 +111,8 @@ export function linkStudiesToScientificQuestions(input: {
   questions: ScientificQuestion[];
   links: ScientificQuestionStudyLink[];
   coverage: ScientificQuestionCoverage[];
+  undercoveredQuestionIds: string[];
+  backlogReasons: string[];
 } {
   const linkedAt = nowIso(input.now);
   const links: ScientificQuestionStudyLink[] = [];
@@ -161,5 +163,11 @@ export function linkStudiesToScientificQuestions(input: {
     }),
   );
 
-  return { questions, links, coverage };
+  const undercoveredQuestionIds = questions
+    .filter((question) => question.coverageStatus !== 'mature')
+    .map((question) => question.questionId)
+    .sort();
+  const backlogReasons = undercoveredQuestionIds.length > 0 ? ['undercovered-question'] : [];
+
+  return { questions, links, coverage, undercoveredQuestionIds, backlogReasons };
 }
