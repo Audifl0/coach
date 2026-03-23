@@ -342,6 +342,96 @@ test('quality gate blocks snapshots with insufficient thematic diversity', async
   assert.equal(gate.reasons.includes('insufficient_topic_diversity'), true);
 });
 
+test('quality gate can satisfy thematic diversity from cumulative question dossiers in backlog mode', async () => {
+  const gate = evaluateCorpusQualityGate({
+    now: new Date('2026-03-05T00:00:00.000Z'),
+    threshold: 0.2,
+    records: [
+      {
+        id: 'record-1',
+        sourceType: 'guideline',
+        sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/1/',
+        sourceDomain: 'pubmed.ncbi.nlm.nih.gov',
+        publishedAt: '2026-01-01',
+        title: 'Guideline',
+        summaryEn: 'Detailed guidance.',
+        tags: ['progression'],
+        provenanceIds: ['record-1'],
+      },
+      {
+        id: 'record-2',
+        sourceType: 'review',
+        sourceUrl: 'https://doi.org/2',
+        sourceDomain: 'doi.org',
+        publishedAt: '2026-01-02',
+        title: 'Review',
+        summaryEn: 'Detailed review.',
+        tags: ['progression'],
+        provenanceIds: ['record-2'],
+      },
+    ],
+    validatedSynthesis: buildValidatedSynthesisFromPrinciples({
+      records: [
+        {
+          id: 'record-1',
+          sourceType: 'guideline',
+          sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/1/',
+          sourceDomain: 'pubmed.ncbi.nlm.nih.gov',
+          publishedAt: '2026-01-01',
+          title: 'Guideline',
+          summaryEn: 'Detailed guidance.',
+          tags: ['progression'],
+          provenanceIds: ['record-1'],
+        },
+        {
+          id: 'record-2',
+          sourceType: 'review',
+          sourceUrl: 'https://doi.org/2',
+          sourceDomain: 'doi.org',
+          publishedAt: '2026-01-02',
+          title: 'Review',
+          summaryEn: 'Detailed review.',
+          tags: ['progression'],
+          provenanceIds: ['record-2'],
+        },
+      ],
+      principles: [
+        {
+          id: 'p_safe',
+          title: 'Safe progression',
+          summaryFr: 'Conserver une progression prudente.',
+          guidanceFr: 'Monter progressivement.',
+          provenanceRecordIds: ['record-1', 'record-2'],
+          evidenceLevel: 'review',
+          guardrail: 'SAFE-03',
+        },
+      ],
+    }),
+    questionDossiers: [
+      {
+        questionId: 'q-progression',
+        topicKeys: ['progression'],
+        linkedStudyIds: ['study-1'],
+        contradictions: [],
+        summaryFr: 'Progression.',
+        confidenceLevel: 'moderate',
+        publicationReadiness: 'candidate',
+      },
+      {
+        questionId: 'q-hypertrophy',
+        topicKeys: ['hypertrophy-dose'],
+        linkedStudyIds: ['study-2'],
+        contradictions: [],
+        summaryFr: 'Dose hypertrophie.',
+        confidenceLevel: 'moderate',
+        publicationReadiness: 'candidate',
+      },
+    ] as any,
+  });
+
+  assert.equal(gate.reasons.includes('insufficient_topic_diversity'), false);
+});
+
 test('quality gate distinguishes no progress, progressive library growth, and blocked runtime publication', () => {
   const now = new Date('2026-03-05T00:00:00.000Z');
 

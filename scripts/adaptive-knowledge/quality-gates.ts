@@ -155,7 +155,11 @@ function hasInsufficientCoverage(records: NormalizedEvidenceRecord[], validatedS
   return validatedSynthesis.principles.length < 1;
 }
 
-function hasInsufficientTopicDiversity(records: NormalizedEvidenceRecord[], validatedSynthesis: ValidatedSynthesis | undefined): boolean {
+function hasInsufficientTopicDiversity(
+  records: NormalizedEvidenceRecord[],
+  validatedSynthesis: ValidatedSynthesis | undefined,
+  questionDossiers: readonly QuestionSynthesisDossier[] | undefined,
+): boolean {
   if (!validatedSynthesis || records.length < 2) {
     return false;
   }
@@ -167,6 +171,11 @@ function hasInsufficientTopicDiversity(records: NormalizedEvidenceRecord[], vali
 
   const recordTags = new Set(records.flatMap((r) => r.tags));
   if (recordTags.size >= 2) return false;
+
+  // In backlog mode, cumulative dossier coverage can provide the needed thematic
+  // breadth even when the current run's synthesized slice is narrow.
+  const dossierBreadth = new Set((questionDossiers ?? []).map((dossier) => dossier.questionId));
+  if (dossierBreadth.size >= 2) return false;
 
   // Last resort: multiple distinct guardrails across principles counts as diverse
   const guardrails = new Set(validatedSynthesis.principles.map((p) => p.guardrail));
@@ -255,7 +264,7 @@ export function evaluateCorpusQualityGate(input: EvaluateCorpusQualityGateInput)
   if (hasInsufficientCoverage(input.records, input.validatedSynthesis)) {
     reasons.push('insufficient_coverage');
   }
-  if (hasInsufficientTopicDiversity(input.records, input.validatedSynthesis)) {
+  if (hasInsufficientTopicDiversity(input.records, input.validatedSynthesis, input.questionDossiers)) {
     reasons.push('insufficient_topic_diversity');
   }
   if (hasInsufficientSourceDiversity(input.records, input.validatedSynthesis)) {
