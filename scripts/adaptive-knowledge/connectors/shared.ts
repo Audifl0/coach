@@ -157,13 +157,18 @@ function deriveContentTags(title: string, summary: string): string[] {
   return tags.length > 0 ? tags : ['adaptive-coaching'];
 }
 
-function normalizeRecord(raw: RawRecord): NormalizedEvidenceRecord {
+function normalizeRecord(raw: RawRecord, now: Date): NormalizedEvidenceRecord {
   const canonicalId = buildCanonicalRecordId({
     id: raw.id,
     title: raw.title,
     url: raw.url,
   });
-  const tags = raw.tags?.length ? raw.tags : deriveContentTags(raw.title, raw.summary);
+  const publishedMs = Date.parse(raw.publishedAt);
+  const publishedAtAgeDays = Number.isNaN(publishedMs)
+    ? 0
+    : Math.max(0, Math.floor((now.getTime() - publishedMs) / DAY_MS));
+  const tagsWithFreshness = raw.tags?.length ? raw.tags : deriveContentTags(raw.title, raw.summary);
+  const tags = publishedAtAgeDays > 0 ? [...new Set([...tagsWithFreshness, `age-days:${publishedAtAgeDays}`])] : tagsWithFreshness;
   return parseNormalizedEvidenceRecord({
     id: raw.id,
     canonicalId,
@@ -441,9 +446,7 @@ export function normalizeConnectorRecords(
       continue;
     }
     if (!isWithinFreshnessWindow(raw.publishedAt, now, config.freshnessWindowDays)) {
-      skipped += 1;
       skipReasons.stalePublication += 1;
-      continue;
     }
     if (seenIds.has(raw.id)) {
       skipped += 1;
@@ -463,7 +466,7 @@ export function normalizeConnectorRecords(
       skipReasons.offTopic += 1;
       continue;
     }
-    accepted.push(normalizeRecord(raw));
+    accepted.push(normalizeRecord(raw, now));
   }
 
   return {

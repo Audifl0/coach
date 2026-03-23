@@ -9,6 +9,7 @@ import {
   parseAdaptiveKnowledgeRankingTelemetry,
   parseAdaptiveKnowledgeCoverageGap,
   parseAdaptiveKnowledgeDiscoveryTelemetry,
+  parseAdaptiveKnowledgeSchedulerTelemetry,
   parseCorpusPrinciple,
   parseCorpusRunReport,
   parseCorpusSnapshotManifest,
@@ -21,6 +22,7 @@ import {
   type AdaptiveKnowledgeDiscoveryQuery,
   type AdaptiveKnowledgeDiscoveryTelemetry,
   type AdaptiveKnowledgeRankingTelemetry,
+  type AdaptiveKnowledgeSchedulerTelemetry,
   type CorpusSnapshotManifest,
   type CorpusPrinciple,
   type CorpusRunReport,
@@ -33,6 +35,7 @@ import { fetchCrossrefEvidenceBatch } from './connectors/crossref';
 import { buildAdaptiveKnowledgeBootstrapCollectionJobs, buildAdaptiveKnowledgeDiscoveryPlan } from './discovery';
 import { fetchOpenAlexEvidenceBatch } from './connectors/openalex';
 import { fetchPubmedEvidenceBatch } from './connectors/pubmed';
+import { executeDiscoveryWorkItem } from './executors/discovery-executor';
 import {
   buildDocumentaryRecordStagingArtifact,
   dedupeNormalizedEvidenceRecords,
@@ -61,13 +64,16 @@ import { acquireFullText, type FullTextAcquisitionResult } from './fulltext-acqu
 import { extractStudyCards } from './study-card-extraction';
 import { synthesizeThematicPrinciples } from './thematic-synthesis';
 import { renderBookletMarkdown } from './booklet-renderer';
-import { buildDocumentRegistryRecordFromNormalizedRecord, upsertDocumentRegistryRecords } from './registry/doc-library';
+import { buildDocumentRegistryRecordFromNormalizedRecord, loadDocumentRegistry, upsertDocumentRegistryRecords } from './registry/doc-library';
+import { ensureDiscoveryResearchFronts, loadResearchFronts } from './registry/research-fronts';
 import { buildStudyDossierFromStudyCard, upsertStudyDossiers } from './registry/study-dossiers';
 import { loadScientificQuestions, upsertScientificQuestions } from './registry/scientific-questions';
 import { enqueueWorkItems } from './registry/work-queues';
 import { linkStudiesToScientificQuestions } from './question-linking';
 import { analyzeQuestionContradictions, buildQuestionSynthesisDossier } from './contradiction-analysis';
+import { buildAdaptiveKnowledgeWorkItems } from './work-items';
 import { evaluateDoctrineCandidatePublication, reconcileDoctrineAgainstDossiers } from './conservative-publication';
+import { scheduleAdaptiveKnowledgeWork } from './scheduler';
 import {
   appendDoctrineRevisionEntries,
   loadPublishedDoctrineSnapshot,
@@ -96,6 +102,11 @@ type PipelineStage = {
     | 'publish';
   status: StageStatus;
   message?: string;
+};
+
+type ScheduledDocumentExecution = {
+  executed: number;
+  records: NormalizedEvidenceRecord[];
 };
 
 type PipelineMode = 'bootstrap' | 'refresh' | 'check';
@@ -292,6 +303,41 @@ function summarizeBootstrapQueue(jobs: readonly AdaptiveKnowledgeCollectionJob[]
   };
 }
 
+function buildDocumentQueueWorkRecords(input: {
+  outputRootDir: string;
+  now: Date;
+  selectedTargetIds: readonly string[];
+  documentRegistry: Awaited<ReturnType<typeof loadDocumentRegistry>>;
+}): ScheduledDocumentExecution {
+  const selectedIds = new Set(input.selectedTargetIds);
+  const records = input.documentRegistry.items
+    .filter((document) => selectedIds.has(document.documentId) && document.status === 'extractible')
+    .map((document) => ({
+      id: document.recordId,
+      canonicalId: document.canonicalId ?? document.documentId,
+      sourceType: 'review' as const,
+      sourceUrl: document.sourceUrl,
+      sourceDomain: document.sourceDomain,
+      publishedAt: input.now.toISOString().slice(0, 10),
+      title: document.title,
+      summaryEn: `${document.title} queued for extraction.`,
+      tags: document.topicKeys,
+      provenanceIds: [document.recordId],
+      documentary: {
+        status: 'abstract-ready' as const,
+        acquisition: {
+          sourceKind: 'abstract' as const,
+          rejectionReason: null,
+        },
+      },
+    }));
+
+  return {
+    executed: records.length,
+    records,
+  };
+}
+
 function buildQualityGateProjection(input: {
   mode: PipelineMode;
   normalizedRecords: NormalizedEvidenceRecord[];
@@ -475,6 +521,16 @@ export async function runAdaptiveKnowledgePipeline(
           maxQueries: config.maxQueriesPerRun,
         });
 
+  if (mode === 'refresh') {
+    await ensureDiscoveryResearchFronts(outputRootDir, {
+      sources: Object.keys(connectors) as Array<keyof PipelineConnectors>,
+      maxFronts: config.maxQueriesPerRun,
+    });
+  }
+
+  const refreshResearchFronts = mode === 'refresh' ? await loadResearchFronts(outputRootDir) : [];
+  const refreshDocumentRegistry = mode === 'refresh' ? await loadDocumentRegistry(outputRootDir) : null;
+
   const stageReports: PipelineStage[] = [];
 
   const pagesPerQuery = config.pagesPerQuery;
@@ -530,8 +586,81 @@ export async function runAdaptiveKnowledgePipeline(
     }),
   );
 
+  let schedulerTelemetry: AdaptiveKnowledgeSchedulerTelemetry | undefined;
+  let refreshScheduledRecords: NormalizedEvidenceRecord[] = [];
+
+  if (mode === 'refresh') {
+    const hasPreexistingBacklog = (refreshDocumentRegistry?.items.length ?? 0) > 0 || refreshResearchFronts.length > 0;
+    const discoveredImmediateRecords = sourceResults.flatMap((source) => source.records);
+    const shouldRunRefreshScheduler = hasPreexistingBacklog && discoveredImmediateRecords.length === 0;
+
+    if (shouldRunRefreshScheduler) {
+      const refreshItems = buildAdaptiveKnowledgeWorkItems({
+        researchFronts: refreshResearchFronts,
+        documents: refreshDocumentRegistry?.items ?? [],
+        questions: [],
+        contradictions: [],
+        doctrineCandidates: [],
+        now,
+      });
+      const refreshPlan = scheduleAdaptiveKnowledgeWork({
+        items: refreshItems,
+        limits: {
+          maxItems: config.maxQueriesPerRun,
+          perKind: {
+            'discover-front-page': config.maxQueriesPerRun,
+            'extract-study-card': config.maxQueriesPerRun,
+          },
+        },
+      });
+
+      const selectedDiscoveryItems = refreshPlan.selectedItems.filter((item) => item.kind === 'discover-front-page');
+      for (const item of selectedDiscoveryItems) {
+        const front = refreshResearchFronts.find((candidate) => candidate.id === item.targetId);
+        if (!front) {
+          continue;
+        }
+        const connector = connectors[front.source];
+        const executed = await executeDiscoveryWorkItem({
+          outputRootDir,
+          now,
+          front,
+          connector,
+          cursorState,
+          connectorInput: {
+            allowedDomains: [...config.allowedDomains],
+            freshnessWindowDays: config.freshnessWindowDays,
+            retryCount: config.maxRetries,
+            timeoutMs: config.requestTimeoutMs,
+            collectionJob: undefined,
+          },
+        });
+        refreshScheduledRecords.push(...executed.records);
+      }
+
+      const documentExecution = refreshDocumentRegistry
+        ? buildDocumentQueueWorkRecords({
+            outputRootDir,
+            now,
+            selectedTargetIds: refreshPlan.selectedItems
+              .filter((item) => item.kind === 'extract-study-card')
+              .map((item) => item.targetId),
+            documentRegistry: refreshDocumentRegistry,
+          })
+        : { executed: 0, records: [] };
+      refreshScheduledRecords.push(...documentExecution.records);
+
+      schedulerTelemetry = parseAdaptiveKnowledgeSchedulerTelemetry({
+        itemsSelected: refreshPlan.selectedItems.length,
+        itemsExecuted: selectedDiscoveryItems.length + documentExecution.executed,
+        selectedKinds: refreshPlan.selectedItems.map((item) => item.kind),
+        noProgressReasons: refreshPlan.noProgressSummary?.noProgressReasons ?? [],
+      });
+    }
+  }
+
   const skippedSources = sourceResults.filter((source) => source.skipped).length;
-  const rawNormalizedRecords = sourceResults.flatMap((source) => source.records);
+  const rawNormalizedRecords = [...sourceResults.flatMap((source) => source.records), ...refreshScheduledRecords];
   const incrementalFilteredRecords = rawNormalizedRecords.filter(
     (record) => !cursorState.seenRecordIds.includes(record.id),
   );
@@ -737,12 +866,16 @@ export async function runAdaptiveKnowledgePipeline(
     stageReports.push({
       stage: 'synthesize',
       status: 'skipped',
-      message: 'no-records-selected-for-synthesis',
+      message: schedulerTelemetry?.itemsExecuted
+        ? 'discovery-cold-but-backlog-progressed'
+        : 'no-records-selected-for-synthesis',
     });
     stageReports.push({
       stage: 'validate',
       status: 'skipped',
-      message: 'blocked-by-empty-corpus',
+      message: schedulerTelemetry?.itemsExecuted
+        ? 'blocked-by-backlog-driven-refresh'
+        : 'blocked-by-empty-corpus',
     });
     qualityGateResult = evaluateCorpusQualityGate({
       now,
@@ -887,9 +1020,11 @@ export async function runAdaptiveKnowledgePipeline(
       ? 'blocked-by-synthesis-failure'
       : qualityGateResult.publishable
         ? 'pending-artifact-write'
-        : qualityGateResult.status === 'progressing'
-          ? `progressing:${qualityGateResult.reasons.join(',')}`
-        : `blocked:${qualityGateResult.reasons.join(',')}`,
+        : schedulerTelemetry?.itemsExecuted
+          ? `progressing:items-executed=${schedulerTelemetry.itemsExecuted}`
+          : qualityGateResult.status === 'progressing'
+            ? `progressing:${qualityGateResult.reasons.join(',')}`
+            : `blocked:${qualityGateResult.reasons.join(',')}`,
   });
 
   const runReport = parseCorpusRunReport({
@@ -901,6 +1036,7 @@ export async function runAdaptiveKnowledgePipeline(
     stageReports,
     discovery: discoveryTelemetry,
     ranking: rankingTelemetry,
+    scheduler: schedulerTelemetry,
     bootstrap: bootstrapTelemetry,
   });
 

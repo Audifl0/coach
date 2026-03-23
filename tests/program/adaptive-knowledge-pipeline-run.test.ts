@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, access, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, access, writeFile, mkdir } from 'node:fs/promises';
 import { constants, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -544,6 +544,109 @@ test('documentary staging contract remains backward-compatible with legacy norma
 
   assert.equal(artifact.records[0]?.documentary.status, 'metadata-only');
   assert.equal(artifact.records[0]?.documentary.acquisition.rejectionReason, null);
+});
+
+test('pipeline keeps useful work when discovery returns only old or already-seen records', async () => {
+  const outputRootDir = await mkdtemp(path.join(tmpdir(), 'adaptive-pipeline-'));
+  await mkdir(path.join(outputRootDir, 'registry'), { recursive: true });
+
+  await writeFile(
+    path.join(outputRootDir, 'registry', 'document-library.json'),
+    JSON.stringify(
+      {
+        version: 'v1',
+        generatedAt: '2026-03-05T00:00:00.000Z',
+        items: [
+          {
+            documentId: 'doc-extract-1',
+            canonicalId: 'record:doc-extract-1',
+            sourceRecordId: 'doc-extract-1',
+            sourceDomain: 'pubmed.ncbi.nlm.nih.gov',
+            sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/doc-extract-1',
+            title: 'Queued extractible document',
+            topicKeys: ['progression'],
+            status: 'extractible',
+            studyCardStatus: 'pending',
+            extractionSource: 'abstract',
+            provenanceIds: ['doc-extract-1'],
+            updatedAt: '2026-03-05T00:00:00.000Z',
+          },
+        ],
+      },
+      null,
+      2,
+    ) + '\n',
+    'utf8',
+  );
+
+  const result = await runAdaptiveKnowledgePipeline({
+    runId: 'run-stale-discovery-nonterminal',
+    mode: 'refresh',
+    now: new Date('2026-03-23T00:00:00.000Z'),
+    outputRootDir,
+    connectors: {
+      pubmed: async () => ({
+        source: 'pubmed',
+        skipped: false,
+        records: [],
+        recordsFetched: 0,
+        recordsSkipped: 5,
+        telemetry: {
+          attempts: 1,
+          rawResults: 5,
+          skipReasons: {
+            disallowedDomain: 0,
+            stalePublication: 5,
+            alreadySeen: 0,
+            invalidUrl: 0,
+            offTopic: 0,
+          },
+          hasMore: false,
+        },
+      }),
+      crossref: async () => ({
+        source: 'crossref',
+        skipped: false,
+        records: [],
+        recordsFetched: 0,
+        recordsSkipped: 3,
+        telemetry: {
+          attempts: 1,
+          rawResults: 3,
+          skipReasons: {
+            disallowedDomain: 0,
+            stalePublication: 3,
+            alreadySeen: 0,
+            invalidUrl: 0,
+            offTopic: 0,
+          },
+          hasMore: false,
+        },
+      }),
+      openalex: async () => ({
+        source: 'openalex',
+        skipped: false,
+        records: [],
+        recordsFetched: 0,
+        recordsSkipped: 4,
+        telemetry: {
+          attempts: 1,
+          rawResults: 4,
+          skipReasons: {
+            disallowedDomain: 0,
+            stalePublication: 4,
+            alreadySeen: 0,
+            invalidUrl: 0,
+            offTopic: 0,
+          },
+          hasMore: false,
+        },
+      }),
+    },
+  });
+
+  assert.notEqual(result.runReport.stageReports.find((stage) => stage.stage === 'publish')?.message, 'blocked:no_library_progress');
+  assert.ok((result.runReport as { scheduler?: { itemsExecuted?: number } }).scheduler?.itemsExecuted === 1);
 });
 
 test('pipeline triages documentary staging before synthesis and defers non-extractable records', async () => {

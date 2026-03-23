@@ -581,6 +581,15 @@ export const adaptiveKnowledgeBacklogHealthSummarySchema = z
   })
   .strict();
 
+export const adaptiveKnowledgeSchedulerTelemetrySchema = z
+  .object({
+    itemsSelected: z.number().int().nonnegative(),
+    itemsExecuted: z.number().int().nonnegative(),
+    selectedKinds: z.array(z.enum(ADAPTIVE_KNOWLEDGE_WORK_ITEM_KIND_VALUES)),
+    noProgressReasons: z.array(z.string().min(1)),
+  })
+  .strict();
+
 export const adaptiveKnowledgeBootstrapRunTelemetrySchema = z
   .object({
     queueDepth: z
@@ -752,6 +761,7 @@ export const corpusRunReportSchema = z
     stageReports: z.array(stageReportSchema).min(1),
     discovery: adaptiveKnowledgeDiscoveryTelemetrySchema.optional(),
     ranking: adaptiveKnowledgeRankingTelemetrySchema.optional(),
+    scheduler: adaptiveKnowledgeSchedulerTelemetrySchema.optional(),
     bootstrap: adaptiveKnowledgeBootstrapRunTelemetrySchema.optional(),
   })
   .strict()
@@ -821,6 +831,7 @@ export type AdaptiveKnowledgeResearchFront = z.infer<typeof adaptiveKnowledgeRes
 export type AdaptiveKnowledgeWorkItem = z.infer<typeof adaptiveKnowledgeWorkItemSchema>;
 export type AdaptiveKnowledgeBacklogHealthSummary = z.infer<typeof adaptiveKnowledgeBacklogHealthSummarySchema>;
 export type AdaptiveKnowledgeBootstrapRunTelemetry = z.infer<typeof adaptiveKnowledgeBootstrapRunTelemetrySchema>;
+export type AdaptiveKnowledgeSchedulerTelemetry = z.infer<typeof adaptiveKnowledgeSchedulerTelemetrySchema>;
 export type SynthesisRunMetadata = z.infer<typeof synthesisRunMetadataSchema>;
 export type RejectedSynthesisClaim = z.infer<typeof rejectedSynthesisClaimSchema>;
 export type SynthesisContradiction = z.infer<typeof synthesisContradictionSchema>;
@@ -860,6 +871,10 @@ export function parseAdaptiveKnowledgeResearchFront(input: unknown): AdaptiveKno
 
 export function parseAdaptiveKnowledgeWorkItem(input: unknown): AdaptiveKnowledgeWorkItem {
   return adaptiveKnowledgeWorkItemSchema.parse(input);
+}
+
+export function parseAdaptiveKnowledgeSchedulerTelemetry(input: unknown): AdaptiveKnowledgeSchedulerTelemetry {
+  return adaptiveKnowledgeSchedulerTelemetrySchema.parse(input);
 }
 
 export function parseAdaptiveKnowledgeBacklogHealthSummary(input: unknown): AdaptiveKnowledgeBacklogHealthSummary {
