@@ -342,6 +342,8 @@ export const workerCorpusLiveRunSchema = z
     mode: z.enum(workerCorpusModeValues).nullable(),
     status: z.enum(workerCorpusLiveRunStatusValues),
     currentStage: z.string().trim().min(1).nullable(),
+    currentWorkItemKind: z.string().trim().min(1).nullable().default(null),
+    lastCompletedItemKind: z.string().trim().min(1).nullable().default(null),
     currentWorkItemLabel: z.string().trim().min(1).nullable(),
     lastHeartbeatAt: z.iso.datetime().nullable(),
     heartbeatAgeSec: z.number().int().nonnegative().nullable(),
@@ -406,6 +408,7 @@ export const workerCorpusOverviewResponseSchema = z.object({
     isHeartbeatStale: z.boolean(),
   }),
   liveRun: workerCorpusLiveRunSchema,
+  backlog: workerCorpusBacklogDashboardPayloadSchema,
   publication: z.object({
     severity: z.enum(workerCorpusSeverityValues),
     activeSnapshotId: z.string().trim().min(1).nullable(),

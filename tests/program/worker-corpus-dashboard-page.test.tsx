@@ -31,18 +31,33 @@ function buildClientProps() {
         runActive: false,
         liveRun: {
           active: false,
+          runId: null,
+          mode: null,
           status: 'idle' as const,
           currentStage: null,
+          currentWorkItemKind: null,
+          lastCompletedItemKind: null,
           currentWorkItemLabel: null,
           lastHeartbeatAt: null,
           heartbeatAgeSec: null,
+          startedAt: null,
           liveMessage: 'Aucun run actif détecté',
           progress: {
-            pending: 4,
-            running: 0,
-            completed: 3,
-            failed: 0,
+            queue: 4,
+            documents: 48,
+            questions: 9,
+            doctrine: 6,
           },
+        },
+        backlog: {
+          generatedAt: '2026-03-11T10:00:00.000Z',
+          queueHealth: { ready: 4, blocked: 1, inProgress: 0 },
+          itemsByKind: {
+            'discover-front-page': 4,
+            'extract-study-card': 9,
+            'publish-doctrine': 6,
+          },
+          noProgressReasons: ['questions_undercovered'],
         },
         control: {
           state: 'paused' as const,
@@ -395,17 +410,22 @@ test('worker corpus dashboard client renders idle live run card copy', async () 
   const props = buildClientProps();
   props.initialSection.data.liveRun = {
     active: false,
+    runId: null,
+    mode: null,
     status: 'idle' as const,
     currentStage: null,
+    currentWorkItemKind: null,
+    lastCompletedItemKind: null,
     currentWorkItemLabel: null,
     lastHeartbeatAt: null,
     heartbeatAgeSec: null,
+    startedAt: null,
     liveMessage: 'Aucun run actif détecté',
     progress: {
-      pending: 4,
-      running: 0,
-      completed: 3,
-      failed: 0,
+      queue: 4,
+      documents: 0,
+      questions: 3,
+      doctrine: 1,
     },
   };
   const html = renderToStaticMarkup(<WorkerCorpusDashboardClient {...props} />);
@@ -413,9 +433,9 @@ test('worker corpus dashboard client renders idle live run card copy', async () 
   assert.match(html, /Run actif/i);
   assert.match(html, /Aucun run actif détecté/i);
   assert.match(html, /pending 4/i);
-  assert.match(html, /running 0/i);
-  assert.match(html, /completed 3/i);
-  assert.match(html, /failed 0/i);
+  assert.match(html, /documents 0/i);
+  assert.match(html, /questions 3/i);
+  assert.match(html, /doctrine 1/i);
 });
 
 test('worker corpus dashboard client renders running live run state with stage and current item', async () => {
@@ -425,11 +445,16 @@ test('worker corpus dashboard client renders running live run state with stage a
   const props = buildClientProps();
   props.initialSection.data.liveRun = {
     active: true,
+    runId: 'run-1',
+    mode: 'refresh' as const,
     status: 'running' as const,
     currentStage: 'Extraction en cours',
+    currentWorkItemKind: 'extract-study-card',
+    lastCompletedItemKind: 'discover-front-page',
     currentWorkItemLabel: 'PMID-123456 · Progressive overload review',
     lastHeartbeatAt: '2026-03-11T10:09:30.000Z',
     heartbeatAgeSec: 8,
+    startedAt: '2026-03-11T10:00:00.000Z',
     liveMessage: 'Analyse en cours',
     progress: {
       queue: 2,
@@ -445,6 +470,8 @@ test('worker corpus dashboard client renders running live run state with stage a
   assert.match(html, /Extraction en cours/i);
   assert.match(html, /PMID-123456 · Progressive overload review/i);
   assert.match(html, /Analyse en cours/i);
+  assert.match(html, /Type courant extract-study-card/i);
+  assert.match(html, /Dernier discover-front-page/i);
   assert.match(html, /Heartbeat 2026-03-11T10:09:30.000Z/i);
   assert.match(html, /8s/i);
   assert.match(html, /pending 2/i);
@@ -460,11 +487,16 @@ test('worker corpus dashboard client renders stale live run warning state', asyn
   const props = buildClientProps();
   props.initialSection.data.liveRun = {
     active: true,
+    runId: 'run-stale',
+    mode: 'refresh' as const,
     status: 'stale' as const,
     currentStage: 'Publication',
+    currentWorkItemKind: 'publish-doctrine',
+    lastCompletedItemKind: 'extract-study-card',
     currentWorkItemLabel: 'Question Q-42 · Recovery pacing',
     lastHeartbeatAt: '2026-03-11T09:58:00.000Z',
     heartbeatAgeSec: 720,
+    startedAt: '2026-03-11T09:00:00.000Z',
     liveMessage: 'Heartbeat en retard',
     progress: {
       queue: 1,

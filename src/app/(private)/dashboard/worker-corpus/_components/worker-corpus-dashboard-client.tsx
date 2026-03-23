@@ -91,6 +91,7 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
   const liveRunStage = liveRun?.currentStage ?? 'Aucun run actif';
   const liveRunBadgeLabel = getLiveRunBadgeLabel(liveRun?.status ?? 'idle', liveRun?.active ?? false);
   const liveRunBadgeClassName = getLiveRunBadgeClassName(liveRun?.status ?? 'idle', liveRun?.active ?? false);
+  const backlog = sectionData?.backlog ?? null;
   const startDisabled = pendingAction !== null || (sectionReady && operatorMode === 'running' && runActive);
   const pauseDisabled = pendingAction !== null || !sectionReady || operatorMode === 'paused';
 
@@ -202,6 +203,10 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
               <div className={styles.liveRunItem}>{liveRun.currentWorkItemLabel}</div>
             ) : null}
             <div className={styles.liveRunMetaRow}>
+              <span>Type courant {formatMaybe(liveRun?.currentWorkItemKind)}</span>
+              <span>Dernier {formatMaybe(liveRun?.lastCompletedItemKind)}</span>
+            </div>
+            <div className={styles.liveRunMetaRow}>
               <span>Heartbeat {formatMaybe(liveRun?.lastHeartbeatAt)}</span>
               <span>{formatHeartbeatAge(liveRun?.heartbeatAgeSec)}</span>
             </div>
@@ -211,6 +216,26 @@ export function WorkerCorpusDashboardClient(props: WorkerCorpusDashboardClientPr
               <span className={styles.chip}>questions {liveRun?.progress.questions ?? 0}</span>
               <span className={styles.chip}>doctrine {liveRun?.progress.doctrine ?? 0}</span>
             </div>
+          </article>
+          <article className={styles.metricCard}>
+            <div className={styles.metaLabel}>Backlog scientifique</div>
+            <h2 className={styles.metricTitle}>Travail restant</h2>
+            <div className={styles.statValue}>{backlog ? sumRecord(backlog.itemsByKind) : 0}</div>
+            <div className={styles.muted}>
+              prêt {backlog?.queueHealth.ready ?? 0} · bloqué {backlog?.queueHealth.blocked ?? 0} · en cours {backlog?.queueHealth.inProgress ?? 0}
+            </div>
+            <div className={styles.chips}>
+              <span className={styles.chip}>discovery {backlog?.itemsByKind['discover-front-page'] ?? 0}</span>
+              <span className={styles.chip}>extract {backlog?.itemsByKind['extract-study-card'] ?? 0}</span>
+              <span className={styles.chip}>doctrine {backlog?.itemsByKind['publish-doctrine'] ?? 0}</span>
+            </div>
+            {backlog && backlog.noProgressReasons.length > 0 ? (
+              <div className={styles.chips}>
+                {backlog.noProgressReasons.map((reason) => (
+                  <span key={reason} className={styles.chip}>{reason}</span>
+                ))}
+              </div>
+            ) : null}
           </article>
           <article className={styles.metricCard}>
             <div className={styles.metaLabel}>Workflow status</div>

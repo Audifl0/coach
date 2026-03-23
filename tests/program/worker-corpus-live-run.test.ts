@@ -25,6 +25,8 @@ test('live run returns inactive projection when runtime artifacts are absent', a
     mode: null,
     status: 'idle',
     currentStage: null,
+    currentWorkItemKind: null,
+    lastCompletedItemKind: null,
     currentWorkItemLabel: null,
     lastHeartbeatAt: null,
     heartbeatAgeSec: null,

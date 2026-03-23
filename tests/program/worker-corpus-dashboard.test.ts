@@ -192,6 +192,9 @@ async function buildWorkerFixture() {
     stageReports: [
       { stage: 'discover', status: 'succeeded', message: 'discovered=3' },
       { stage: 'ingest', status: 'succeeded', message: 'normalized=5' },
+      { stage: 'fulltext', status: 'succeeded', message: 'fulltext=2' },
+      { stage: 'extract-study-cards', status: 'succeeded', message: 'study_cards=2' },
+      { stage: 'thematic-synthesis', status: 'succeeded', message: 'themes=1' },
       { stage: 'synthesize', status: 'succeeded', message: 'principles=2; coverage=5; provider=openai' },
       { stage: 'validate', status: 'succeeded', message: 'contracts=ok' },
       { stage: 'publish', status: 'succeeded', message: 'promoted:run-ready;rollback=run-previous' },
@@ -365,6 +368,8 @@ test('worker corpus contracts parse overview, run detail and snapshot detail pay
       mode: 'refresh',
       status: 'running',
       currentStage: 'synthesize',
+      currentWorkItemKind: 'publish-doctrine',
+      lastCompletedItemKind: 'extract-study-card',
       currentWorkItemLabel: 'Question 12 · Progressive overload',
       lastHeartbeatAt: '2026-03-11T10:00:00.000Z',
       heartbeatAgeSec: 0,
@@ -376,6 +381,16 @@ test('worker corpus contracts parse overview, run detail and snapshot detail pay
         questions: 4,
         doctrine: 2,
       },
+    },
+    backlog: {
+      generatedAt: '2026-03-11T10:00:00.000Z',
+      queueHealth: { ready: 2, blocked: 1, inProgress: 1 },
+      itemsByKind: {
+        'discover-front-page': 3,
+        'extract-study-card': 5,
+        'publish-doctrine': 1,
+      },
+      noProgressReasons: [],
     },
     publication: {
       severity: 'healthy',
@@ -474,6 +489,8 @@ test('worker corpus contracts parse overview, run detail and snapshot detail pay
       mode: null,
       status: 'idle',
       currentStage: null,
+      currentWorkItemKind: null,
+      lastCompletedItemKind: null,
       currentWorkItemLabel: null,
       lastHeartbeatAt: null,
       heartbeatAgeSec: null,
@@ -485,6 +502,16 @@ test('worker corpus contracts parse overview, run detail and snapshot detail pay
         questions: 0,
         doctrine: 0,
       },
+    },
+    backlog: {
+      generatedAt: '2026-03-11T10:00:00.000Z',
+      queueHealth: { ready: 0, blocked: 0, inProgress: 0 },
+      itemsByKind: {
+        'discover-front-page': 0,
+        'extract-study-card': 0,
+        'publish-doctrine': 0,
+      },
+      noProgressReasons: [],
     },
     publication: {
       severity: 'degraded',
@@ -529,6 +556,8 @@ test('worker dashboard overview projects live worker, publication and recent run
     mode: 'bootstrap',
     status: 'running',
     currentStage: 'discover',
+    currentWorkItemKind: null,
+    lastCompletedItemKind: null,
     currentWorkItemLabel: 'PubMed · progression-load',
     lastHeartbeatAt: '2026-03-11T10:01:00.000Z',
     heartbeatAgeSec: 120,
@@ -544,6 +573,8 @@ test('worker dashboard overview projects live worker, publication and recent run
   assert.equal(section.data.control.mode, 'bootstrap');
   assert.equal(section.data.control.campaign?.campaignId, 'bootstrap-2026-03-11');
   assert.equal(section.data.control.campaign?.backlog.blocked, 1);
+  assert.equal(section.data.backlog.queueHealth.blocked, 1);
+  assert.equal(section.data.backlog.itemsByKind['discover-front-page'], 2);
   assert.equal(section.data.control.campaign?.cursors.activeCursorCount, 2);
   assert.equal(section.data.publication.activeSnapshotId, 'run-ready');
   assert.equal(section.data.publication.rollbackAvailable, true);

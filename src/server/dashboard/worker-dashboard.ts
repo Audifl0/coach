@@ -41,6 +41,7 @@ import {
 import type { CuratedKnowledgeBible } from '../../../scripts/adaptive-knowledge/curation';
 import { readAdaptiveKnowledgeWorkerState } from '../../../scripts/adaptive-knowledge/worker-state';
 import { loadWorkerCorpusLiveRun } from '../services/worker-corpus-live-run';
+import { getWorkerCorpusBacklog } from '../services/worker-corpus-backlog';
 import { readWorkerControlState } from './worker-control';
 
 type Pointer = {
@@ -519,10 +520,11 @@ export async function loadWorkerCorpusOverview(
   const now = input.now ?? new Date();
 
   try {
-    const [workerState, controlState, liveRun, activePointer, rollbackPointer, snapshotArtifacts] = await Promise.all([
+    const [workerState, controlState, liveRun, backlog, activePointer, rollbackPointer, snapshotArtifacts] = await Promise.all([
       readAdaptiveKnowledgeWorkerState(knowledgeRootDir),
       readWorkerControlState({ knowledgeRootDir, now }),
       loadWorkerCorpusLiveRun({ knowledgeRootDir, now }),
+      getWorkerCorpusBacklog({ knowledgeRootDir, now }),
       readPointer(path.join(knowledgeRootDir, 'active.json')),
       readPointer(path.join(knowledgeRootDir, 'rollback.json')),
       listSnapshotArtifacts(knowledgeRootDir),
@@ -555,6 +557,7 @@ export async function loadWorkerCorpusOverview(
       control: controlState,
       live: deriveLiveState(workerState, now),
       liveRun,
+      backlog,
       publication: {
         severity: derivePublicationSeverity({
           activePointer,
