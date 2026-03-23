@@ -751,7 +751,7 @@ export async function runAdaptiveKnowledgePipeline(
 
       schedulerTelemetry = parseAdaptiveKnowledgeSchedulerTelemetry({
         itemsSelected: refreshPlan.selectedItems.length,
-        itemsExecuted: selectedDiscoveryItems.length + documentExecution.executed,
+        itemsExecuted: selectedDiscoveryItems.length + documentExecution.executed + questionExecution.executed,
         selectedKinds: refreshPlan.selectedItems.map((item) => item.kind),
         noProgressReasons: refreshPlan.noProgressSummary?.noProgressReasons ?? [],
       });
